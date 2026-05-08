@@ -176,3 +176,8 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(245, 216, 0, 0.5);
 }
+
+mjx-container svg,
+span[data-mathjax] svg {
+  display: inline !important;
+}
