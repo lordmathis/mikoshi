@@ -1,7 +1,9 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
+import remarkMath from "remark-math";
 import rehypeHighlight from "rehype-highlight";
+import rehypeMathjax from "rehype-mathjax";
 import "highlight.js/styles/github-dark.css";
 import { Loader2, X, File } from "lucide-react";
 import { Button } from "./ui/button";
@@ -82,10 +84,10 @@ export function FilePreview({ filePath, fileContent, isLoading, onClose }: FileP
               Failed to load file
             </div>
           ) : isMd ? (
-            <div className="text-foreground/90" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', lineHeight: '1.6' }}>
+            <div className="text-foreground/90 [&_mjx-container:not([display='true'])]:inline" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', lineHeight: '1.6' }}>
               <ReactMarkdown
-                remarkPlugins={[remarkGfm, remarkBreaks]}
-                rehypePlugins={[rehypeHighlight]}
+                remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]}
+                rehypePlugins={[rehypeHighlight, rehypeMathjax]}
                 components={markdownComponents}
               >
                 {fileContent}
