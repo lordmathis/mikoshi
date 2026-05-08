@@ -124,7 +124,7 @@ class WorkspaceService:
             if entry.name == ".git":
                 continue
             rel_path = os.path.relpath(entry.path, root)
-            node_type = "directory" if entry.is_dir() else "file"
+            node_type = "dir" if entry.is_dir() else "file"
             size = None
             if entry.is_file(follow_symlinks=False):
                 try:
@@ -136,7 +136,7 @@ class WorkspaceService:
             )
 
         dir_name = os.path.basename(resolved) if path else ""
-        return FileNode(path=path, name=dir_name, type="directory", children=children)
+        return FileNode(path=path, name=dir_name, type="dir", children=children)
 
     def read_file(self, workspace_id: str, path: str) -> str:
         root = self.get_workspace_path(workspace_id)

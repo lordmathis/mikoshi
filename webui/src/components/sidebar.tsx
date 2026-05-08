@@ -1,4 +1,4 @@
-import { PanelLeftClose, MessageSquare, Plus, Trash2, Hash } from "lucide-react";
+import { PanelLeftClose, Plus, Trash2 } from "lucide-react";
 import { Button } from "./ui/button";
 import {
   Tooltip,
@@ -12,6 +12,7 @@ export interface Conversation {
   title: string;
   timestamp: string;
   preview?: string;
+  workspace_id?: string | null;
 }
 
 interface SidebarProps {

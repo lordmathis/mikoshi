@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
-import { api, type Message, type FileResource } from "../lib/api";
+import { api, type Message, type FileResource, type WorkspaceUpdateData } from "../lib/api";
 import { type ChatSettings } from "../components/chat-settings-dialog";
 
-export function useMessages(chatId: string | undefined) {
+export function useMessages(
+  chatId: string | undefined,
+  onWorkspaceUpdate?: (data: WorkspaceUpdateData) => void
+) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -89,6 +92,8 @@ export function useMessages(chatId: string | undefined) {
       })) {
         if (event.type === 'message') {
           setMessages(prev => [...prev, event.data as Message]);
+        } else if (event.type === 'workspace_update') {
+          onWorkspaceUpdate?.(event.data as WorkspaceUpdateData);
         } else if (event.type === 'error') {
           setMessages(prev => prev.filter(m => m.id !== tempId));
           throw new Error((event.data as { message: string }).message);
@@ -110,6 +115,8 @@ export function useMessages(chatId: string | undefined) {
       for await (const event of api.streamRetry(chatId)) {
         if (event.type === 'message') {
           setMessages(prev => [...prev, event.data as Message]);
+        } else if (event.type === 'workspace_update') {
+          onWorkspaceUpdate?.(event.data as WorkspaceUpdateData);
         } else if (event.type === 'error') {
           throw new Error((event.data as { message: string }).message);
         }
@@ -127,6 +134,8 @@ export function useMessages(chatId: string | undefined) {
       for await (const event of api.streamEdit(chatId, text)) {
         if (event.type === 'message') {
           setMessages(prev => [...prev, event.data as Message]);
+        } else if (event.type === 'workspace_update') {
+          onWorkspaceUpdate?.(event.data as WorkspaceUpdateData);
         } else if (event.type === 'error') {
           throw new Error((event.data as { message: string }).message);
         }

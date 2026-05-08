@@ -19,6 +19,7 @@ export interface Chat {
   system_prompt?: string | null;
   tool_servers?: string[] | null;
   model_params?: ModelParams | null;
+  workspace_id?: string | null;
 }
 
 export interface FileResource {
@@ -56,9 +57,14 @@ export interface Message {
   }>;
 }
 
+export interface WorkspaceUpdateData {
+  workspace_id: string;
+  tree: FileNode;
+}
+
 export interface StreamEvent {
-  type: 'message' | 'error' | 'done';
-  data: Message | { message: string } | Record<string, never>;
+  type: 'message' | 'error' | 'done' | 'workspace_update';
+  data: Message | { message: string } | Record<string, never> | WorkspaceUpdateData;
 }
 
 export interface ModelParams {
@@ -138,6 +144,15 @@ export interface FileNode {
   type: 'file' | 'dir';
   size?: number;
   children?: FileNode[];
+}
+
+export interface Workspace {
+  id: string;
+  name: string;
+  repo_url: string;
+  connector: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface TokenEstimate {
@@ -464,6 +479,43 @@ class ApiClient {
     }
 
     return response.blob();
+  }
+
+  async listWorkspaces(): Promise<{ workspaces: Workspace[] }> {
+    return this.request('/workspaces');
+  }
+
+  async getWorkspace(id: string): Promise<Workspace> {
+    return this.request(`/workspaces/${id}`);
+  }
+
+  async createWorkspace(data: { name: string; repo_url: string; connector?: string }): Promise<Workspace> {
+    return this.request('/workspaces', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteWorkspace(id: string): Promise<{ success: boolean }> {
+    return this.request(`/workspaces/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getWorkspaceTree(id: string, path: string = ""): Promise<FileNode> {
+    return this.request(`/workspaces/${id}/tree?path=${encodeURIComponent(path)}`);
+  }
+
+  async getWorkspaceFile(id: string, path: string): Promise<string> {
+    const url = `${this.baseURL}/workspaces/${id}/files/${path}`;
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: response.statusText }));
+      throw new Error(error.detail || `HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    return response.text();
   }
 }
 

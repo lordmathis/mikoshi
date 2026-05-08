@@ -16,6 +16,7 @@ export function useConversations() {
         title: chat.title,
         timestamp: formatTimestamp(chat.updated_at),
         preview: chat.model || undefined,
+        workspace_id: chat.workspace_id ?? null,
       }));
       setConversations(formattedChats);
     } catch (error) {

@@ -1,27 +1,63 @@
-import { useState, useEffect, useRef } from "react";
-import { Sidebar } from "./sidebar";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { SidebarSegmentedControl } from "./sidebar-segmented";
+import { CreateNodeDialog } from "./create-node-dialog";
 import { AddConnectorDialog } from "./add-connector-dialog";
 import { ChatHeader } from "./chat-header";
 import { MessagesList } from "./messages-list";
 import { ChatInput } from "./chat-input";
+import { FilePreview } from "./file-preview";
 import { useConversations } from "../hooks/use-conversations";
 import { useMessages } from "../hooks/use-messages";
 import { useChatFiles } from "../hooks/use-chat-files";
 import { useChatInput } from "../hooks/use-chat-input";
-import type { ConnectorEntry } from "../lib/api";
+import { useSidebar } from "../hooks/use-sidebar";
+import { api, type ConnectorEntry, type FileNode, type WorkspaceUpdateData } from "../lib/api";
 
 export function ChatView() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isConnectorDialogOpen, setIsConnectorDialogOpen] = useState(false);
   const [editingConnectorEntry, setEditingConnectorEntry] = useState<ConnectorEntry | null>(null);
   const [currentConversationId, setCurrentConversationId] = useState<string | undefined>();
+  const [isCreateNodeOpen, setIsCreateNodeOpen] = useState(false);
+  const [workspaces, setWorkspaces] = useState<{ id: string; name: string }[]>([]);
+  const [workspaceRefreshTrigger, setWorkspaceRefreshTrigger] = useState(0);
+  const [sidebarWorkspaceTree, setSidebarWorkspaceTree] = useState<FileNode | null>(null);
+  const [previewFilePath, setPreviewFilePath] = useState<string | null>(null);
+  const [previewFileContent, setPreviewFileContent] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const conversations = useConversations();
-  const messages = useMessages(currentConversationId);
+  const sidebar = useSidebar();
+
+  const handleWorkspaceSSEEvent = useCallback(
+    (data: WorkspaceUpdateData) => {
+      setSidebarWorkspaceTree(data.tree);
+    },
+    []
+  );
+
+  const messages = useMessages(currentConversationId, handleWorkspaceSSEEvent);
   const files = useChatFiles(currentConversationId);
 
+  const currentConversation = conversations.conversations.find(
+    (conv) => conv.id === currentConversationId
+  );
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (currentConversation?.title) {
+      document.title = `${currentConversation.title} - Mikoshi Chat`;
+    } else {
+      document.title = "Mikoshi Chat";
+    }
+  }, [currentConversation?.title]);
+
+  useEffect(() => {
+    api.listWorkspaces().then((res) => {
+      setWorkspaces(res.workspaces.map((w) => ({ id: w.id, name: w.name })));
+    }).catch(() => {});
+  }, [workspaceRefreshTrigger]);
 
   const chatInput = useChatInput({
     onSend: messages.send,
@@ -38,31 +74,65 @@ export function ChatView() {
     },
   });
 
-  const handleFileUploadClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const currentConversation = conversations.conversations.find(
-    (conv) => conv.id === currentConversationId
-  );
-  const currentChatTitle = currentConversation?.title;
-
-  useEffect(() => {
-    if (currentChatTitle) {
-      document.title = `${currentChatTitle} - Mikoshi Chat`;
-    } else {
-      document.title = "Mikoshi Chat";
-    }
-  }, [currentChatTitle]);
-
   const handleRetry = async () => {
     await messages.retry();
     conversations.refresh();
   };
 
+  const handleFileUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleNewWorkspace = () => {
+    setIsCreateNodeOpen(true);
+  };
+
+  const handleDeleteWorkspace = async (id: string) => {
+    await api.deleteWorkspace(id);
+    setWorkspaceRefreshTrigger((n) => n + 1);
+    if (sidebar.activeWorkspaceId === id) {
+      sidebar.setActiveWorkspace(null);
+      setSidebarWorkspaceTree(null);
+    }
+    conversations.refresh();
+  };
+
+  const handleWorkspaceCreated = (ws: { id: string; name: string }) => {
+    setWorkspaceRefreshTrigger((n) => n + 1);
+    sidebar.setActiveWorkspace(ws.id);
+    sidebar.setActiveTab("data");
+  };
+
+  const handleFileClick = async (path: string) => {
+    const wsId = sidebar.activeWorkspaceId;
+    if (!wsId) return;
+    setPreviewFilePath(path);
+    setPreviewFileContent(null);
+    setPreviewLoading(true);
+    try {
+      const content = await api.getWorkspaceFile(wsId, path);
+      setPreviewFileContent(content);
+    } catch (error) {
+      console.error("Failed to fetch workspace file:", error);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const handleClosePreview = () => {
+    setPreviewFilePath(null);
+    setPreviewFileContent(null);
+  };
+
+  const handleSidebarTreeUpdate = useCallback((tree: FileNode) => {
+    setSidebarWorkspaceTree(tree);
+  }, []);
+
+  const showPreview = previewFilePath !== null;
+
   return (
-    <div className="relative flex h-screen" style={{ background: '#0a0a0c' }}>
-      <Sidebar
+    <div className="relative flex h-screen" style={{ background: "#0a0a0c" }}>
+      <SidebarSegmentedControl
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen(!sidebarOpen)}
         conversations={conversations.conversations}
@@ -77,13 +147,37 @@ export function ChatView() {
           if (currentConversationId === id) setCurrentConversationId(undefined);
         }}
         isLoading={conversations.isLoading}
+        activeTab={sidebar.activeTab}
+        onTabChange={sidebar.setActiveTab}
+        activeWorkspaceId={sidebar.activeWorkspaceId}
+        onSelectWorkspace={sidebar.setActiveWorkspace}
+        workspaceTree={sidebarWorkspaceTree}
+        onWorkspaceTreeUpdate={handleSidebarTreeUpdate}
+        activeFilePath={previewFilePath}
+        onFileClick={handleFileClick}
+        onNewWorkspace={handleNewWorkspace}
+        onDeleteWorkspace={handleDeleteWorkspace}
+        onClearFilter={() => sidebar.setActiveWorkspace(null)}
+        workspaces={workspaces}
+        workspaceRefreshTrigger={workspaceRefreshTrigger}
       />
 
-      <div className="relative flex flex-1 flex-col">
-        <ChatHeader 
-          sidebarOpen={sidebarOpen} 
+      {showPreview && (
+        <div className="w-[3fr] min-w-0">
+          <FilePreview
+            filePath={previewFilePath}
+            fileContent={previewFileContent}
+            isLoading={previewLoading}
+            onClose={handleClosePreview}
+          />
+        </div>
+      )}
+
+      <div className={`relative flex flex-col ${showPreview ? "w-[2fr]" : "flex-1"} min-w-0`}>
+        <ChatHeader
+          sidebarOpen={sidebarOpen}
           onToggleSidebar={() => setSidebarOpen(true)}
-          chatTitle={currentChatTitle}
+          chatTitle={currentConversation?.title}
         />
 
         <MessagesList
@@ -118,7 +212,7 @@ export function ChatView() {
           onRemoveConnectorEntry={files.removeConnectorEntry}
           onEditConnectorEntry={(connectorId, resourceId) => {
             const entry = files.connectorEntries.find(
-              e => e.connectorId === connectorId && e.resourceId === resourceId
+              (e) => e.connectorId === connectorId && e.resourceId === resourceId
             );
             if (entry) {
               setEditingConnectorEntry(entry);
@@ -159,6 +253,12 @@ export function ChatView() {
           }
           setEditingConnectorEntry(null);
         }}
+      />
+
+      <CreateNodeDialog
+        open={isCreateNodeOpen}
+        onOpenChange={setIsCreateNodeOpen}
+        onCreated={handleWorkspaceCreated}
       />
     </div>
   );
