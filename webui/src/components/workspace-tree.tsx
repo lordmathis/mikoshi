@@ -69,7 +69,7 @@ function TreeNode({
         ) : (
           <File className="h-4 w-4 text-muted-foreground flex-shrink-0" />
         )}
-        <span className="text-sm truncate">{node.name}</span>
+        <span className="text-sm truncate min-w-0 flex-1">{node.name}</span>
       </div>
       {isDir && expanded && node.children && (
         <div>

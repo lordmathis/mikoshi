@@ -73,7 +73,7 @@ export function TreeNode({
         ) : (
           <File className="h-4 w-4 text-muted-foreground flex-shrink-0" />
         )}
-        <span className="text-sm truncate" onClick={handleToggle}>
+        <span className="text-sm truncate min-w-0 flex-1" onClick={handleToggle}>
           {node.name}
         </span>
         {!isDir && node.size !== undefined && (
