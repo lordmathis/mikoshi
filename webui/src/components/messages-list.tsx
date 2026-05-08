@@ -37,7 +37,7 @@ export function MessagesList({
 
   return (
     <ScrollArea className="flex-1 min-h-0">
-      <div className="mx-auto max-w-3xl pb-6">
+      <div className="mx-auto max-w-3xl px-4 pb-6">
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
             <div className="cp-label text-muted-foreground uppercase tracking-widest">

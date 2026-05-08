@@ -162,75 +162,79 @@ export function ChatView() {
         workspaceRefreshTrigger={workspaceRefreshTrigger}
       />
 
-      {showPreview && (
-        <div className="w-[3fr] min-w-0">
-          <FilePreview
-            filePath={previewFilePath}
-            fileContent={previewFileContent}
-            isLoading={previewLoading}
-            onClose={handleClosePreview}
-          />
-        </div>
-      )}
-
-      <div className={`relative flex flex-col ${showPreview ? "w-[2fr]" : "flex-1"} min-w-0`}>
+      <div className="relative flex flex-col flex-1 min-w-0">
         <ChatHeader
           sidebarOpen={sidebarOpen}
           onToggleSidebar={() => setSidebarOpen(true)}
           chatTitle={currentConversation?.title}
         />
 
-        <MessagesList
-          messages={messages.messages}
-          isLoading={messages.isLoading}
-          isSending={messages.isSending}
-          currentConversationId={currentConversationId}
-          messagesEndRef={messagesEndRef}
-          onBranch={async (messageId) => {
-            const id = await conversations.branchConversation(currentConversationId!, messageId);
-            setCurrentConversationId(id);
-          }}
-          onRetry={handleRetry}
-          onEdit={chatInput.handleEdit}
-        />
+        <div className="flex flex-1 min-h-0">
+          {showPreview && (
+            <div className="h-full overflow-hidden" style={{ flex: '2 2 0%', minWidth: 0 }}>
+              <FilePreview
+                filePath={previewFilePath}
+                fileContent={previewFileContent}
+                isLoading={previewLoading}
+                onClose={handleClosePreview}
+              />
+            </div>
+          )}
 
-        <ChatInput
-          inputValue={chatInput.inputValue}
-          isEditingMode={chatInput.isEditingMode}
-          onInputChange={chatInput.setInputValue}
-          onCancelEdit={chatInput.cancelEdit}
-          onSend={chatInput.handleSend}
-          onKeyDown={chatInput.handleKeyDown}
-          isSending={messages.isSending}
-          isUploadingFiles={files.isUploading}
-          currentConversationId={currentConversationId}
-          chatSettings={messages.chatSettings}
-          onSettingsChange={messages.setChatSettings}
-          uploadedFiles={files.uploadedFiles}
-          connectorEntries={files.connectorEntries}
-          onRemoveFile={files.removeFile}
-          onRemoveConnectorEntry={files.removeConnectorEntry}
-          onEditConnectorEntry={(connectorId, resourceId) => {
-            const entry = files.connectorEntries.find(
-              (e) => e.connectorId === connectorId && e.resourceId === resourceId
-            );
-            if (entry) {
-              setEditingConnectorEntry(entry);
-              setIsConnectorDialogOpen(true);
-            }
-          }}
-          onFileUploadClick={handleFileUploadClick}
-          onConnectorDialogOpen={() => {
-            setEditingConnectorEntry(null);
-            setIsConnectorDialogOpen(true);
-          }}
-          onChatUpdated={conversations.refresh}
-          textareaRef={chatInput.textareaRef}
-          fileInputRef={fileInputRef}
-          onFileChange={(e) => {
-            if (e.target.files) files.uploadFiles(Array.from(e.target.files));
-          }}
-        />
+          <div className="flex flex-col flex-1 min-w-0">
+            <MessagesList
+              messages={messages.messages}
+              isLoading={messages.isLoading}
+              isSending={messages.isSending}
+              currentConversationId={currentConversationId}
+              messagesEndRef={messagesEndRef}
+              onBranch={async (messageId) => {
+                const id = await conversations.branchConversation(currentConversationId!, messageId);
+                setCurrentConversationId(id);
+              }}
+              onRetry={handleRetry}
+              onEdit={chatInput.handleEdit}
+            />
+
+            <ChatInput
+              inputValue={chatInput.inputValue}
+              isEditingMode={chatInput.isEditingMode}
+              onInputChange={chatInput.setInputValue}
+              onCancelEdit={chatInput.cancelEdit}
+              onSend={chatInput.handleSend}
+              onKeyDown={chatInput.handleKeyDown}
+              isSending={messages.isSending}
+              isUploadingFiles={files.isUploading}
+              currentConversationId={currentConversationId}
+              chatSettings={messages.chatSettings}
+              onSettingsChange={messages.setChatSettings}
+              uploadedFiles={files.uploadedFiles}
+              connectorEntries={files.connectorEntries}
+              onRemoveFile={files.removeFile}
+              onRemoveConnectorEntry={files.removeConnectorEntry}
+              onEditConnectorEntry={(connectorId, resourceId) => {
+                const entry = files.connectorEntries.find(
+                  (e) => e.connectorId === connectorId && e.resourceId === resourceId
+                );
+                if (entry) {
+                  setEditingConnectorEntry(entry);
+                  setIsConnectorDialogOpen(true);
+                }
+              }}
+              onFileUploadClick={handleFileUploadClick}
+              onConnectorDialogOpen={() => {
+                setEditingConnectorEntry(null);
+                setIsConnectorDialogOpen(true);
+              }}
+              onChatUpdated={conversations.refresh}
+              textareaRef={chatInput.textareaRef}
+              fileInputRef={fileInputRef}
+              onFileChange={(e) => {
+                if (e.target.files) files.uploadFiles(Array.from(e.target.files));
+              }}
+            />
+          </div>
+        </div>
       </div>
 
       <AddConnectorDialog

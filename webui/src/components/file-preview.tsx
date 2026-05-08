@@ -55,7 +55,7 @@ export function FilePreview({ filePath, fileContent, isLoading, onClose }: FileP
   const isMd = isMarkdownFile(filePath);
 
   return (
-    <div className="flex flex-col h-full border-r" style={{ borderColor: "rgba(245, 216, 0, 0.1)" }}>
+    <div className="flex flex-col h-full overflow-hidden border-r" style={{ borderColor: "rgba(245, 216, 0, 0.1)" }}>
       <div
         className="flex items-center justify-between px-4 py-2 shrink-0 border-b"
         style={{
@@ -71,8 +71,8 @@ export function FilePreview({ filePath, fileContent, isLoading, onClose }: FileP
           <X className="h-4 w-4" />
         </Button>
       </div>
-      <ScrollArea className="flex-1">
-        <div className="p-4">
+      <ScrollArea className="flex-1 min-h-0">
+        <div className="p-6">
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-5 w-5 animate-spin text-primary/50" />
