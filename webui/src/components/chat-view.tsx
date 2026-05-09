@@ -176,7 +176,11 @@ export function ChatView() {
         onFileClick={handleFileClick}
         onNewWorkspace={handleNewWorkspace}
         onDeleteWorkspace={handleDeleteWorkspace}
-        onClearFilter={() => sidebar.setActiveWorkspace(null)}
+        onClearFilter={() => {
+          sidebar.setActiveWorkspace(null);
+          setSidebarWorkspaceTree(null);
+          handleClosePreview();
+        }}
         workspaces={workspaces}
         workspaceRefreshTrigger={workspaceRefreshTrigger}
       />
