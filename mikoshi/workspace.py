@@ -1,4 +1,5 @@
 import logging
+import mimetypes
 import os
 import shutil
 import subprocess
@@ -148,6 +149,23 @@ class WorkspaceService:
 
         with open(full_path, "r", encoding="utf-8", errors="replace") as f:
             return f.read()
+
+    def read_file_raw(self, workspace_id: str, path: str) -> tuple[bytes, str]:
+        root = self.get_workspace_path(workspace_id)
+        full_path = os.path.realpath(os.path.join(root, path))
+        self._validate_path(root, full_path)
+
+        if not os.path.isfile(full_path):
+            raise WorkspaceError(f"File not found: {path}")
+
+        with open(full_path, "rb") as f:
+            content = f.read()
+
+        mime_type, _ = mimetypes.guess_type(full_path)
+        if mime_type is None:
+            mime_type = "application/octet-stream"
+
+        return content, mime_type
 
     def write_file(self, workspace_id: str, path: str, content: str):
         root = self.get_workspace_path(workspace_id)

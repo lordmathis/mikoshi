@@ -8,6 +8,7 @@ import "highlight.js/styles/github-dark.css";
 import { Loader2, X, File } from "lucide-react";
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
+import { remarkWikiLinks, resolveTarget } from "../lib/remark-wiki-links";
 
 const markdownComponents = {
   h1: ({ children, ...props }: any) => (
@@ -61,17 +62,73 @@ interface FilePreviewProps {
   fileContent: string | null;
   isLoading: boolean;
   onClose: () => void;
+  workspaceId: string | null;
+  fileIndex: Map<string, string>;
+  onFileClick: (path: string) => void;
 }
 
 function isMarkdownFile(path: string): boolean {
   return /\.(md|mdx|markdown)$/i.test(path);
 }
 
-export function FilePreview({ filePath, fileContent, isLoading, onClose }: FilePreviewProps) {
+export function FilePreview({ filePath, fileContent, isLoading, onClose, workspaceId, fileIndex, onFileClick }: FilePreviewProps) {
   if (!filePath) return null;
 
   const fileName = filePath.split("/").pop() || filePath;
   const isMd = isMarkdownFile(filePath);
+
+  const remarkPlugins: any[] = [remarkGfm, remarkBreaks, remarkMath, remarkWikiLinks];
+
+  const components: Record<string, React.ComponentType<any>> = {
+    ...markdownComponents,
+    img: ({ src, alt }: any) => {
+      if (!src) return null;
+      if (!src.startsWith("http") && !src.startsWith("data:")) {
+        const dir = filePath?.includes("/") ? filePath.substring(0, filePath.lastIndexOf("/") + 1) : "";
+        src = `/api/workspaces/${workspaceId}/files/${dir}${src}`;
+      }
+      return <img src={src} alt={alt} className="max-w-full h-auto rounded" />;
+    },
+    a: ({ href, children }: any) => {
+      if (href?.startsWith("wiki-image://")) {
+        const target = href.replace("wiki-image://", "");
+        const resolved = workspaceId ? resolveTarget(target, fileIndex) : null;
+        if (resolved) {
+          return <img src={`/api/workspaces/${workspaceId}/files/${resolved}`} alt={target} className="max-w-full h-auto rounded" />;
+        }
+        return (
+          <span
+            style={{ color: "rgba(245, 216, 0, 0.5)", background: "rgba(245, 216, 0, 0.06)", padding: "0 3px", borderRadius: "3px", fontSize: "0.9em" }}
+          >
+            {`![[${target}]]`}
+          </span>
+        );
+      }
+      if (href?.startsWith("wiki://")) {
+        const target = href.replace("wiki://", "");
+        const resolved = workspaceId ? resolveTarget(target, fileIndex) : null;
+        if (resolved) {
+          return (
+            <a
+              href="#"
+              className="text-primary underline decoration-primary/40 hover:decoration-primary"
+              onClick={(e) => { e.preventDefault(); onFileClick(resolved); }}
+            >
+              {children}
+            </a>
+          );
+        }
+        return (
+          <span
+            style={{ color: "rgba(245, 216, 0, 0.5)", background: "rgba(245, 216, 0, 0.06)", padding: "0 3px", borderRadius: "3px", fontSize: "0.9em" }}
+          >
+            {`[[${target}]]`}
+          </span>
+        );
+      }
+      return <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>;
+    },
+  };
 
   return (
     <div className="flex flex-col h-full overflow-hidden border-r" style={{ borderColor: "rgba(245, 216, 0, 0.1)" }}>
@@ -103,9 +160,13 @@ export function FilePreview({ filePath, fileContent, isLoading, onClose }: FileP
           ) : isMd ? (
             <div className="text-foreground/90" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', lineHeight: '1.6' }}>
               <ReactMarkdown
-                remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]}
+                remarkPlugins={remarkPlugins}
                 rehypePlugins={[rehypeHighlight, rehypeMathjax]}
-                components={markdownComponents}
+                components={components}
+                urlTransform={(url) => {
+                  if (url.startsWith("wiki://") || url.startsWith("wiki-image://")) return url;
+                  return url;
+                }}
               >
                 {fileContent}
               </ReactMarkdown>

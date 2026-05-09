@@ -517,6 +517,11 @@ class ApiClient {
 
     return response.text();
   }
+
+  async getWorkspaceFileList(id: string): Promise<string[]> {
+    const result = await this.request<{ files: string[] }>(`/workspaces/${id}/ls`);
+    return result.files;
+  }
 }
 
 export const api = new ApiClient();

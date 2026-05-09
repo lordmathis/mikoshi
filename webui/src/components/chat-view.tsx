@@ -25,6 +25,7 @@ export function ChatView() {
   const [previewFilePath, setPreviewFilePath] = useState<string | null>(null);
   const [previewFileContent, setPreviewFileContent] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [fileIndex, setFileIndex] = useState<Map<string, string>>(new Map());
 
   const conversations = useConversations();
   const sidebar = useSidebar();
@@ -58,6 +59,24 @@ export function ChatView() {
       setWorkspaces(res.workspaces.map((w) => ({ id: w.id, name: w.name })));
     }).catch(() => {});
   }, [workspaceRefreshTrigger]);
+
+  useEffect(() => {
+    if (!sidebar.activeWorkspaceId) {
+      setFileIndex(new Map());
+      return;
+    }
+    api.getWorkspaceFileList(sidebar.activeWorkspaceId).then((files) => {
+      const index = new Map<string, string>();
+      for (const filePath of files) {
+        const fileName = filePath.split("/").pop()!;
+        const key = fileName.toLowerCase();
+        if (!index.has(key)) {
+          index.set(key, filePath);
+        }
+      }
+      setFileIndex(index);
+    }).catch(() => {});
+  }, [sidebar.activeWorkspaceId]);
 
   const chatInput = useChatInput({
     onSend: messages.send,
@@ -177,6 +196,9 @@ export function ChatView() {
                 fileContent={previewFileContent}
                 isLoading={previewLoading}
                 onClose={handleClosePreview}
+                workspaceId={sidebar.activeWorkspaceId}
+                fileIndex={fileIndex}
+                onFileClick={handleFileClick}
               />
             </div>
           )}

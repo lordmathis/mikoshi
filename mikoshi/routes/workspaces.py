@@ -3,7 +3,7 @@ import logging
 from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, Response
 from pydantic import BaseModel
 
 from mikoshi.routes.schemas import format_timestamp, serialize_chat
@@ -104,8 +104,32 @@ async def get_workspace_file(request: Request, workspace_id: str, path: str):
         raise HTTPException(status_code=404, detail="Workspace not found")
 
     try:
-        content = workspace_service.read_file(workspace_id, path)
-        return PlainTextResponse(content)
+        content, mime_type = workspace_service.read_file_raw(workspace_id, path)
+        if mime_type.startswith("text/") or mime_type in (
+            "application/json",
+            "application/javascript",
+            "application/xml",
+        ):
+            return PlainTextResponse(content.decode("utf-8", errors="replace"))
+        return Response(content=content, media_type=mime_type)
+    except WorkspaceNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except WorkspaceError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/{workspace_id}/ls")
+async def list_workspace_files(request: Request, workspace_id: str):
+    database = request.app.state.database
+    workspace_service = _get_workspace_service(request)
+
+    workspace = database.get_workspace(workspace_id)
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    try:
+        files = workspace_service.list_files_flat(workspace_id)
+        return {"files": files}
     except WorkspaceNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except WorkspaceError as e:
