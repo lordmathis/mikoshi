@@ -30,19 +30,26 @@ export function useConversations() {
     refresh();
   }, [refresh]);
 
-  const createConversation = async (overrideConfig?: Partial<ChatConfig>) => {
+  const createConversation = async (
+    overrideConfig?: Partial<ChatConfig>,
+    workspaceId?: string | null
+  ) => {
     const defaults = await api.getDefaultChatConfig();
     const model = overrideConfig?.model ?? defaults.model;
     if (!model) throw new Error("No model available — configure a default in settings.");
-
+ 
     const config: ChatConfig = {
       model,
       system_prompt: overrideConfig?.system_prompt ?? defaults.system_prompt ?? undefined,
       tool_servers: overrideConfig?.tool_servers ?? defaults.tool_servers ?? [],
       model_params: overrideConfig?.model_params ?? defaults.model_params ?? undefined,
     };
-
-    const chat = await api.createChat({ title: "Untitled Chat", config });
+ 
+    const chat = await api.createChat({
+      title: "Untitled Chat",
+      config,
+      workspace_id: workspaceId,
+    });
     await refresh();
     return chat.id;
   };

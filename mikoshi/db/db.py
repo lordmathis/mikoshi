@@ -39,9 +39,11 @@ class Database:
         # Run migrations
         run_migrations(self.engine)
 
-    def create_chat(self, title: Optional[str] = None) -> Chat:
+    def create_chat(
+        self, title: Optional[str] = None, workspace_id: Optional[str] = None
+    ) -> Chat:
         with self.SessionLocal() as session:
-            chat = Chat(id=str(uuid.uuid4()), title=title)
+            chat = Chat(id=str(uuid.uuid4()), title=title, workspace_id=workspace_id)
             session.add(chat)
             session.commit()
             session.refresh(chat)
@@ -270,6 +272,7 @@ class Database:
                 system_prompt=source_chat.system_prompt,
                 tool_servers=source_chat.tool_servers,
                 model_params=source_chat.model_params,
+                workspace_id=source_chat.workspace_id,
             )
             session.add(new_chat)
             session.flush()  # Get the new chat ID

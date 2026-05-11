@@ -44,6 +44,7 @@ class ChatConfig(BaseModel):
 
 class CreateChatRequest(BaseModel):
     title: Optional[str] = "Untitled Chat"
+    workspace_id: Optional[str] = None
     config: ChatConfig
 
 
@@ -80,7 +81,7 @@ async def create_chat(request: Request, body: CreateChatRequest):
     database = request.app.state.database
     agent_manager: AgentManager = request.app.state.agent_manager
 
-    chat = database.create_chat(title=body.title)
+    chat = database.create_chat(title=body.title, workspace_id=body.workspace_id)
 
     try:
         agent_manager.create(

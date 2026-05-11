@@ -158,7 +158,10 @@ export function ChatView() {
         currentConversationId={currentConversationId}
         onConversationSelect={setCurrentConversationId}
         onNewConversation={async () => {
-          const id = await conversations.createConversation();
+          const id = await conversations.createConversation(
+            undefined,
+            sidebar.activeWorkspaceId
+          );
           setCurrentConversationId(id);
         }}
         onDeleteConversation={async (id) => {

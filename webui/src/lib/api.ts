@@ -88,6 +88,7 @@ export interface ChatConfig {
 
 export interface CreateChatRequest {
   title?: string;
+  workspace_id?: string | null;
   config: ChatConfig;
 }
 

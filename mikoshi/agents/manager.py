@@ -6,6 +6,7 @@ from typing import Dict, Optional, Type
 
 from mikoshi.agents.base import BaseAgent
 from mikoshi.agents.react import ReActAgent, ReActAgentPlugin
+from mikoshi.agents.workspace import WorkspaceAgent, WorkspaceAgentPlugin
 from mikoshi.agents.structured import StructuredAgentPlugin
 from mikoshi.config import TitleGenerationConfig, WorkspaceConfig
 from mikoshi.db.db import Database
@@ -31,7 +32,7 @@ class AgentRegistry:
         self.tool_manager = tool_manager
         self.agents_dir = agents_dir
         self._agent_classes: Dict[
-            str, Type[ReActAgentPlugin | StructuredAgentPlugin]
+            str, Type[ReActAgentPlugin | StructuredAgentPlugin | WorkspaceAgentPlugin]
         ] = {}
         self._register_agents()
 
@@ -65,8 +66,8 @@ class AgentRegistry:
 
                 for name, obj in inspect.getmembers(module, inspect.isclass):
                     if not issubclass(
-                        obj, (ReActAgentPlugin, StructuredAgentPlugin)
-                    ) or obj in (ReActAgentPlugin, StructuredAgentPlugin):
+                        obj, (ReActAgentPlugin, StructuredAgentPlugin, WorkspaceAgentPlugin)
+                    ) or obj in (ReActAgentPlugin, StructuredAgentPlugin, WorkspaceAgentPlugin):
                         continue
 
                     required_attrs = ["provider_id", "model_id"]
@@ -97,7 +98,7 @@ class AgentRegistry:
 
     def get_agent_class(
         self, name: str
-    ) -> Optional[Type[ReActAgentPlugin | StructuredAgentPlugin]]:
+    ) -> Optional[Type[ReActAgentPlugin | StructuredAgentPlugin | WorkspaceAgentPlugin]]:
         """Retrieve an agent class by name."""
         return self._agent_classes.get(name)
 
@@ -109,6 +110,13 @@ class AgentRegistry:
         """Return the name of the first registered agent class with default=True."""
         for name, cls in self._agent_classes.items():
             if getattr(cls, "default", False):
+                return name
+        return None
+
+    def get_default_workspace_agent_name(self) -> Optional[str]:
+        """Return the name of the first registered agent class with workspace_default=True."""
+        for name, cls in self._agent_classes.items():
+            if getattr(cls, "workspace_default", False):
                 return name
         return None
 
@@ -189,12 +197,21 @@ class AgentManager:
 
     def _hydrate(self, chat_id: str, config: dict) -> BaseAgent:
         """Instantiate agent from config dict without persisting."""
-        model = config.get("model")
-        if not model:
-            raise ValueError("Model is required")
-
         chat = self.db.get_chat(chat_id)
         workspace_id = chat.workspace_id if chat else None
+
+        model = config.get("model")
+        if not model:
+            # If no model specified, try to find a default
+            if workspace_id:
+                model = self.agent_registry.get_default_workspace_agent_name()
+            
+            if not model:
+                model = self.agent_registry.get_default_agent_name()
+
+        if not model:
+            raise ValueError("Model is required and no default agent found")
+
         connector_name = None
         if workspace_id:
             workspace = self.db.get_workspace(workspace_id)
@@ -214,7 +231,11 @@ class AgentManager:
                     servers.append(WORKSPACE_SERVER_NAME)
                 params["tool_servers"] = servers
             title_params = self._resolve_title_params()
-            return ReActAgent(
+
+            # If it's a workspace-linked chat, we use WorkspaceAgent for tree injection
+            agent_cls = WorkspaceAgent if workspace_id else ReActAgent
+            
+            return agent_cls(
                 chat_id=chat_id,
                 db=self.db,
                 provider=provider,
@@ -248,8 +269,8 @@ class AgentManager:
         params = self._resolve_agent_params(config, defaults)
         if workspace_id:
             servers = list(params.get("tool_servers", []))
-            if "workspace" not in servers:
-                servers.append("workspace")
+            if WORKSPACE_SERVER_NAME not in servers:
+                servers.append(WORKSPACE_SERVER_NAME)
             params["tool_servers"] = servers
         title_params = self._resolve_title_params()
 

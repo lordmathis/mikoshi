@@ -12,7 +12,7 @@ WORKSPACE_SERVER_NAME = "workspace"
 
 def _resolve_root(context: ToolCallContext) -> str:
     ws = context.workspace
-    return os.path.join(ws.data_dir, "workspaces", ws.workspace_id)
+    return os.path.realpath(os.path.join(ws.data_dir, "workspaces", ws.workspace_id))
 
 
 def _run_git(cwd: str, args: list[str], timeout: int = 30) -> str:
@@ -51,6 +51,7 @@ class WorkspaceToolSetHandler(ToolSetHandler):
             return "Error: No workspace linked to this chat."
         root = _resolve_root(context)
         full_path = os.path.realpath(os.path.join(root, path))
+
         if not full_path.startswith(root):
             return "Error: Path traversal detected."
         if not os.path.isfile(full_path):
