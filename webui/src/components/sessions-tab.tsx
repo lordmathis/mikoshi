@@ -31,9 +31,14 @@ export function SessionsTab({
   onClearFilter,
   isLoading = false,
 }: SessionsTabProps) {
-  const filtered = activeWorkspaceId
-    ? conversations.filter((c) => c.workspace_id === activeWorkspaceId)
-    : conversations;
+  let filtered: Conversation[];
+  if (activeWorkspaceId) {
+    filtered = conversations.filter(
+      (c) => c.workspace_id === activeWorkspaceId,
+    );
+  } else {
+    filtered = conversations.filter((c) => !c.workspace_id);
+  }
 
   const activeWorkspaceName = activeWorkspaceId
     ? workspaces.find((w) => w.id === activeWorkspaceId)?.name
