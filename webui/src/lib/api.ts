@@ -379,8 +379,9 @@ class ApiClient {
     return this.request('/config/agents');
   }
 
-  async getDefaultChatConfig(): Promise<DefaultChatConfig> {
-    return this.request('/config/default-chat');
+  async getDefaultChatConfig(workspaceId?: string | null): Promise<DefaultChatConfig> {
+    const params = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : '';
+    return this.request(`/config/default-chat${params}`);
   }
 
   // Tools endpoints

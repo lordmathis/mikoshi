@@ -1,5 +1,7 @@
 import time
 
+from typing import Optional
+
 from fastapi import APIRouter, Request
 
 router = APIRouter()
@@ -99,12 +101,13 @@ async def list_agents(request: Request):
 
 
 @router.get("/config/default-chat")
-async def get_default_chat_config(request: Request):
+async def get_default_chat_config(request: Request, workspace_id: Optional[str] = None):
     """
     Get the default agent plugin (the one with default=True).
+    When workspace_id is provided, prefers WorkspaceAgentPlugin defaults.
     """
     agent_registry = request.app.state.model_registry
-    default_name = agent_registry.get_default_agent_name()
+    default_name = agent_registry.get_default_agent_name(workspace=bool(workspace_id))
     if default_name is None:
         return {"model": None}
 

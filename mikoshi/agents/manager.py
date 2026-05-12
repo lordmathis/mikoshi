@@ -106,17 +106,14 @@ class AgentRegistry:
         """List all registered agent names."""
         return list(self._agent_classes.keys())
 
-    def get_default_agent_name(self) -> Optional[str]:
-        """Return the name of the first registered agent class with default=True."""
+    def get_default_agent_name(self, workspace: bool = False) -> Optional[str]:
+        """Return the name of the default agent. Prefers WorkspaceAgentPlugin subclasses when workspace=True."""
+        if workspace:
+            for name, cls in self._agent_classes.items():
+                if getattr(cls, "default", False) and issubclass(cls, WorkspaceAgentPlugin):
+                    return name
         for name, cls in self._agent_classes.items():
             if getattr(cls, "default", False):
-                return name
-        return None
-
-    def get_default_workspace_agent_name(self) -> Optional[str]:
-        """Return the name of the first registered agent class with workspace_default=True."""
-        for name, cls in self._agent_classes.items():
-            if getattr(cls, "workspace_default", False):
                 return name
         return None
 
@@ -202,12 +199,7 @@ class AgentManager:
 
         model = config.get("model")
         if not model:
-            # If no model specified, try to find a default
-            if workspace_id:
-                model = self.agent_registry.get_default_workspace_agent_name()
-            
-            if not model:
-                model = self.agent_registry.get_default_agent_name()
+            model = self.agent_registry.get_default_agent_name(workspace=bool(workspace_id))
 
         if not model:
             raise ValueError("Model is required and no default agent found")

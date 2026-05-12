@@ -34,7 +34,7 @@ export function useConversations() {
     overrideConfig?: Partial<ChatConfig>,
     workspaceId?: string | null
   ) => {
-    const defaults = await api.getDefaultChatConfig();
+    const defaults = await api.getDefaultChatConfig(workspaceId);
     const model = overrideConfig?.model ?? defaults.model;
     if (!model) throw new Error("No model available — configure a default in settings.");
  

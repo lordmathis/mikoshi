@@ -121,7 +121,7 @@ class WorkspaceAgent(ReActAgent):
 class WorkspaceAgentPlugin(WorkspaceAgent):
     """Base class for Workspace agent plugins."""
 
-    workspace_default: bool = False
+    default: bool = False
     name: str = ""
     provider_id: str = ""
     model_id: str = ""
