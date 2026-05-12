@@ -91,7 +91,7 @@ export function FilePreview({ filePath, fileContent, isLoading, onClose, workspa
     },
     a: ({ href, children }: any) => {
       if (href?.startsWith("wiki-image://")) {
-        const target = href.replace("wiki-image://", "");
+        const target = decodeURIComponent(href.replace("wiki-image://", ""));
         const resolved = workspaceId ? resolveTarget(target, fileIndex) : null;
         if (resolved) {
           return <img src={`/api/workspaces/${workspaceId}/files/${resolved}`} alt={target} className="max-w-full h-auto rounded" />;
@@ -105,7 +105,7 @@ export function FilePreview({ filePath, fileContent, isLoading, onClose, workspa
         );
       }
       if (href?.startsWith("wiki://")) {
-        const target = href.replace("wiki://", "");
+        const target = decodeURIComponent(href.replace("wiki://", ""));
         const resolved = workspaceId ? resolveTarget(target, fileIndex) : null;
         if (resolved) {
           return (
