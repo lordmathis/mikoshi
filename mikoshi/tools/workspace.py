@@ -666,6 +666,51 @@ class WorkspaceToolSetHandler(ToolSetHandler):
         return f"Committed as {commit_hash}"
 
     @tool(
+        description="Pull latest changes from the remote repository.",
+        parameters={
+            "type": "object",
+            "properties": {},
+        },
+    )
+    def git_pull(self, context: ToolCallContext) -> str:
+        if not context.workspace:
+            return "Error: No workspace linked to this chat."
+        ws = context.workspace
+        root = _resolve_root(context)
+
+        url_result = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            capture_output=True,
+            text=True,
+            cwd=root,
+        )
+        original_url = url_result.stdout.strip()
+
+        token = None
+        if ws.connector and self._tool_manager:
+            token = self._tool_manager.get_connector_token(ws.connector)
+
+        if token and original_url.startswith("https://"):
+            auth_url = original_url.replace(
+                "https://", f"https://x-access-token:{token}@"
+            )
+            subprocess.run(
+                ["git", "remote", "set-url", "origin", auth_url],
+                capture_output=True,
+                cwd=root,
+            )
+
+        try:
+            return _run_git(root, ["pull"], timeout=120)
+        finally:
+            if token and original_url.startswith("https://"):
+                subprocess.run(
+                    ["git", "remote", "set-url", "origin", original_url],
+                    capture_output=True,
+                    cwd=root,
+                )
+
+    @tool(
         description="Push commits to the remote repository.",
         parameters={
             "type": "object",
