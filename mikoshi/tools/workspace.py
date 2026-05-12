@@ -665,6 +665,28 @@ class WorkspaceToolSetHandler(ToolSetHandler):
         commit_hash = hash_result.stdout.strip()
         return f"Committed as {commit_hash}"
 
+    def _get_auth_git_args(self, context: ToolCallContext) -> list[str]:
+        if not context.workspace:
+            return []
+        ws = context.workspace
+        token = None
+        if ws.connector and self._tool_manager:
+            token = self._tool_manager.get_connector_token(ws.connector)
+        if not token:
+            return []
+
+        root = _resolve_root(context)
+        url_result = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            capture_output=True,
+            text=True,
+            cwd=root,
+        )
+        if not url_result.stdout.strip().startswith("https://"):
+            return []
+
+        return ["-c", f"http.extraHeader=Authorization: token {token}"]
+
     @tool(
         description="Pull latest changes from the remote repository.",
         parameters={
@@ -673,42 +695,9 @@ class WorkspaceToolSetHandler(ToolSetHandler):
         },
     )
     def git_pull(self, context: ToolCallContext) -> str:
-        if not context.workspace:
-            return "Error: No workspace linked to this chat."
-        ws = context.workspace
-        root = _resolve_root(context)
-
-        url_result = subprocess.run(
-            ["git", "remote", "get-url", "origin"],
-            capture_output=True,
-            text=True,
-            cwd=root,
-        )
-        original_url = url_result.stdout.strip()
-
-        token = None
-        if ws.connector and self._tool_manager:
-            token = self._tool_manager.get_connector_token(ws.connector)
-
-        if token and original_url.startswith("https://"):
-            auth_url = original_url.replace(
-                "https://", f"https://x-access-token:{token}@"
-            )
-            subprocess.run(
-                ["git", "remote", "set-url", "origin", auth_url],
-                capture_output=True,
-                cwd=root,
-            )
-
-        try:
-            return _run_git(root, ["pull"], timeout=120)
-        finally:
-            if token and original_url.startswith("https://"):
-                subprocess.run(
-                    ["git", "remote", "set-url", "origin", original_url],
-                    capture_output=True,
-                    cwd=root,
-                )
+        root = _require_workspace(context)
+        auth_args = self._get_auth_git_args(context)
+        return _run_git(root, auth_args + ["pull"], timeout=120)
 
     @tool(
         description="Push commits to the remote repository.",
@@ -718,39 +707,6 @@ class WorkspaceToolSetHandler(ToolSetHandler):
         },
     )
     def git_push(self, context: ToolCallContext) -> str:
-        if not context.workspace:
-            return "Error: No workspace linked to this chat."
-        ws = context.workspace
-        root = _resolve_root(context)
-
-        url_result = subprocess.run(
-            ["git", "remote", "get-url", "origin"],
-            capture_output=True,
-            text=True,
-            cwd=root,
-        )
-        original_url = url_result.stdout.strip()
-
-        token = None
-        if ws.connector and self._tool_manager:
-            token = self._tool_manager.get_connector_token(ws.connector)
-
-        if token and original_url.startswith("https://"):
-            auth_url = original_url.replace(
-                "https://", f"https://x-access-token:{token}@"
-            )
-            subprocess.run(
-                ["git", "remote", "set-url", "origin", auth_url],
-                capture_output=True,
-                cwd=root,
-            )
-
-        try:
-            return _run_git(root, ["push"], timeout=120)
-        finally:
-            if token and original_url.startswith("https://"):
-                subprocess.run(
-                    ["git", "remote", "set-url", "origin", original_url],
-                    capture_output=True,
-                    cwd=root,
-                )
+        root = _require_workspace(context)
+        auth_args = self._get_auth_git_args(context)
+        return _run_git(root, auth_args + ["push"], timeout=120)
