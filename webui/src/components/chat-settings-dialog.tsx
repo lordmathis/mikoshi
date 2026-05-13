@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Settings } from "lucide-react";
+import { Settings, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "./ui/button";
 import {
   Dialog,
@@ -32,8 +32,8 @@ export interface ChatSettings {
 interface ChatSettingsDialogProps {
   settings: ChatSettings;
   onSettingsChange: (settings: ChatSettings) => void;
-  currentChatId?: string; // Optional chat ID for updating existing chats
-  onChatUpdated?: () => void; // Callback when chat is updated on backend
+  currentChatId?: string;
+  onChatUpdated?: () => void;
 }
 
 export function ChatSettingsDialog({
@@ -47,118 +47,145 @@ export function ChatSettingsDialog({
   const [modelsByProvider, setModelsByProvider] = useState<Record<string, { id: string; label: string }[]>>({});
   const [providers, setProviders] = useState<string[]>([]);
   const [selectedProvider, setSelectedProvider] = useState<string>("");
+  const [selectedAgent, setSelectedAgent] = useState<string>("");
   const [toolServers, setToolServers] = useState<ToolServer[]>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [isLoadingTools, setIsLoadingTools] = useState(false);
   const [agentConfigs, setAgentConfigs] = useState<AgentConfig[]>([]);
+  const [toolsExpanded, setToolsExpanded] = useState(false);
 
-  useEffect(() => {
-    if (open) {
-      void Promise.all([fetchTools(), fetchModels(), fetchAgents()]);
-    }
-  }, [open]);
-
-  // Sync local settings when parent settings change
   useEffect(() => {
     setLocalSettings(settings);
   }, [settings]);
 
-  const fetchModels = async () => {
-    try {
-      setIsLoadingModels(true);
-      const response = await api.listModels();
+  useEffect(() => {
+    if (!open) return;
 
-      // Group models by provider
-      const grouped: Record<string, { id: string; label: string }[]> = {};
-      response.data.forEach((model: Model) => {
-        const provider = model.owned_by || "Unknown";
-        if (!grouped[provider]) {
-          grouped[provider] = [];
-        }
-        grouped[provider].push({
-          id: model.id,
-          label: model.id,
-        });
-      });
+    let fetchedAgents: AgentConfig[] = [];
+    let fetchedModels: Record<string, { id: string; label: string }[]> = {};
+    let fetchedProviders: string[] = [];
 
-      setModelsByProvider(grouped);
-      const providerList = Object.keys(grouped).sort();
-      setProviders(providerList);
+    const loadAgents = async () => {
+      try {
+        const response = await api.listAgents();
+        setAgentConfigs(response.agents);
+        fetchedAgents = response.agents;
+      } catch (error) {
+        console.error("Failed to fetch agents:", error);
+      }
+    };
 
-      // Determine the initial provider based on current model
-      if (localSettings.baseModel) {
-        const currentProvider = response.data.find(
-          (m: Model) => m.id === localSettings.baseModel
-        )?.owned_by || "";
-        setSelectedProvider(currentProvider);
-      } else if (providerList.length > 0) {
-        // Set default provider and model if none selected
-        setSelectedProvider(providerList[0]);
-        const firstProvider = providerList[0];
-        const firstModel = grouped[firstProvider]?.[0];
-        if (firstModel) {
+    const loadModels = async () => {
+      try {
+        setIsLoadingModels(true);
+        const response = await api.listModels();
+
+        const grouped: Record<string, { id: string; label: string }[]> = {};
+        response.data
+          .filter((model: Model) => model.owned_by !== "mikoshi")
+          .forEach((model: Model) => {
+            const provider = model.owned_by || "Unknown";
+            if (!grouped[provider]) {
+              grouped[provider] = [];
+            }
+            grouped[provider].push({
+              id: model.id,
+              label: model.id.includes(":") ? model.id.split(":").slice(1).join(":") : model.id,
+            });
+          });
+
+        fetchedModels = grouped;
+        fetchedProviders = Object.keys(grouped).sort();
+        setModelsByProvider(grouped);
+        setProviders(fetchedProviders);
+      } catch (error) {
+        console.error("Failed to fetch models:", error);
+        setModelsByProvider({});
+        setProviders([]);
+      } finally {
+        setIsLoadingModels(false);
+      }
+    };
+
+    const loadTools = async () => {
+      try {
+        setIsLoadingTools(true);
+        const response = await api.listTools();
+        setToolServers(response.tool_servers);
+      } catch (error) {
+        console.error("Failed to fetch tools:", error);
+        setToolServers([]);
+      } finally {
+        setIsLoadingTools(false);
+      }
+    };
+
+    void Promise.all([loadTools(), loadAgents(), loadModels()]).then(() => {
+      const baseModel = settings.baseModel;
+
+      if (baseModel) {
+        const agent = fetchedAgents.find((a) => a.name === baseModel);
+        if (agent) {
+          setSelectedAgent(agent.name);
+          setSelectedProvider(agent.provider);
           setLocalSettings((prev) => ({
             ...prev,
-            baseModel: firstModel.id,
+            baseModel: `${agent.provider}:${agent.model_id}`,
           }));
+        } else if (baseModel.includes(":")) {
+          setSelectedProvider(baseModel.split(":")[0]);
+        } else if (fetchedProviders.length > 0) {
+          setSelectedProvider(fetchedProviders[0]);
+        }
+      } else if (fetchedProviders.length > 0) {
+        setSelectedProvider(fetchedProviders[0]);
+        const firstModel = fetchedModels[fetchedProviders[0]]?.[0];
+        if (firstModel) {
+          setLocalSettings((prev) => ({ ...prev, baseModel: firstModel.id }));
         }
       }
-    } catch (error) {
-      console.error("Failed to fetch models:", error);
-      setModelsByProvider({});
-      setProviders([]);
-    } finally {
-      setIsLoadingModels(false);
-    }
-  };
 
-  const fetchTools = async () => {
-    try {
-      setIsLoadingTools(true);
-      const response = await api.listTools();
-      setToolServers(response.tool_servers);
-    } catch (error) {
-      console.error("Failed to fetch tools:", error);
-      setToolServers([]);
-    } finally {
-      setIsLoadingTools(false);
-    }
-  };
+      setToolsExpanded(false);
+    });
 
-  const fetchAgents = async () => {
-    try {
-      const response = await api.listAgents();
-      setAgentConfigs(response.agents);
-    } catch (error) {
-      console.error("Failed to fetch agents:", error);
-      setAgentConfigs([]);
-    }
-  };
+    return () => {
+      setSelectedAgent("");
+    };
+  }, [open, settings]);
 
   const handleSave = async () => {
-    // Update local state first
-    onSettingsChange(localSettings);
-    
-    // If there's a current chat, update it on the backend
+    let modelToSend = localSettings.baseModel;
+
+    if (selectedAgent) {
+      const agent = agentConfigs.find((a) => a.name === selectedAgent);
+      if (agent && localSettings.baseModel === `${agent.provider}:${agent.model_id}`) {
+        modelToSend = selectedAgent;
+      }
+    }
+
+    onSettingsChange({
+      ...localSettings,
+      baseModel: modelToSend,
+    });
+
     if (currentChatId) {
       try {
         await api.updateChat(currentChatId, {
           config: {
-            model: localSettings.baseModel,
+            model: modelToSend,
             system_prompt: localSettings.systemPrompt || undefined,
             tool_servers: localSettings.enabledTools.length > 0 ? localSettings.enabledTools : undefined,
             model_params: localSettings.modelParams,
           },
         });
-        // Notify parent that chat was updated
         onChatUpdated?.();
       } catch (error) {
         console.error("Failed to update chat settings:", error);
         alert(`Failed to update chat settings: ${error instanceof Error ? error.message : "Unknown error"}`);
-        return; // Don't close dialog on error
+        return;
       }
     }
-    
+
     setOpen(false);
   };
 
@@ -176,6 +203,38 @@ export function ChatSettingsDialog({
     }));
   };
 
+  const handleAgentChange = (value: string) => {
+    setSelectedAgent(value);
+    const agent = agentConfigs.find((a) => a.name === value);
+    if (agent) {
+      setLocalSettings((prev) => ({
+        ...prev,
+        baseModel: `${agent.provider}:${agent.model_id}`,
+        systemPrompt: agent.system_prompt,
+        enabledTools: agent.tool_servers,
+        modelParams: {
+          ...prev.modelParams,
+          max_iterations: agent.max_iterations,
+          temperature: agent.temperature ?? prev.modelParams.temperature,
+          max_tokens: agent.max_tokens ?? prev.modelParams.max_tokens,
+        },
+      }));
+      setSelectedProvider(agent.provider);
+    }
+  };
+
+  const handleProviderChange = (value: string) => {
+    setSelectedProvider(value);
+    const modelsForProvider = modelsByProvider[value] || [];
+    if (modelsForProvider.length > 0) {
+      setLocalSettings((prev) => ({ ...prev, baseModel: modelsForProvider[0].id }));
+    }
+  };
+
+  const handleModelChange = (value: string) => {
+    setLocalSettings((prev) => ({ ...prev, baseModel: value }));
+  };
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -188,40 +247,37 @@ export function ChatSettingsDialog({
         <DialogHeader>
           <DialogTitle className="uppercase tracking-[0.15em] text-sm text-primary">Chat Configuration</DialogTitle>
           <DialogDescription className="cp-label">
-            Configure model, system prompt, and tools for this session.
+            Configure agent, model, system prompt, and tools for this session.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6 py-4">
+          {/* Agent Selection */}
+          <div className="space-y-2">
+            <Label htmlFor="agent">Agent</Label>
+            <Select value={selectedAgent || undefined} onValueChange={handleAgentChange}>
+              <SelectTrigger id="agent" className="w-full">
+                <SelectValue placeholder="Select an agent..." />
+              </SelectTrigger>
+              <SelectContent>
+                {agentConfigs.map((agent) => (
+                  <SelectItem key={agent.name} value={agent.name}>
+                    {agent.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Applies a preset for system prompt, tools, and model. Everything can be overridden below.
+            </p>
+          </div>
+
           {/* Provider Selection */}
           <div className="space-y-2">
             <Label htmlFor="provider">Provider</Label>
             <Select
               value={selectedProvider}
-              onValueChange={(value) => {
-                setSelectedProvider(value);
-                const modelsForProvider = modelsByProvider[value] || [];
-                if (modelsForProvider.length > 0 && !modelsForProvider.find(m => m.id === localSettings.baseModel)) {
-                  const firstModel = modelsForProvider[0];
-                  const agent = agentConfigs.find((a) => a.name === firstModel.id);
-                  if (agent) {
-                    setLocalSettings((prev) => ({
-                      ...prev,
-                      baseModel: firstModel.id,
-                      systemPrompt: agent.system_prompt,
-                      enabledTools: agent.tool_servers,
-                      modelParams: {
-                        ...prev.modelParams,
-                        max_iterations: agent.max_iterations,
-                        temperature: agent.temperature ?? prev.modelParams.temperature,
-                        max_tokens: agent.max_tokens ?? prev.modelParams.max_tokens,
-                      },
-                    }));
-                  } else {
-                    setLocalSettings((prev) => ({ ...prev, baseModel: firstModel.id }));
-                  }
-                }
-              }}
+              onValueChange={handleProviderChange}
               disabled={isLoadingModels}
             >
               <SelectTrigger id="provider" className="w-full">
@@ -237,30 +293,12 @@ export function ChatSettingsDialog({
             </Select>
           </div>
 
-          {/* Base Model Selection */}
+          {/* Model Selection */}
           <div className="space-y-2">
-            <Label htmlFor="base-model">Base Model</Label>
+            <Label htmlFor="base-model">Model</Label>
             <Select
               value={localSettings.baseModel}
-              onValueChange={(value) => {
-                const agent = agentConfigs.find((a) => a.name === value);
-                if (agent) {
-                  setLocalSettings((prev) => ({
-                    ...prev,
-                    baseModel: value,
-                    systemPrompt: agent.system_prompt,
-                    enabledTools: agent.tool_servers,
-                    modelParams: {
-                      ...prev.modelParams,
-                      max_iterations: agent.max_iterations,
-                      temperature: agent.temperature ?? prev.modelParams.temperature,
-                      max_tokens: agent.max_tokens ?? prev.modelParams.max_tokens,
-                    },
-                  }));
-                } else {
-                  setLocalSettings((prev) => ({ ...prev, baseModel: value }));
-                }
-              }}
+              onValueChange={handleModelChange}
               disabled={isLoadingModels || !selectedProvider}
             >
               <SelectTrigger id="base-model" className="w-full">
@@ -306,9 +344,8 @@ export function ChatSettingsDialog({
                 Configure advanced model behavior settings.
               </p>
             </div>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Max Iterations */}
               <div className="space-y-2">
                 <Label htmlFor="max-iterations">Max Iterations</Label>
                 <Input
@@ -333,7 +370,6 @@ export function ChatSettingsDialog({
                 </p>
               </div>
 
-              {/* Temperature */}
               <div className="space-y-2">
                 <Label htmlFor="temperature">Temperature</Label>
                 <Input
@@ -360,7 +396,6 @@ export function ChatSettingsDialog({
                 </p>
               </div>
 
-              {/* Max Tokens */}
               <div className="space-y-2">
                 <Label htmlFor="max-tokens">Max Tokens</Label>
                 <Input
@@ -387,48 +422,62 @@ export function ChatSettingsDialog({
             </div>
           </div>
 
-          {/* Tools Section */}
+          {/* Tools Section - Collapsible */}
           <div className="space-y-4">
-            <div>
-              <Label className="text-xs uppercase tracking-[0.15em] text-primary">Tool Servers</Label>
-              <p className="cp-label mt-1">
-                Select which tool servers the assistant can use.
-              </p>
-            </div>
-            {isLoadingTools ? (
-              <div className="rounded-lg border border-border p-4 text-center text-sm text-muted-foreground">
-                Loading available tools...
-              </div>
-            ) : toolServers.length === 0 ? (
-              <div className="rounded-lg border border-border p-4 text-center text-sm text-muted-foreground">
-                No tool servers available
-              </div>
-            ) : (
-              <div className="space-y-3 rounded-lg border border-border p-4">
-                {toolServers.map((server) => (
-                  <div
-                    key={server.name}
-                    className="flex items-center justify-between space-x-4"
-                  >
-                    <div className="flex-1 space-y-0.5">
-                      <Label
-                        htmlFor={`tool-${server.name}`}
-                        className="cursor-pointer font-medium"
-                      >
-                        {server.name}
-                      </Label>
-                      <p className="text-sm text-muted-foreground">
-                        {server.tools.length} tool{server.tools.length !== 1 ? 's' : ''} available ({server.type})
-                      </p>
+            <button
+              type="button"
+              onClick={() => setToolsExpanded(!toolsExpanded)}
+              className="flex items-center gap-2 w-full text-left"
+            >
+              {toolsExpanded ? (
+                <ChevronDown className="h-4 w-4 text-primary" />
+              ) : (
+                <ChevronRight className="h-4 w-4 text-primary" />
+              )}
+              <Label className="text-xs uppercase tracking-[0.15em] text-primary cursor-pointer">
+                Tool Servers
+              </Label>
+              <span className="text-xs text-muted-foreground">
+                ({localSettings.enabledTools.length} enabled)
+              </span>
+            </button>
+
+            {toolsExpanded && (
+              isLoadingTools ? (
+                <div className="rounded-lg border border-border p-4 text-center text-sm text-muted-foreground">
+                  Loading available tools...
+                </div>
+              ) : toolServers.length === 0 ? (
+                <div className="rounded-lg border border-border p-4 text-center text-sm text-muted-foreground">
+                  No tool servers available
+                </div>
+              ) : (
+                <div className="space-y-3 rounded-lg border border-border p-4">
+                  {toolServers.map((server) => (
+                    <div
+                      key={server.name}
+                      className="flex items-center justify-between space-x-4"
+                    >
+                      <div className="flex-1 space-y-0.5">
+                        <Label
+                          htmlFor={`tool-${server.name}`}
+                          className="cursor-pointer font-medium"
+                        >
+                          {server.name}
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                          {server.tools.length} tool{server.tools.length !== 1 ? 's' : ''} available ({server.type})
+                        </p>
+                      </div>
+                      <Switch
+                        id={`tool-${server.name}`}
+                        checked={localSettings.enabledTools.includes(server.name)}
+                        onCheckedChange={() => toggleTool(server.name)}
+                      />
                     </div>
-                    <Switch
-                      id={`tool-${server.name}`}
-                      checked={localSettings.enabledTools.includes(server.name)}
-                      onCheckedChange={() => toggleTool(server.name)}
-                    />
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )
             )}
           </div>
         </div>

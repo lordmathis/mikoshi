@@ -233,7 +233,7 @@ export function ChatInput({
             }}
           >
             <Bot className="h-3.5 w-3.5 text-primary/60" />
-            <span className="cp-label" style={{ color: '#f5d800' }}>{chatSettings.baseModel}</span>
+            <span className="cp-label" style={{ color: '#f5d800' }}>{chatSettings.baseModel.includes(':') ? chatSettings.baseModel.split(':').slice(1).join(':') : chatSettings.baseModel}</span>
           </div>
           {chatSettings.enabledTools.length > 0 && (
             <div

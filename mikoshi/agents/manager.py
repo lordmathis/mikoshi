@@ -108,10 +108,12 @@ class AgentRegistry:
 
     def get_default_agent_name(self, workspace: bool = False) -> Optional[str]:
         """Return the name of the default agent. Prefers WorkspaceAgentPlugin subclasses when workspace=True."""
-        if workspace:
-            for name, cls in self._agent_classes.items():
-                if getattr(cls, "default", False) and issubclass(cls, WorkspaceAgentPlugin):
-                    return name
+        for name, cls in self._agent_classes.items():
+            if not getattr(cls, "default", False):
+                continue
+            is_workspace = issubclass(cls, WorkspaceAgentPlugin)
+            if workspace == is_workspace:
+                return name
         for name, cls in self._agent_classes.items():
             if getattr(cls, "default", False):
                 return name
