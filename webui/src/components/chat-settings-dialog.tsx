@@ -53,6 +53,8 @@ export function ChatSettingsDialog({
   const [isLoadingTools, setIsLoadingTools] = useState(false);
   const [agentConfigs, setAgentConfigs] = useState<AgentConfig[]>([]);
   const [toolsExpanded, setToolsExpanded] = useState(false);
+  const [systemPromptExpanded, setSystemPromptExpanded] = useState(false);
+  const [modelParamsExpanded, setModelParamsExpanded] = useState(false);
 
   useEffect(() => {
     setLocalSettings(settings);
@@ -146,6 +148,8 @@ export function ChatSettingsDialog({
       }
 
       setToolsExpanded(false);
+      setSystemPromptExpanded(false);
+      setModelParamsExpanded(false);
     });
 
     return () => {
@@ -314,112 +318,140 @@ export function ChatSettingsDialog({
             </Select>
           </div>
 
-          {/* System Prompt */}
-          <div className="space-y-2">
-            <Label htmlFor="system-prompt">System Prompt</Label>
-            <Textarea
-              id="system-prompt"
-              value={localSettings.systemPrompt}
-              onChange={(e) =>
-                setLocalSettings((prev) => ({
-                  ...prev,
-                  systemPrompt: e.target.value,
-                }))
-              }
-              placeholder="Enter system prompt..."
-              className="min-h-[120px] resize-none"
-              rows={6}
-            />
-            <p className="text-xs text-muted-foreground">
-              The system prompt sets the behavior and context for the AI
-              assistant.
-            </p>
+          {/* System Prompt - Collapsible */}
+          <div className="space-y-4">
+            <button
+              type="button"
+              onClick={() => setSystemPromptExpanded(!systemPromptExpanded)}
+              className="flex items-center gap-2 w-full text-left"
+            >
+              {systemPromptExpanded ? (
+                <ChevronDown className="h-4 w-4 text-primary" />
+              ) : (
+                <ChevronRight className="h-4 w-4 text-primary" />
+              )}
+              <Label className="text-xs uppercase tracking-[0.15em] text-primary cursor-pointer">
+                System Prompt
+              </Label>
+            </button>
+
+            {systemPromptExpanded && (
+              <div className="space-y-2">
+                <Textarea
+                  id="system-prompt"
+                  value={localSettings.systemPrompt}
+                  onChange={(e) =>
+                    setLocalSettings((prev) => ({
+                      ...prev,
+                      systemPrompt: e.target.value,
+                    }))
+                  }
+                  placeholder="Enter system prompt..."
+                  className="min-h-[120px] resize-none"
+                  rows={6}
+                />
+                <p className="text-xs text-muted-foreground">
+                  The system prompt sets the behavior and context for the AI
+                  assistant.
+                </p>
+              </div>
+            )}
           </div>
 
-          {/* Model Parameters Section */}
+          {/* Model Parameters Section - Collapsible */}
           <div className="space-y-4">
-            <div>
-              <Label className="text-xs uppercase tracking-[0.15em] text-primary">Model Parameters</Label>
-              <p className="cp-label mt-1">
-                Configure advanced model behavior settings.
-              </p>
-            </div>
+            <button
+              type="button"
+              onClick={() => setModelParamsExpanded(!modelParamsExpanded)}
+              className="flex items-center gap-2 w-full text-left"
+            >
+              {modelParamsExpanded ? (
+                <ChevronDown className="h-4 w-4 text-primary" />
+              ) : (
+                <ChevronRight className="h-4 w-4 text-primary" />
+              )}
+              <Label className="text-xs uppercase tracking-[0.15em] text-primary cursor-pointer">
+                Model Parameters
+              </Label>
+            </button>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="max-iterations">Max Iterations</Label>
-                <Input
-                  id="max-iterations"
-                  type="number"
-                  min="1"
-                  value={localSettings.modelParams.max_iterations ?? 5}
-                  onChange={(e) => {
-                    const value = e.target.value === "" ? undefined : parseInt(e.target.value);
-                    setLocalSettings((prev) => ({
-                      ...prev,
-                      modelParams: {
-                        ...prev.modelParams,
-                        max_iterations: value,
-                      },
-                    }));
-                  }}
-                  placeholder="5"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Maximum tool call iterations
-                </p>
-              </div>
+            {modelParamsExpanded && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="max-iterations">Max Iterations</Label>
+                  <Input
+                    id="max-iterations"
+                    type="number"
+                    min="1"
+                    value={localSettings.modelParams.max_iterations ?? 5}
+                    onChange={(e) => {
+                      const value = e.target.value === "" ? undefined : parseInt(e.target.value);
+                      setLocalSettings((prev) => ({
+                        ...prev,
+                        modelParams: {
+                          ...prev.modelParams,
+                          max_iterations: value,
+                        },
+                      }));
+                    }}
+                    placeholder="5"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Maximum tool call iterations
+                  </p>
+                </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="temperature">Temperature</Label>
-                <Input
-                  id="temperature"
-                  type="number"
-                  min="0"
-                  max="2"
-                  step="0.1"
-                  value={localSettings.modelParams.temperature ?? ""}
-                  onChange={(e) => {
-                    const value = e.target.value === "" ? undefined : parseFloat(e.target.value);
-                    setLocalSettings((prev) => ({
-                      ...prev,
-                      modelParams: {
-                        ...prev.modelParams,
-                        temperature: value,
-                      },
-                    }));
-                  }}
-                  placeholder="Default"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Randomness (0-2, lower = focused)
-                </p>
-              </div>
+                <div className="space-y-2">
+                  <Label htmlFor="temperature">Temperature</Label>
+                  <Input
+                    id="temperature"
+                    type="number"
+                    min="0"
+                    max="2"
+                    step="0.1"
+                    value={localSettings.modelParams.temperature ?? ""}
+                    onChange={(e) => {
+                      const value = e.target.value === "" ? undefined : parseFloat(e.target.value);
+                      setLocalSettings((prev) => ({
+                        ...prev,
+                        modelParams: {
+                          ...prev.modelParams,
+                          temperature: value,
+                        },
+                      }));
+                    }}
+                    placeholder="Default"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Randomness (0-2, lower = focused)
+                  </p>
+                </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="max-tokens">Max Tokens</Label>
-                <Input
-                  id="max-tokens"
-                  type="number"
-                  min="1"
-                  value={localSettings.modelParams.max_tokens ?? ""}
-                  onChange={(e) => {
-                    const value = e.target.value === "" ? undefined : parseInt(e.target.value);
-                    setLocalSettings((prev) => ({
-                      ...prev,
-                      modelParams: {
-                        ...prev.modelParams,
-                        max_tokens: value,
-                      },
-                    }));
-                  }}
-                  placeholder="Default"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Maximum response length
-                </p>
+                <div className="space-y-2">
+                  <Label htmlFor="max-tokens">Max Tokens</Label>
+                  <Input
+                    id="max-tokens"
+                    type="number"
+                    min="1"
+                    value={localSettings.modelParams.max_tokens ?? ""}
+                    onChange={(e) => {
+                      const value = e.target.value === "" ? undefined : parseInt(e.target.value);
+                      setLocalSettings((prev) => ({
+                        ...prev,
+                        modelParams: {
+                          ...prev.modelParams,
+                          max_tokens: value,
+                        },
+                      }));
+                    }}
+                    placeholder="Default"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Maximum response length
+                  </p>
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Tools Section - Collapsible */}
