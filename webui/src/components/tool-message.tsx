@@ -1,6 +1,6 @@
 import { Wrench } from "lucide-react";
 import { cn } from "../lib/utils";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
@@ -12,8 +12,19 @@ interface ToolMessageProps {
   message: Message;
 }
 
+function extractDisplayContent(content: string): string {
+  try {
+    const parsed = JSON.parse(content);
+    if (parsed && parsed.__workspace === true && typeof parsed.summary === "string") {
+      return parsed.summary;
+    }
+  } catch {}
+  return content;
+}
+
 export function ToolMessage({ message }: ToolMessageProps) {
   const [showToolResult, setShowToolResult] = useState(false);
+  const displayContent = useMemo(() => extractDisplayContent(message.content), [message.content]);
 
   return (
     <div
@@ -121,7 +132,7 @@ export function ToolMessage({ message }: ToolMessageProps) {
                   ),
                 }}
               >
-                {message.content}
+                {displayContent}
               </ReactMarkdown>
             </div>
           </div>

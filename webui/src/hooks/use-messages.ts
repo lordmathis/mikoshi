@@ -1,10 +1,22 @@
 import { useState, useEffect, useCallback } from "react";
-import { api, type Message, type FileResource, type WorkspaceUpdateData } from "../lib/api";
+import { api, type Message, type FileResource } from "../lib/api";
 import { type ChatSettings } from "../components/chat-settings-dialog";
+
+function tryParseWorkspaceChange(
+  content: string,
+): { paths: string[] } | null {
+  try {
+    const parsed = JSON.parse(content);
+    if (parsed && parsed.__workspace === true) {
+      return { paths: parsed.paths ?? [] };
+    }
+  } catch {}
+  return null;
+}
 
 export function useMessages(
   chatId: string | undefined,
-  onWorkspaceUpdate?: (data: WorkspaceUpdateData) => void
+  onWorkspaceChange?: (paths: string[]) => void
 ) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -64,43 +76,55 @@ export function useMessages(
     fetchInitial();
   }, [chatId, reloadMessages, loadDefaultSettings]);
 
+  const handleEvent = useCallback(
+    (event: { type: string; data: unknown }) => {
+      if (event.type === "message") {
+        const msg = event.data as Message;
+        setMessages((prev) => [...prev, msg]);
+
+        if (msg.role === "tool") {
+          const change = tryParseWorkspaceChange(msg.content);
+          if (change) {
+            onWorkspaceChange?.(change.paths);
+          }
+        }
+      } else if (event.type === "error") {
+        throw new Error((event.data as { message: string }).message);
+      }
+    },
+    [onWorkspaceChange]
+  );
+
   const send = async (text: string, files: FileResource[]) => {
     if (!chatId) return;
-    
+
     const tempId = `temp-${Date.now()}`;
     const optimisticMessage: Message = {
       id: tempId,
-      role: 'user',
+      role: "user",
       content: text,
       sequence: messages.length,
       created_at: new Date().toISOString(),
-      files: files.map(f => ({
+      files: files.map((f) => ({
         id: f.id,
         filename: f.filename,
         content_type: f.content_type,
         source: f.source,
       })),
     };
-    
-    setMessages(prev => [...prev, optimisticMessage]);
-    
+
+    setMessages((prev) => [...prev, optimisticMessage]);
+
     try {
       setIsSending(true);
       for await (const event of api.streamMessage(chatId, {
         message: text,
-        file_ids: files.map(f => f.id),
+        file_ids: files.map((f) => f.id),
       })) {
-        if (event.type === 'message') {
-          setMessages(prev => [...prev, event.data as Message]);
-        } else if (event.type === 'workspace_update') {
-          onWorkspaceUpdate?.(event.data as WorkspaceUpdateData);
-        } else if (event.type === 'error') {
-          setMessages(prev => prev.filter(m => m.id !== tempId));
-          throw new Error((event.data as { message: string }).message);
-        }
+        handleEvent(event);
       }
     } catch (error) {
-      setMessages(prev => prev.filter(m => m.id !== tempId));
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
       throw error;
     } finally {
       setIsSending(false);
@@ -113,13 +137,7 @@ export function useMessages(
       setIsSending(true);
       await reloadMessages();
       for await (const event of api.streamRetry(chatId)) {
-        if (event.type === 'message') {
-          setMessages(prev => [...prev, event.data as Message]);
-        } else if (event.type === 'workspace_update') {
-          onWorkspaceUpdate?.(event.data as WorkspaceUpdateData);
-        } else if (event.type === 'error') {
-          throw new Error((event.data as { message: string }).message);
-        }
+        handleEvent(event);
       }
     } finally {
       setIsSending(false);
@@ -132,13 +150,7 @@ export function useMessages(
       setIsSending(true);
       await reloadMessages();
       for await (const event of api.streamEdit(chatId, text)) {
-        if (event.type === 'message') {
-          setMessages(prev => [...prev, event.data as Message]);
-        } else if (event.type === 'workspace_update') {
-          onWorkspaceUpdate?.(event.data as WorkspaceUpdateData);
-        } else if (event.type === 'error') {
-          throw new Error((event.data as { message: string }).message);
-        }
+        handleEvent(event);
       }
     } finally {
       setIsSending(false);

@@ -57,14 +57,15 @@ export interface Message {
   }>;
 }
 
-export interface WorkspaceUpdateData {
-  workspace_id: string;
-  tree: FileNode;
+export interface WorkspaceChangeResult {
+  __workspace: true;
+  summary: string;
+  paths: string[];
 }
 
 export interface StreamEvent {
-  type: 'message' | 'error' | 'done' | 'workspace_update';
-  data: Message | { message: string } | Record<string, never> | WorkspaceUpdateData;
+  type: 'message' | 'error' | 'done';
+  data: Message | { message: string } | Record<string, never>;
 }
 
 export interface ModelParams {

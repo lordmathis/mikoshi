@@ -183,7 +183,7 @@ def format_history(db: Database, chat_id: str) -> List[ChatCompletionMessagePara
                 {
                     "role": "tool",
                     "tool_call_id": msg.tool_call_id or "unknown",
-                    "content": parse_content(msg.content),
+                    "content": msg.content,
                 }
             )
         elif msg.role == "system":

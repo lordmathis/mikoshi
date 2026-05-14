@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from "react";
-import { api, type FileNode, type WorkspaceUpdateData } from "../lib/api";
+import { api, type FileNode } from "../lib/api";
 
 export function useWorkspace(workspaceId: string | null | undefined) {
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
@@ -42,15 +42,6 @@ export function useWorkspace(workspaceId: string | null | undefined) {
     [workspaceId]
   );
 
-  const handleSSEEvent = useCallback(
-    (data: WorkspaceUpdateData) => {
-      if (workspaceId && data.workspace_id === workspaceId) {
-        setTree(data.tree);
-      }
-    },
-    [workspaceId]
-  );
-
   const reset = useCallback(() => {
     setActiveFilePath(null);
     setFileContent(null);
@@ -70,7 +61,6 @@ export function useWorkspace(workspaceId: string | null | undefined) {
     isLoadingFile,
     fetchTree,
     fetchFile,
-    handleSSEEvent,
     reset,
     closeFile,
   };

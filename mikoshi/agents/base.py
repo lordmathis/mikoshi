@@ -17,7 +17,6 @@ from mikoshi.skills.registry import SkillRegistry
 from mikoshi.tools.approval import ToolDeniedError
 from mikoshi.tools.context import ToolCallContext, WorkspaceContext
 from mikoshi.tools.manager import ToolManager
-from mikoshi.tools.workspace import WORKSPACE_SERVER_NAME
 from mikoshi.workspace import WorkspaceService
 
 logger = logging.getLogger(__name__)
@@ -213,31 +212,6 @@ class BaseAgent(ABC):
                         queue,
                         StreamEvent(type="message", data=self._format_message(msg)),
                     )
-
-                    if (
-                        tool_name.startswith(f"{WORKSPACE_SERVER_NAME}__")
-                        and self.workspace_id
-                        and self._workspace_service
-                    ):
-                        try:
-                            tree = self._workspace_service.get_file_tree(
-                                self.workspace_id
-                            )
-                            await self._emit(
-                                queue,
-                                StreamEvent(
-                                    type="workspace_update",
-                                    data={
-                                        "workspace_id": self.workspace_id,
-                                        "tree": tree.model_dump(),
-                                    },
-                                ),
-                            )
-                        except Exception:
-                            logger.debug(
-                                "Failed to emit workspace_update event",
-                                exc_info=True,
-                            )
 
                     messages.append(
                         {

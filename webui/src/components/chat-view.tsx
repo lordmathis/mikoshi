@@ -11,7 +11,7 @@ import { useMessages } from "../hooks/use-messages";
 import { useChatFiles } from "../hooks/use-chat-files";
 import { useChatInput } from "../hooks/use-chat-input";
 import { useSidebar } from "../hooks/use-sidebar";
-import { api, type ConnectorEntry, type FileNode, type WorkspaceUpdateData } from "../lib/api";
+import { api, type ConnectorEntry, type FileNode } from "../lib/api";
 
 export function ChatView() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -30,14 +30,27 @@ export function ChatView() {
   const conversations = useConversations();
   const sidebar = useSidebar();
 
-  const handleWorkspaceSSEEvent = useCallback(
-    (data: WorkspaceUpdateData) => {
-      setSidebarWorkspaceTree(data.tree);
+  const handleWorkspaceChange = useCallback(
+    async (paths: string[]) => {
+      const wsId = sidebar.activeWorkspaceId;
+      if (!wsId) return;
+
+      try {
+        const tree = await api.getWorkspaceTree(wsId);
+        setSidebarWorkspaceTree(tree);
+      } catch {}
+
+      if (previewFilePath && paths.includes(previewFilePath)) {
+        try {
+          const content = await api.getWorkspaceFile(wsId, previewFilePath);
+          setPreviewFileContent(content);
+        } catch {}
+      }
     },
-    []
+    [sidebar.activeWorkspaceId, previewFilePath]
   );
 
-  const messages = useMessages(currentConversationId, handleWorkspaceSSEEvent);
+  const messages = useMessages(currentConversationId, handleWorkspaceChange);
   const files = useChatFiles(currentConversationId);
 
   const currentConversation = conversations.conversations.find(

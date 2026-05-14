@@ -1,5 +1,6 @@
 import base64
 import fnmatch
+import json
 import logging
 import mimetypes
 import os
@@ -19,6 +20,12 @@ MAX_OUTPUT_BYTES = 50000
 GREP_MATCH_LIMIT = 100
 FIND_RESULT_LIMIT = 100
 GREP_LINE_TRUNCATE = 500
+
+def _workspace_result(summary: str, paths: list[str] | None = None) -> str:
+    return json.dumps(
+        {"__workspace": True, "summary": summary, "paths": paths or []}
+    )
+
 
 IMAGE_EXTENSIONS = {
     ".png",
@@ -240,7 +247,10 @@ class WorkspaceToolSetHandler(ToolSetHandler):
             with open(full_path, "w", encoding="utf-8") as f:
                 f.write(content)
             line_count = content.count("\n") + (1 if content and not content.endswith("\n") else 0)
-            return f"Wrote {len(content)} bytes ({line_count} lines) to {path}"
+            return _workspace_result(
+                f"Wrote {len(content)} bytes ({line_count} lines) to {path}",
+                paths=[path],
+            )
         except Exception as e:
             return f"Error writing file: {e}"
 
@@ -312,7 +322,7 @@ class WorkspaceToolSetHandler(ToolSetHandler):
             msg = f"Applied {len(edits)} edit(s) to {path} ({old_lines} → {new_lines} lines)"
             if warnings:
                 msg += "\n" + "\n".join(f"Note: {w}" for w in warnings)
-            return msg
+            return _workspace_result(msg, paths=[path])
 
         except EditError as e:
             return f"Error: {e}"
@@ -697,7 +707,10 @@ class WorkspaceToolSetHandler(ToolSetHandler):
     def git_pull(self, context: ToolCallContext) -> str:
         root = _require_workspace(context)
         auth_args = self._get_auth_git_args(context)
-        return _run_git(root, auth_args + ["pull"], timeout=120)
+        output = _run_git(root, auth_args + ["pull"], timeout=120)
+        if output.startswith("Error"):
+            return output
+        return _workspace_result(output)
 
     @tool(
         description="Push commits to the remote repository.",
