@@ -1,6 +1,5 @@
-import json
 import logging
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import PlainTextResponse, Response
@@ -37,6 +36,13 @@ def _get_workspace_service(request: Request):
     return service
 
 
+def _require_workspace(database, workspace_id):
+    workspace = database.get_workspace(workspace_id)
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    return workspace
+
+
 @router.post("")
 async def create_workspace(request: Request, body: CreateWorkspaceRequest):
     database = request.app.state.database
@@ -70,9 +76,7 @@ async def list_workspaces(request: Request):
 @router.get("/{workspace_id}")
 async def get_workspace(request: Request, workspace_id: str):
     database = request.app.state.database
-    workspace = database.get_workspace(workspace_id)
-    if not workspace:
-        raise HTTPException(status_code=404, detail="Workspace not found")
+    workspace = _require_workspace(database, workspace_id)
     return _serialize_workspace(workspace)
 
 
@@ -80,10 +84,7 @@ async def get_workspace(request: Request, workspace_id: str):
 async def get_workspace_tree(request: Request, workspace_id: str, path: str = ""):
     database = request.app.state.database
     workspace_service = _get_workspace_service(request)
-
-    workspace = database.get_workspace(workspace_id)
-    if not workspace:
-        raise HTTPException(status_code=404, detail="Workspace not found")
+    _require_workspace(database, workspace_id)
 
     try:
         tree = workspace_service.get_file_tree(workspace_id, path)
@@ -98,10 +99,7 @@ async def get_workspace_tree(request: Request, workspace_id: str, path: str = ""
 async def get_workspace_file(request: Request, workspace_id: str, path: str):
     database = request.app.state.database
     workspace_service = _get_workspace_service(request)
-
-    workspace = database.get_workspace(workspace_id)
-    if not workspace:
-        raise HTTPException(status_code=404, detail="Workspace not found")
+    _require_workspace(database, workspace_id)
 
     try:
         content, mime_type = workspace_service.read_file_raw(workspace_id, path)
@@ -122,10 +120,7 @@ async def get_workspace_file(request: Request, workspace_id: str, path: str):
 async def list_workspace_files(request: Request, workspace_id: str):
     database = request.app.state.database
     workspace_service = _get_workspace_service(request)
-
-    workspace = database.get_workspace(workspace_id)
-    if not workspace:
-        raise HTTPException(status_code=404, detail="Workspace not found")
+    _require_workspace(database, workspace_id)
 
     try:
         files = workspace_service.list_files_flat(workspace_id)
@@ -141,23 +136,9 @@ async def delete_workspace(request: Request, workspace_id: str):
     database = request.app.state.database
     workspace_service = _get_workspace_service(request)
     agent_manager = request.app.state.agent_manager
+    _require_workspace(database, workspace_id)
 
-    workspace = database.get_workspace(workspace_id)
-    if not workspace:
-        raise HTTPException(status_code=404, detail="Workspace not found")
-
-    from sqlalchemy import select
-
-    from mikoshi.db.models import Chat
-
-    with database.SessionLocal() as session:
-        stmt = select(Chat).where(Chat.workspace_id == workspace_id)
-        chats = session.execute(stmt).scalars().all()
-        for chat in chats:
-            agent_manager.remove(chat.id)
-            session.delete(chat)
-        session.commit()
-
+    database.delete_chats_by_workspace(workspace_id, agent_manager)
     workspace_service.delete_workspace_files(workspace_id)
     database.delete_workspace(workspace_id)
 

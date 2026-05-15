@@ -1,13 +1,11 @@
 import asyncio
-import importlib.util
-import inspect
 import logging
 from contextlib import AsyncExitStack
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from mikoshi.config import ConnectorsConfig, MCPConfig
 from mikoshi.db.db import Database
+from mikoshi.plugins import discover_plugins
 from mikoshi.storage import get_persistent_storage
 from mikoshi.tools.approval import PendingApproval, ToolDeniedError
 from mikoshi.tools.context import ToolCallContext
@@ -19,13 +17,23 @@ from mikoshi.tools.workspace import WorkspaceToolSetHandler
 logger = logging.getLogger(__name__)
 
 
+def _parse_tool_name(call_name: str) -> tuple[str, str]:
+    try:
+        server_name, tool_name = call_name.split("__", 1)
+    except ValueError:
+        raise ValueError(
+            f"Invalid tool name format: '{call_name}'. Expected 'server__tool'"
+        )
+    return server_name, tool_name
+
+
 class ToolManager:
     def __init__(
         self,
         data_dir: str,
         tools_dir: str,
         servers: Dict[str, MCPConfig],
-        connectors_config: Dict[str, ConnectorsConfig] = {},
+        connectors_config: Optional[Dict[str, ConnectorsConfig]] = None,
         mcp_timeout: int = 30,
         db: Optional[Database] = None,
     ):
@@ -36,7 +44,7 @@ class ToolManager:
         self.mcp_timeout = mcp_timeout
         self.mcp_exit_stack = AsyncExitStack()
         self._pending_approvals: Dict[str, PendingApproval] = {}
-        self._connectors_config = connectors_config
+        self._connectors_config = connectors_config or {}
 
         self._mcp_handlers: Dict[str, MCPToolHandler] = {}
         for server_name, config in servers.items():
@@ -50,51 +58,9 @@ class ToolManager:
         ] = {}  # Store discovered toolset handlers
 
     def _discover_toolset_plugins(self) -> Dict[str, type]:
-        """Discover ToolSetHandler subclasses from Python files in tools_dir
-
-        Returns:
-            Dict mapping class names to class types
-        """
-        plugins = {}
-        seen_classes = set()
-        tools_path = Path(self._tools_dir)
-
-        if not tools_path.exists() or not tools_path.is_dir():
-            logger.warning(
-                f"Tools directory '{self._tools_dir}' does not exist or is not a directory"
-            )
-            return plugins
-
-        for py_file in tools_path.glob("*.py"):
-            if py_file.name.startswith("_"):
-                continue
-
-            try:
-                module_name = py_file.stem
-                spec = importlib.util.spec_from_file_location(module_name, py_file)
-                if spec is None or spec.loader is None:
-                    logger.warning(f"Could not load spec for {py_file}")
-                    continue
-
-                module = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(module)
-
-                for name, obj in inspect.getmembers(module, inspect.isclass):
-                    if not issubclass(obj, ToolSetHandler) or obj is ToolSetHandler:
-                        continue
-                    if obj in seen_classes:
-                        continue
-
-                    seen_classes.add(obj)
-                    logger.info(
-                        f"Discovered toolset plugin: {name} from {py_file.name}"
-                    )
-                    plugins[name] = obj
-
-            except Exception as e:
-                logger.error(f"Error loading plugin from {py_file}: {e}", exc_info=True)
-
-        return plugins
+        return discover_plugins(
+            self._tools_dir, ToolSetHandler, exclude_bases=(ToolSetHandler,)
+        )
 
     def get_persistent_storage(self, tool_server_name):
         return get_persistent_storage(self._data_dir, tool_server_name)
@@ -166,12 +132,7 @@ class ToolManager:
         logger.info(
             "call_tool START name=%s chat_id=%s", call_name, context.chat_id
         )
-        try:
-            server_name, tool_name = call_name.split("__", 1)
-        except ValueError:
-            raise ValueError(
-                f"Invalid tool name format: '{call_name}'. Expected 'server__tool'"
-            )
+        server_name, tool_name = _parse_tool_name(call_name)
 
         handler = self._server_map.get(server_name)
         if handler is None:
@@ -206,17 +167,10 @@ class ToolManager:
         return list(self._server_map.keys())
 
     def get_tool_definition(self, call_name: str):
-        """Get tool definition by full call name (e.g., 'server__tool')
-
-        Returns:
-            ToolDefinition if found and handler is a ToolSetHandler, None otherwise
-        """
         try:
-            server_name, tool_name = call_name.split("__", 1)
+            server_name, tool_name = _parse_tool_name(call_name)
         except ValueError:
-            logger.warning(
-                f"Invalid tool name format: '{call_name}'. Expected 'server__tool'"
-            )
+            logger.warning(f"Invalid tool name format: '{call_name}'. Expected 'server__tool'")
             return None
 
         # Only ToolSetHandlers have tool definitions with require_approval
@@ -244,11 +198,11 @@ class ToolManager:
         if self._db is not None:
             self._db.update_approval_status(approval_id, "approved")
 
-        handler = self._server_map.get(approval.tool_name.split("__", 1)[0])
+        handler = self._server_map.get(_parse_tool_name(approval.tool_name)[0])
         if handler is None:
             raise ValueError(f"Tool server not found for {approval.tool_name}")
 
-        tool_name = approval.tool_name.split("__", 1)[1]
+        tool_name = _parse_tool_name(approval.tool_name)[1]
         result = await handler.call_tool(
             tool_name, approval.arguments, approval.context
         )

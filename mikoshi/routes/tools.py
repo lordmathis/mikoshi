@@ -1,13 +1,13 @@
+import logging
+
 from fastapi import APIRouter, Request
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.get("/tools")
 async def list_tools(request: Request):
-    """
-    List all available tool servers and their tools.
-    """
     tool_manager = request.app.state.tool_manager
 
     tool_servers = []
@@ -17,7 +17,6 @@ async def list_tools(request: Request):
         try:
             tools = await tool_manager.list_tools(server_name)
 
-            # Convert tools to dict format
             tool_list = []
             for tool in tools:
                 if hasattr(tool, "parameters"):
@@ -36,7 +35,7 @@ async def list_tools(request: Request):
 
             tool_servers.append({"name": server_name, "tools": tool_list})
         except Exception as e:
-            print(f"Warning: Could not list tools from server {server_name}: {e}")
+            logger.warning("Could not list tools from server %s: %s", server_name, e)
             continue
 
     return {"tool_servers": tool_servers}

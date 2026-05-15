@@ -1,7 +1,4 @@
-import importlib.util
-import inspect
 import logging
-from pathlib import Path
 from typing import Dict, Optional, Type
 
 from mikoshi.agents.base import BaseAgent
@@ -10,6 +7,7 @@ from mikoshi.agents.workspace import WorkspaceAgent, WorkspaceAgentPlugin
 from mikoshi.agents.structured import StructuredAgentPlugin
 from mikoshi.config import TitleGenerationConfig, WorkspaceConfig
 from mikoshi.db.db import Database
+from mikoshi.plugins import discover_plugins
 from mikoshi.providers.registry import ProviderRegistry
 from mikoshi.skills.registry import SkillRegistry
 from mikoshi.tools.manager import ToolManager
@@ -17,6 +15,8 @@ from mikoshi.tools.workspace import WORKSPACE_SERVER_NAME
 from mikoshi.workspace import WorkspaceService
 
 logger = logging.getLogger(__name__)
+
+_PLUGIN_BASES = (ReActAgentPlugin, StructuredAgentPlugin, WorkspaceAgentPlugin)
 
 
 class AgentRegistry:
@@ -33,73 +33,16 @@ class AgentRegistry:
         self.agents_dir = agents_dir
         self._agent_classes: Dict[
             str, Type[ReActAgentPlugin | StructuredAgentPlugin | WorkspaceAgentPlugin]
-        ] = {}
-        self._register_agents()
-
-    def _register_agents(self):
-        """Discover and register agent plugins from the configured directory."""
-        agents_path = Path(self.agents_dir)
-
-        if not agents_path.exists():
-            logger.warning(f"Agents directory does not exist: {self.agents_dir}")
-            return
-
-        if not agents_path.is_dir():
-            logger.warning(f"Agents path is not a directory: {self.agents_dir}")
-            return
-
-        python_files = list(agents_path.glob("*.py"))
-
-        for file_path in python_files:
-            if file_path.name.startswith("_"):
-                continue
-
-            try:
-                spec = importlib.util.spec_from_file_location(file_path.stem, file_path)
-
-                if spec is None or spec.loader is None:
-                    logger.warning(f"Could not load spec for module: {file_path}")
-                    continue
-
-                module = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(module)
-
-                for name, obj in inspect.getmembers(module, inspect.isclass):
-                    if not issubclass(
-                        obj, (ReActAgentPlugin, StructuredAgentPlugin, WorkspaceAgentPlugin)
-                    ) or obj in (ReActAgentPlugin, StructuredAgentPlugin, WorkspaceAgentPlugin):
-                        continue
-
-                    required_attrs = ["provider_id", "model_id"]
-                    missing_attrs = []
-                    for attr in required_attrs:
-                        val = getattr(obj, attr, "")
-                        if not val:
-                            missing_attrs.append(attr)
-
-                    if missing_attrs:
-                        agent_name = obj.name if obj.name else name.lower()
-                        logger.warning(
-                            f"Plugin '{agent_name}' missing required attributes: {', '.join(missing_attrs)}, skipping"
-                        )
-                        continue
-
-                    agent_name = obj.name if obj.name else name.lower()
-                    self._agent_classes[agent_name] = obj
-                    logger.info(
-                        f"Registered agent class: {agent_name} from {file_path.name}"
-                    )
-            except Exception as e:
-                logger.error(
-                    f"Failed to load module from {file_path}: {e}", exc_info=True
-                )
-
-        logger.info(f"Registered {len(self._agent_classes)} agent(s)")
+        ] = discover_plugins(
+            agents_dir,
+            _PLUGIN_BASES,
+            exclude_bases=_PLUGIN_BASES,
+            required_attrs=["provider_id", "model_id"],
+        )
 
     def get_agent_class(
         self, name: str
     ) -> Optional[Type[ReActAgentPlugin | StructuredAgentPlugin | WorkspaceAgentPlugin]]:
-        """Retrieve an agent class by name."""
         return self._agent_classes.get(name)
 
     def list_agent_names(self) -> list[str]:
@@ -194,6 +137,38 @@ class AgentManager:
             "title_model_id": self.title_generation.model,
         }
 
+    @staticmethod
+    def _inject_workspace_tools(params: Dict, workspace_id: Optional[str]) -> None:
+        if workspace_id:
+            servers = list(params.get("tool_servers", []))
+            if WORKSPACE_SERVER_NAME not in servers:
+                servers.append(WORKSPACE_SERVER_NAME)
+            params["tool_servers"] = servers
+
+    def _construct_agent(
+        self, agent_cls: Type[BaseAgent], chat_id: str, provider, model_id: str,
+        workspace_id: Optional[str], connector_name: Optional[str], params: Dict,
+    ) -> BaseAgent:
+        kwargs = {
+            "chat_id": chat_id,
+            "db": self.db,
+            "provider": provider,
+            "tool_manager": self.tool_manager,
+            "model_id": model_id,
+            "skill_registry": self.skill_registry,
+            "workspace_id": workspace_id,
+            "data_dir": self.data_dir,
+            "connector_name": connector_name,
+            "workspace_config": self.workspace_config,
+            "workspace_service": self.workspace_service,
+            **params,
+            **self._resolve_title_params(),
+        }
+        agent = agent_cls(**kwargs)
+        if hasattr(agent, "post_init"):
+            agent.post_init()
+        return agent
+
     def _hydrate(self, chat_id: str, config: dict) -> BaseAgent:
         """Instantiate agent from config dict without persisting."""
         chat = self.db.get_chat(chat_id)
@@ -219,30 +194,10 @@ class AgentManager:
                 raise ValueError(f"Provider '{provider_name}' not found")
 
             params = self._resolve_agent_params(config)
-            if workspace_id:
-                servers = list(params.get("tool_servers", []))
-                if WORKSPACE_SERVER_NAME not in servers:
-                    servers.append(WORKSPACE_SERVER_NAME)
-                params["tool_servers"] = servers
-            title_params = self._resolve_title_params()
-
-            # If it's a workspace-linked chat, we use WorkspaceAgent for tree injection
+            self._inject_workspace_tools(params, workspace_id)
             agent_cls = WorkspaceAgent if workspace_id else ReActAgent
-            
-            return agent_cls(
-                chat_id=chat_id,
-                db=self.db,
-                provider=provider,
-                tool_manager=self.tool_manager,
-                model_id=model_id,
-                skill_registry=self.skill_registry,
-                workspace_id=workspace_id,
-                data_dir=self.data_dir,
-                connector_name=connector_name,
-                workspace_config=self.workspace_config,
-                workspace_service=self.workspace_service,
-                **params,
-                **title_params,
+            return self._construct_agent(
+                agent_cls, chat_id, provider, model_id, workspace_id, connector_name, params
             )
 
         agent_class = self.agent_registry.get_agent_class(model)
@@ -261,30 +216,10 @@ class AgentManager:
             "max_iterations": agent_class.max_iterations,
         }
         params = self._resolve_agent_params(config, defaults)
-        if workspace_id:
-            servers = list(params.get("tool_servers", []))
-            if WORKSPACE_SERVER_NAME not in servers:
-                servers.append(WORKSPACE_SERVER_NAME)
-            params["tool_servers"] = servers
-        title_params = self._resolve_title_params()
-
-        agent = agent_class(
-            chat_id=chat_id,
-            db=self.db,
-            provider=provider,
-            tool_manager=self.tool_manager,
-            model_id=agent_class.model_id,
-            skill_registry=self.skill_registry,
-            workspace_id=workspace_id,
-            data_dir=self.data_dir,
-            connector_name=connector_name,
-            workspace_config=self.workspace_config,
-            workspace_service=self.workspace_service,
-            **params,
-            **title_params,
+        self._inject_workspace_tools(params, workspace_id)
+        return self._construct_agent(
+            agent_class, chat_id, provider, agent_class.model_id, workspace_id, connector_name, params
         )
-        agent.post_init()
-        return agent
 
     def create(self, chat_id: str, config: dict) -> BaseAgent:
         """Create an agent for a chat and persist config to DB."""

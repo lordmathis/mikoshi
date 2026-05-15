@@ -502,6 +502,16 @@ class Database:
                 session.delete(workspace)
                 session.commit()
 
+    def delete_chats_by_workspace(self, workspace_id: str, agent_manager=None) -> None:
+        with self.SessionLocal() as session:
+            stmt = select(Chat).where(Chat.workspace_id == workspace_id)
+            chats = session.execute(stmt).scalars().all()
+            for chat in chats:
+                if agent_manager:
+                    agent_manager.remove(chat.id)
+                session.delete(chat)
+            session.commit()
+
     def get_workspace_by_chat(self, chat_id: str) -> Optional[Workspace]:
         with self.SessionLocal() as session:
             chat = session.get(Chat, chat_id)

@@ -4,41 +4,59 @@ from typing import Dict, List
 
 import httpx
 
+from mikoshi.config import ConnectorType
 from mikoshi.connectors.client_base import ConnectorClient, FileNode, TokenEstimate
 
 logger = logging.getLogger(__name__)
 
+_GITHUB_DEFAULTS = {
+    ConnectorType.GITHUB: {
+        "base_url": "https://api.github.com",
+        "auth_prefix": "Bearer",
+        "accept": "application/vnd.github+json",
+        "page_size": 100,
+        "page_param": "per_page",
+        "extra_list_params": {"sort": "updated", "affiliation": "owner,collaborator,organization_member"},
+    },
+    ConnectorType.FORGEJO: {
+        "base_url": "https://codeberg.org/api/v1",
+        "auth_prefix": "token",
+        "accept": "application/json",
+        "page_size": 50,
+        "page_param": "limit",
+        "extra_list_params": {},
+    },
+}
+
 
 class GitHubClient(ConnectorClient):
-    """Client for interacting with GitHub REST API"""
+    """Client for interacting with GitHub and Forgejo/Gitea REST APIs."""
 
     @property
     def type(self) -> str:
-        return "github"
+        return self._connector_type.value
 
-    def __init__(self, token: str):
-        """Initialize GitHub client with authentication token
-
-        Args:
-            token: GitHub personal access token
-        """
+    def __init__(
+        self,
+        token: str,
+        connector_type: ConnectorType = ConnectorType.GITHUB,
+        base_url: str | None = None,
+    ):
+        cfg = _GITHUB_DEFAULTS[connector_type]
+        self._connector_type = connector_type
         self.token = token
-        self.base_url = "https://api.github.com"
+        self.base_url = (base_url or cfg["base_url"]).rstrip("/")
+        self._cfg = cfg
         self.client = httpx.AsyncClient(
             headers={
-                "Authorization": f"Bearer {token}",
-                "Accept": "application/vnd.github+json",
+                "Authorization": f"{cfg['auth_prefix']} {token}",
+                "Accept": cfg["accept"],
             },
             timeout=30.0,
         )
         self._token_cache: Dict[tuple, int] = {}
 
     async def authenticate(self) -> bool:
-        """Verify that the token is valid
-
-        Returns:
-            True if authentication is successful, False otherwise
-        """
         try:
             response = await self.client.get(f"{self.base_url}/user")
             return response.status_code == 200
@@ -47,25 +65,17 @@ class GitHubClient(ConnectorClient):
             return False
 
     async def list_repositories(self) -> List[Dict]:
-        """List repositories accessible with the current token
-
-        Returns:
-            List of repository dictionaries with name, full_name, description, etc.
-        """
         try:
             repos = []
             page = 1
-            per_page = 100
+            page_size = self._cfg["page_size"]
+            page_param = self._cfg["page_param"]
 
             while True:
+                params = {page_param: page_size, "page": page}
+                params.update(self._cfg["extra_list_params"])
                 response = await self.client.get(
-                    f"{self.base_url}/user/repos",
-                    params={
-                        "per_page": per_page,
-                        "page": page,
-                        "sort": "updated",
-                        "affiliation": "owner,collaborator,organization_member",
-                    },
+                    f"{self.base_url}/user/repos", params=params
                 )
                 response.raise_for_status()
                 page_repos = response.json()
@@ -75,7 +85,7 @@ class GitHubClient(ConnectorClient):
 
                 repos.extend(page_repos)
 
-                if len(page_repos) < per_page:
+                if len(page_repos) < page_size:
                     break
 
                 page += 1
@@ -86,22 +96,13 @@ class GitHubClient(ConnectorClient):
             raise
 
     async def browse_tree(self, repo: str, path: str = "") -> FileNode:
-        """Browse the file tree of a repository
-
-        Args:
-            repo: Repository in format "owner/repo"
-            path: Path within the repository (empty string for root)
-
-        Returns:
-            FileNode representing the directory with its children
-        """
         try:
             url = f"{self.base_url}/repos/{repo}/contents/{path}"
             response = await self.client.get(url)
             response.raise_for_status()
             contents = response.json()
 
-            if isinstance(contents, dict):
+            if isinstance(contents, dict) and contents.get("type") == "file":
                 return FileNode(
                     path=contents["path"],
                     name=contents["name"],
@@ -114,7 +115,7 @@ class GitHubClient(ConnectorClient):
                 child = FileNode(
                     path=item["path"],
                     name=item["name"],
-                    type="file" if item["type"] == "file" else "dir",
+                    type=item["type"] if item["type"] in ("file", "dir") else "file",
                     size=item.get("size"),
                 )
                 children.append(child)
@@ -130,15 +131,6 @@ class GitHubClient(ConnectorClient):
             raise
 
     async def get_file_content(self, repo: str, path: str) -> bytes:
-        """Fetch raw file content from a repository
-
-        Args:
-            repo: Repository in format "owner/repo"
-            path: File path to fetch
-
-        Returns:
-            Raw bytes of the file content
-        """
         try:
             url = f"{self.base_url}/repos/{repo}/contents/{path}"
             response = await self.client.get(url)
@@ -156,15 +148,6 @@ class GitHubClient(ConnectorClient):
             raise
 
     async def fetch_files(self, repo: str, paths: List[str]) -> Dict[str, str]:
-        """Fetch file contents from a repository
-
-        Args:
-            repo: Repository in format "owner/repo"
-            paths: List of file paths to fetch
-
-        Returns:
-            Dictionary mapping file path to content
-        """
         try:
             file_contents = {}
 
@@ -190,22 +173,22 @@ class GitHubClient(ConnectorClient):
     async def estimate_tokens(
         self, repo: str, paths: List[str], ref: str = "HEAD"
     ) -> TokenEstimate:
-        """Estimate token count for files with caching based on commit hash
-
-        Args:
-            repo: Repository in format "owner/repo"
-            paths: List of file paths to estimate tokens for
-            ref: Git reference (branch, tag, or commit) to use (default: HEAD)
-
-        Returns:
-            TokenEstimate with total and per-file token counts
-        """
         try:
-            commits_url = f"{self.base_url}/repos/{repo}/commits/{ref}"
-            commits_response = await self.client.get(commits_url)
+            if self._connector_type == ConnectorType.GITHUB:
+                commits_url = f"{self.base_url}/repos/{repo}/commits/{ref}"
+                commits_response = await self.client.get(commits_url)
+            else:
+                commits_url = f"{self.base_url}/repos/{repo}/commits"
+                params = {"sha": ref} if ref != "HEAD" else {}
+                commits_response = await self.client.get(commits_url, params=params)
+
             commits_response.raise_for_status()
             commit_data = commits_response.json()
-            commit_hash = commit_data["sha"]
+
+            if isinstance(commit_data, list):
+                commit_hash = commit_data[0]["sha"]
+            else:
+                commit_hash = commit_data["sha"]
 
             file_tokens = {}
             total_tokens = 0
@@ -238,5 +221,4 @@ class GitHubClient(ConnectorClient):
             raise
 
     async def close(self) -> None:
-        """Clean up resources"""
         await self.client.aclose()

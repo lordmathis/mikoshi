@@ -34,11 +34,6 @@ class WorkspaceService:
         cfg = self._connectors_config.get(connector_name)
         return cfg.token if cfg else None
 
-    def _build_auth_url(self, repo_url: str, token: str) -> str:
-        if "github.com" in repo_url:
-            return repo_url.replace("https://", f"https://x-access-token:{token}@")
-        return repo_url.replace("https://", f"https://x-access-token:{token}@")
-
     def _workspace_root(self, workspace_id: str) -> str:
         return os.path.realpath(os.path.join(self._workspaces_dir, workspace_id))
 
@@ -65,15 +60,15 @@ class WorkspaceService:
 
         os.makedirs(target_dir, exist_ok=True)
 
-        clone_url = repo_url
+        git_args = []
         if connector_name:
             token = self._resolve_connector_token(connector_name)
             if token:
-                clone_url = self._build_auth_url(repo_url, token)
+                git_args = ["-c", f"http.extraHeader=Authorization: token {token}"]
 
         try:
             subprocess.run(
-                ["git", "clone", clone_url, target_dir],
+                ["git", *git_args, "clone", repo_url, target_dir],
                 capture_output=True,
                 text=True,
                 check=True,
@@ -139,24 +134,22 @@ class WorkspaceService:
         dir_name = os.path.basename(resolved) if path else ""
         return FileNode(path=path, name=dir_name, type="dir", children=children)
 
-    def read_file(self, workspace_id: str, path: str) -> str:
+    def _resolve_and_validate_file(self, workspace_id: str, path: str) -> str:
         root = self.get_workspace_path(workspace_id)
         full_path = os.path.realpath(os.path.join(root, path))
         self._validate_path(root, full_path)
-
         if not os.path.isfile(full_path):
             raise WorkspaceError(f"File not found: {path}")
+        return full_path
+
+    def read_file(self, workspace_id: str, path: str) -> str:
+        full_path = self._resolve_and_validate_file(workspace_id, path)
 
         with open(full_path, "r", encoding="utf-8", errors="replace") as f:
             return f.read()
 
     def read_file_raw(self, workspace_id: str, path: str) -> tuple[bytes, str]:
-        root = self.get_workspace_path(workspace_id)
-        full_path = os.path.realpath(os.path.join(root, path))
-        self._validate_path(root, full_path)
-
-        if not os.path.isfile(full_path):
-            raise WorkspaceError(f"File not found: {path}")
+        full_path = self._resolve_and_validate_file(workspace_id, path)
 
         with open(full_path, "rb") as f:
             content = f.read()

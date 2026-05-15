@@ -1,7 +1,6 @@
 import logging
 import mimetypes
 import os
-import uuid
 from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Request
@@ -9,6 +8,7 @@ from pydantic import BaseModel
 
 from mikoshi.db.db import Database
 from mikoshi.routes.schemas import FileResponse
+from mikoshi.routes.upload_utils import save_upload_file
 
 router = APIRouter(prefix="/connectors")
 logger = logging.getLogger(__name__)
@@ -151,7 +151,7 @@ async def estimate_tokens(
 
 
 @router.post("/files", response_model=List[FileResponse])
-async def upload_files(request: Request, connector: str, body: FilesRequest):
+async def fetch_repository_files(request: Request, connector: str, body: FilesRequest):
     """Fetch files from repository server-side, store to disk, and return their metadata."""
     client = _get_connector(request, connector)
 
@@ -177,25 +177,7 @@ async def upload_files(request: Request, connector: str, body: FilesRequest):
             if not content_type:
                 content_type = "text/plain"
 
-            file_id = str(uuid.uuid4())
-            upload_dir = os.path.join("uploads", file_id)
-            os.makedirs(upload_dir, exist_ok=True)
-
-            file_path = os.path.join(upload_dir, filename)
-
-            with open(file_path, "wb") as f:
-                if isinstance(content, str):
-                    f.write(content.encode("utf-8"))
-                else:
-                    f.write(content)
-
-            file_obj = db.create_file(
-                filename=filename,
-                file_path=os.path.abspath(file_path),
-                content_type=content_type,
-                file_id=file_id,
-                source=source_str,
-            )
+            file_obj = save_upload_file(db, filename, content, content_type, source=source_str)
 
             result.append(
                 FileResponse(

@@ -5,11 +5,8 @@ from typing import Any, Dict, List, Optional
 from openai.types.chat import ChatCompletionMessageParam
 
 from mikoshi.agents.base import BaseAgent
+from mikoshi.agents.plugin_base import AgentPluginBase
 from mikoshi.agents.streaming import STREAM_DONE, StreamEvent
-from mikoshi.db.db import Database
-from mikoshi.providers.provider import Provider
-from mikoshi.skills.registry import SkillRegistry
-from mikoshi.tools.manager import ToolManager
 
 logger = logging.getLogger(__name__)
 
@@ -42,48 +39,6 @@ class StructuredAgent(BaseAgent):
         '- "new_state" must be a valid JSON object (not a string, number, or array).\n'
         '- Only include keys in "new_state" that you intend to update or add.'
     )
-
-    def __init__(
-        self,
-        chat_id: str,
-        db: Database,
-        provider: Provider,
-        tool_manager: ToolManager,
-        model_id: str,
-        data_dir: str,
-        system_prompt: str = "",
-        tool_servers: List[str] = [],
-        skill_registry: Optional[SkillRegistry] = None,
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        max_iterations: int = 5,
-        title_provider: Optional[Provider] = None,
-        title_model_id: Optional[str] = None,
-        workspace_id: Optional[str] = None,
-        connector_name: Optional[str] = None,
-        workspace_config=None,
-        workspace_service=None,
-    ):
-        super().__init__(
-            chat_id=chat_id,
-            db=db,
-            provider=provider,
-            tool_manager=tool_manager,
-            model_id=model_id,
-            system_prompt=system_prompt,
-            tool_servers=tool_servers,
-            skill_registry=skill_registry,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            max_iterations=max_iterations,
-            title_provider=title_provider,
-            title_model_id=title_model_id,
-            workspace_id=workspace_id,
-            data_dir=data_dir,
-            connector_name=connector_name,
-            workspace_config=workspace_config,
-            workspace_service=workspace_service,
-        )
 
     async def _get_iteration_context(
         self, message: str
@@ -149,15 +104,5 @@ class StructuredAgent(BaseAgent):
         return content, {}
 
 
-class StructuredAgentPlugin(StructuredAgent):
-    default: bool = False
-    name: str = ""
-    provider_id: str = ""
-    model_id: str = ""
-    tool_servers: List[str] = []
-    max_iterations: int = 5
-    temperature: Optional[float] = None
-    max_tokens: Optional[int] = None
-
-    def post_init(self) -> None:
-        pass
+class StructuredAgentPlugin(StructuredAgent, AgentPluginBase):
+    pass

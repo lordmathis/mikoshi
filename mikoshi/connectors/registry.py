@@ -3,7 +3,6 @@ from typing import Dict
 
 from mikoshi.config import ConnectorsConfig, ConnectorType
 from mikoshi.connectors.client_base import ConnectorClient
-from mikoshi.connectors.forgejo import ForgejoClient
 from mikoshi.connectors.github import GitHubClient
 
 logger = logging.getLogger(__name__)
@@ -29,17 +28,15 @@ class ConnectorRegistry:
     async def _create_connector(
         self, name: str, cfg: ConnectorsConfig
     ) -> ConnectorClient | None:
-        connector = None
-        if cfg.type == ConnectorType.GITHUB:
-            connector = GitHubClient(token=cfg.token)
-        elif cfg.type == ConnectorType.FORGEJO:
-            connector = ForgejoClient(
-                token=cfg.token,
-                base_url=cfg.base_url or "https://codeberg.org/api/v1",
-            )
-        else:
+        if cfg.type not in (ConnectorType.GITHUB, ConnectorType.FORGEJO):
             logger.error(f"Unknown connector type: {cfg.type}")
             return None
+
+        connector = GitHubClient(
+            token=cfg.token,
+            connector_type=cfg.type,
+            base_url=cfg.base_url,
+        )
 
         if not await connector.authenticate():
             logger.error(f"Failed to authenticate connector {name} ({cfg.type})")
@@ -52,5 +49,4 @@ class ConnectorRegistry:
         return self._connectors.get(name)
 
     def list_connectors(self) -> Dict[str, ConnectorClient]:
-        """List all registered connectors."""
         return self._connectors.copy()
