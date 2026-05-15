@@ -99,16 +99,6 @@ export interface SendMessageRequest {
   stream?: boolean;
 }
 
-export interface SendMessageResponse {
-  choices: Array<{
-    message: {
-      role: string;
-      content: string;
-      reasoning_content?: string;
-    };
-  }>;
-}
-
 export interface Model {
   id: string;
   object: string;
@@ -193,6 +183,13 @@ class ApiClient {
     this.baseURL = baseURL;
   }
 
+  private async assertOk(response: Response): Promise<void> {
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: response.statusText }));
+      throw new Error(error.detail || `HTTP ${response.status}: ${response.statusText}`);
+    }
+  }
+
   private async request<T>(
     endpoint: string,
     options?: RequestInit
@@ -207,10 +204,7 @@ class ApiClient {
       },
     });
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: response.statusText }));
-      throw new Error(error.detail || `HTTP ${response.status}: ${response.statusText}`);
-    }
+    await this.assertOk(response);
 
     return response.json();
   }
@@ -258,34 +252,6 @@ class ApiClient {
     });
   }
 
-  async sendMessage(
-    chatId: string,
-    data: SendMessageRequest
-  ): Promise<SendMessageResponse> {
-    return this.request(`/chats/${chatId}/messages`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async retryLastMessage(
-    chatId: string
-  ): Promise<SendMessageResponse> {
-    return this.request(`/chats/${chatId}/retry`, {
-      method: 'POST',
-    });
-  }
-
-  async editLastMessage(
-    chatId: string,
-    message: string
-  ): Promise<SendMessageResponse> {
-    return this.request(`/chats/${chatId}/edit`, {
-      method: 'POST',
-      body: JSON.stringify({ message }),
-    });
-  }
-
   private async *parseSSE(response: Response): AsyncGenerator<StreamEvent> {
     const reader = response.body?.getReader();
     if (!reader) throw new Error('No response body');
@@ -329,55 +295,32 @@ class ApiClient {
     }
   }
 
+  private async *streamPost(endpoint: string, body: Record<string, unknown>): AsyncGenerator<StreamEvent> {
+    const url = `${this.baseURL}${endpoint}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    await this.assertOk(response);
+
+    yield* this.parseSSE(response);
+  }
+
   async *streamMessage(
     chatId: string,
     data: SendMessageRequest
   ): AsyncGenerator<StreamEvent> {
-    const url = `${this.baseURL}/chats/${chatId}/messages`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...data, stream: true }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: response.statusText }));
-      throw new Error(error.detail || `HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    yield* this.parseSSE(response);
+    yield* this.streamPost(`/chats/${chatId}/messages`, { ...data, stream: true });
   }
 
   async *streamRetry(chatId: string): AsyncGenerator<StreamEvent> {
-    const url = `${this.baseURL}/chats/${chatId}/retry`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ stream: true }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: response.statusText }));
-      throw new Error(error.detail || `HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    yield* this.parseSSE(response);
+    yield* this.streamPost(`/chats/${chatId}/retry`, { stream: true });
   }
 
   async *streamEdit(chatId: string, message: string): AsyncGenerator<StreamEvent> {
-    const url = `${this.baseURL}/chats/${chatId}/edit`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, stream: true }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: response.statusText }));
-      throw new Error(error.detail || `HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    yield* this.parseSSE(response);
+    yield* this.streamPost(`/chats/${chatId}/edit`, { message, stream: true });
   }
 
   // Configuration endpoints
@@ -416,10 +359,7 @@ class ApiClient {
       body: formData,
     });
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: response.statusText }));
-      throw new Error(error.detail || `HTTP ${response.status}: ${response.statusText}`);
-    }
+    await this.assertOk(response);
 
     return response.json();
   }
@@ -469,10 +409,7 @@ class ApiClient {
       body: formData,
     });
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: response.statusText }));
-      throw new Error(error.detail || `HTTP ${response.status}: ${response.statusText}`);
-    }
+    await this.assertOk(response);
 
     return response.json();
   }
@@ -485,10 +422,7 @@ class ApiClient {
       body: JSON.stringify({ input: text }),
     });
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: response.statusText }));
-      throw new Error(error.detail || `HTTP ${response.status}: ${response.statusText}`);
-    }
+    await this.assertOk(response);
 
     return response.blob();
   }
@@ -522,10 +456,7 @@ class ApiClient {
     const url = `${this.baseURL}/workspaces/${id}/files/${path}`;
     const response = await fetch(url);
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: response.statusText }));
-      throw new Error(error.detail || `HTTP ${response.status}: ${response.statusText}`);
-    }
+    await this.assertOk(response);
 
     return response.text();
   }

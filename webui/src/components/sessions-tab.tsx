@@ -1,11 +1,6 @@
-import { Plus, Trash2, X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { Button } from "./ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "./ui/tooltip";
+import { SidebarItem } from "./sidebar-item";
 import type { Conversation } from "./sidebar";
 
 interface SessionsTabProps {
@@ -37,7 +32,7 @@ export function SessionsTab({
       (c) => c.workspace_id === activeWorkspaceId,
     );
   } else {
-    filtered = conversations.filter((c) => !c.workspace_id);
+    filtered = conversations;
   }
 
   const activeWorkspaceName = activeWorkspaceId
@@ -74,89 +69,35 @@ export function SessionsTab({
       )}
 
       <div className="flex-1 overflow-y-auto px-3 pb-6 space-y-2">
-        <TooltipProvider delayDuration={300}>
-          {isLoading ? (
-            <div className="py-12 text-center cp-label opacity-40 animate-pulse">Syncing...</div>
-          ) : filtered.length === 0 ? (
-            <div className="py-12 text-center cp-label opacity-20 italic">
-              {activeWorkspaceId ? "No sessions bound to this node" : "No sessions found"}
-            </div>
-          ) : (
-            filtered.map((conversation) => {
-              const isActive = currentConversationId === conversation.id;
-              const hasWorkspace = !!conversation.workspace_id;
-              return (
-                <div
-                  key={conversation.id}
-                  className={`group relative flex items-center transition-all duration-200 cursor-pointer border ${
-                    isActive
-                      ? "bg-primary/5 border-primary/30 shadow-[0_0_15px_rgba(245,216,0,0.05)]"
-                      : "bg-white/[0.02] border-white/5 hover:border-white/10 hover:bg-white/[0.04]"
-                  }`}
-                  style={{
-                    clipPath: "polygon(0 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%)",
-                  }}
-                  onClick={() => onConversationSelect(conversation.id)}
-                >
-                  <div
-                    className={`absolute left-0 top-0 bottom-0 w-[2px] transition-all duration-300 ${
-                      isActive ? "bg-primary" : "bg-transparent group-hover:bg-white/20"
-                    }`}
-                  />
-
-                  <div className="flex-1 min-w-0 px-4 py-3">
-                    <div className="flex items-center justify-between mb-1">
-                      <div
-                        className={`text-[9px] font-bold tracking-widest ${
-                          isActive ? "text-cyan" : "text-muted-foreground"
-                        }`}
-                      >
-                        [{conversation.id.slice(0, 4).toUpperCase()}]
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {hasWorkspace && (
-                          <span className="text-[8px] text-primary/50 uppercase">NODE</span>
-                        )}
-                        <span className="text-[8px] text-muted-foreground opacity-50 uppercase">
-                          {conversation.timestamp}
-                        </span>
-                      </div>
-                    </div>
-
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div
-                          className={`truncate text-[13px] font-medium tracking-tight ${
-                            isActive ? "text-foreground" : "text-foreground/60"
-                          }`}
-                        >
-                          {conversation.title || "NULL_SIGNAL"}
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent side="right" className="max-w-xs">
-                        <p>{conversation.title || "NULL_SIGNAL"}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </div>
-
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 mr-2 opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (window.confirm(`Terminate session ${conversation.id.slice(0, 4)}?`)) {
-                        onDeleteConversation(conversation.id);
-                      }
-                    }}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              );
-            })
-          )}
-        </TooltipProvider>
+        {isLoading ? (
+          <div className="py-12 text-center cp-label opacity-40 animate-pulse">Syncing...</div>
+        ) : filtered.length === 0 ? (
+          <div className="py-12 text-center cp-label opacity-20 italic">
+            {activeWorkspaceId ? "No sessions bound to this node" : "No sessions found"}
+          </div>
+        ) : (
+          filtered.map((conversation) => {
+            const isActive = currentConversationId === conversation.id;
+            const hasWorkspace = !!conversation.workspace_id;
+            return (
+              <SidebarItem
+                key={conversation.id}
+                id={conversation.id}
+                isActive={isActive}
+                label={conversation.title || "NULL_SIGNAL"}
+                sublabel={`[${conversation.id.slice(0, 4).toUpperCase()}]`}
+                badge={hasWorkspace ? "NODE" : undefined}
+                confirmMessage={`Terminate session ${conversation.id.slice(0, 4)}?`}
+                onClick={() => onConversationSelect(conversation.id)}
+                onDelete={() => onDeleteConversation(conversation.id)}
+              >
+                <span className="text-[8px] text-muted-foreground opacity-50 uppercase">
+                  {conversation.timestamp}
+                </span>
+              </SidebarItem>
+            );
+          })
+        )}
       </div>
     </>
   );

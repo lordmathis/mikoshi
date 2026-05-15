@@ -74,65 +74,6 @@ body {
   letter-spacing: 0.03em;
 }
 
-.cp-scanlines {
-  background-image: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 3px,
-    rgba(245, 216, 0, 0.018) 3px,
-    rgba(245, 216, 0, 0.018) 4px
-  );
-}
-
-.cp-cut-tr {
-  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%);
-  position: relative;
-}
-
-.cp-cut-tr::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 14px;
-  height: 14px;
-  background: var(--color-cp-yellow);
-  clip-path: polygon(0 0, 100% 100%, 100% 0);
-  opacity: 0.5;
-  z-index: 1;
-}
-
-.cp-cut-tl::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 14px;
-  height: 14px;
-  background: var(--color-cp-red);
-  clip-path: polygon(0 0, 100% 0, 0 100%);
-  opacity: 0.5;
-  z-index: 1;
-}
-
-.cp-cut-both {
-  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
-  position: relative;
-}
-
-.cp-cut-both::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 14px;
-  height: 14px;
-  background: var(--color-cp-yellow);
-  clip-path: polygon(0 0, 100% 100%, 100% 0);
-  opacity: 0.4;
-  z-index: 1;
-}
-
 .cp-label {
   font-family: var(--font-mono);
   font-size: 12px;

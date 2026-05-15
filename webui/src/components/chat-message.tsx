@@ -1,11 +1,8 @@
 import { Bot, User, Brain, File, GitBranch, RotateCw, Edit2, Copy, Check, Link, Volume2 } from "lucide-react";
 import { cn } from "../lib/utils";
 import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import remarkBreaks from "remark-breaks";
-import rehypeHighlight from "rehype-highlight";
 import "highlight.js/styles/github-dark.css";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "./ui/button";
 import {
   Tooltip,
@@ -14,6 +11,7 @@ import {
   TooltipTrigger,
 } from "./ui/tooltip";
 import { type Message } from "../lib/api";
+import { markdownComponents, REMARK_PLUGINS, REHYPE_PLUGINS } from "../lib/markdown-components";
 
 interface ChatMessageProps {
   message: Message;
@@ -23,89 +21,21 @@ interface ChatMessageProps {
   isLastUserMessage?: boolean;
 }
 
-const markdownComponents = {
-  h1: ({ children, ...props }: any) => (
-    <h1 className="text-2xl font-bold mt-6 mb-4 first:mt-0 text-foreground" {...props}>{children}</h1>
-  ),
-  h2: ({ children, ...props }: any) => (
-    <h2 className="text-xl font-bold mt-5 mb-3 first:mt-0 text-foreground" {...props}>{children}</h2>
-  ),
-  h3: ({ children, ...props }: any) => (
-    <h3 className="text-lg font-bold mt-4 mb-2 first:mt-0 text-foreground" {...props}>{children}</h3>
-  ),
-  h4: ({ children, ...props }: any) => (
-    <h4 className="text-base font-bold mt-3 mb-2 first:mt-0 text-foreground" {...props}>{children}</h4>
-  ),
-  p: ({ children, ...props }: any) => (
-    <p className="mb-4 last:mb-0 text-foreground/90" {...props}>{children}</p>
-  ),
-  ul: ({ children, ...props }: any) => (
-    <ul className="list-disc pl-6 mb-4 space-y-1" {...props}>{children}</ul>
-  ),
-  ol: ({ children, ...props }: any) => (
-    <ol className="list-decimal pl-6 mb-4 space-y-1" {...props}>{children}</ol>
-  ),
-  li: ({ children, ...props }: any) => (
-    <li {...props}>{children}</li>
-  ),
-  strong: ({ children, ...props }: any) => (
-    <strong className="font-bold text-foreground" {...props}>{children}</strong>
-  ),
-  em: ({ children, ...props }: any) => (
-    <em className="italic" {...props}>{children}</em>
-  ),
-  blockquote: ({ children, ...props }: any) => (
-    <blockquote className="border-l-2 border-primary/40 pl-4 italic my-4" {...props}>{children}</blockquote>
-  ),
-  hr: ({ ...props }: any) => (
-    <hr className="my-6 border-border" {...props} />
-  ),
-  code: ({ inline, className, children, ...props }: any) => {
-    return inline ? (
-      <code className="bg-[rgba(245,216,0,0.08)] px-1.5 py-0.5 text-xs text-primary/90" {...props}>
-        {children}
-      </code>
-    ) : (
-      <code className={className} {...props}>
-        {children}
-      </code>
-    );
-  },
-  a: ({ children, href, ...props }: any) => (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="text-[var(--color-cp-cyan)] underline hover:text-[var(--color-cp-cyan)]/80"
-      {...props}
-    >
-      {children}
-    </a>
-  ),
-  table: ({ children, ...props }: any) => (
-    <div className="overflow-x-auto mb-4">
-      <table className="w-full border-collapse border border-[rgba(245,216,0,0.2)]" {...props}>{children}</table>
-    </div>
-  ),
-  thead: ({ children, ...props }: any) => (
-    <thead className="bg-[rgba(245,216,0,0.06)]" {...props}>{children}</thead>
-  ),
-  th: ({ children, ...props }: any) => (
-    <th className="border border-[rgba(245,216,0,0.2)] px-3 py-2 text-left text-sm font-bold text-foreground" {...props}>{children}</th>
-  ),
-  td: ({ children, ...props }: any) => (
-    <td className="border border-[rgba(245,216,0,0.15)] px-3 py-2 text-sm text-foreground/80" {...props}>{children}</td>
-  ),
-  tr: ({ children, ...props }: any) => (
-    <tr className="even:bg-[rgba(245,216,0,0.03)]" {...props}>{children}</tr>
-  ),
-};
-
 export function ChatMessage({ message, onBranch, onRetry, onEdit, isLastUserMessage }: ChatMessageProps) {
   const isUser = message.role === "user";
   const [showReasoning, setShowReasoning] = useState(false);
   const [copied, setCopied] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
 
   const handleCopy = async () => {
     try {
@@ -125,17 +55,21 @@ export function ChatMessage({ message, onBranch, onRetry, onEdit, isLastUserMess
       const audioBlob = await api.generateSpeech(message.content);
       const audioUrl = URL.createObjectURL(audioBlob);
       const audio = new Audio(audioUrl);
+      audioRef.current = audio;
       audio.onended = () => {
         URL.revokeObjectURL(audioUrl);
+        audioRef.current = null;
         setIsSpeaking(false);
       };
       audio.onerror = () => {
         URL.revokeObjectURL(audioUrl);
+        audioRef.current = null;
         setIsSpeaking(false);
       };
       await audio.play();
     } catch (err) {
       console.error("Failed to speak:", err);
+      audioRef.current = null;
       setIsSpeaking(false);
     }
   };
@@ -308,8 +242,8 @@ export function ChatMessage({ message, onBranch, onRetry, onEdit, isLastUserMess
                    style={{ clipPath: "polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%)" }}>
                 <div className="text-muted-foreground">
                   <ReactMarkdown
-                    remarkPlugins={[remarkGfm, remarkBreaks]}
-                    rehypePlugins={[rehypeHighlight]}
+                    remarkPlugins={REMARK_PLUGINS}
+                    rehypePlugins={REHYPE_PLUGINS}
                     components={markdownComponents}
                   >
                     {message.reasoning_content}
@@ -363,8 +297,8 @@ export function ChatMessage({ message, onBranch, onRetry, onEdit, isLastUserMess
         
         <div className="text-foreground/90" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', lineHeight: '1.6' }}>
           <ReactMarkdown
-            remarkPlugins={[remarkGfm, remarkBreaks]}
-            rehypePlugins={[rehypeHighlight]}
+            remarkPlugins={REMARK_PLUGINS}
+            rehypePlugins={REHYPE_PLUGINS}
             components={markdownComponents}
           >
             {message.content}

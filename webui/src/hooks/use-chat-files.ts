@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { api, type FileResource, type ConnectorEntry } from "../lib/api";
 
-export function useChatFiles(_chatId: string | undefined) {
+export function useChatFiles() {
   const [uploadedFiles, setUploadedFiles] = useState<FileResource[]>([]);
   const [connectorEntries, setConnectorEntries] = useState<ConnectorEntry[]>([]);
   const [isUploading, setIsUploading] = useState(false);

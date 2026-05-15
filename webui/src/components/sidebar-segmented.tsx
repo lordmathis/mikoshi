@@ -32,7 +32,7 @@ interface SidebarSegmentedControlProps {
   onDeleteWorkspace: (id: string) => void;
   onClearFilter: () => void;
   workspaces: { id: string; name: string }[];
-  workspaceRefreshTrigger?: number;
+  workspacesLoading?: boolean;
 }
 
 const tabs: { key: SidebarTab; label: string }[] = [
@@ -65,7 +65,7 @@ export function SidebarSegmentedControl({
   onDeleteWorkspace,
   onClearFilter,
   workspaces,
-  workspaceRefreshTrigger,
+  workspacesLoading,
 }: SidebarSegmentedControlProps) {
   return (
     <>
@@ -133,10 +133,11 @@ export function SidebarSegmentedControl({
             {activeTab === "nodes" && (
               <NodesTab
                 activeWorkspaceId={activeWorkspaceId}
+                workspaces={workspaces}
+                isLoading={!!workspacesLoading}
                 onSelectWorkspace={onSelectWorkspace}
                 onNewWorkspace={onNewWorkspace}
                 onDeleteWorkspace={onDeleteWorkspace}
-                refreshTrigger={workspaceRefreshTrigger}
               />
             )}
             {activeTab === "data" && (

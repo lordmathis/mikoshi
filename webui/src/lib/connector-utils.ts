@@ -33,7 +33,7 @@ export function matchesPatterns(filePath: string, patterns: string): boolean {
     .filter(Boolean)
     .some((pattern) => {
       const regex = new RegExp(
-        "^" + pattern.split("*").map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join(".*") + "$"
+        "^" + pattern.split("*").map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("[^/]*") + "$"
       );
       return regex.test(fileName) || regex.test(filePath);
     });

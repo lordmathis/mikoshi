@@ -10,7 +10,7 @@ import {
 } from "./ui/dropdown-menu";
 import { ChatSettingsDialog, type ChatSettings } from "./chat-settings-dialog";
 import { FileAttachments } from "./file-attachments";
-import { getToolLabel } from "../lib/formatters";
+import { getToolLabel, formatModelLabel } from "../lib/formatters";
 import { useVoiceRecording } from "../hooks/use-voice-recording";
 import { api, type Skill, type ConnectorEntry } from "../lib/api";
 
@@ -233,7 +233,7 @@ export function ChatInput({
             }}
           >
             <Bot className="h-3.5 w-3.5 text-primary/60" />
-            <span className="cp-label" style={{ color: '#f5d800' }}>{chatSettings.baseModel.includes(':') ? chatSettings.baseModel.split(':').slice(1).join(':') : chatSettings.baseModel}</span>
+            <span className="cp-label" style={{ color: '#f5d800' }}>{formatModelLabel(chatSettings.baseModel)}</span>
           </div>
           {chatSettings.enabledTools.length > 0 && (
             <div

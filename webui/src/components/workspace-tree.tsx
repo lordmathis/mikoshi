@@ -118,7 +118,7 @@ export function WorkspaceTree({ tree, activeFilePath, onFileClick, workspaceId }
         });
       }
     },
-    [tree, workspaceId]
+    [workspaceId]
   );
 
   if (!localTree) {

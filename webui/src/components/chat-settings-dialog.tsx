@@ -21,6 +21,7 @@ import { Textarea } from "./ui/textarea";
 import { Switch } from "./ui/switch";
 import { Input } from "./ui/input";
 import { api, type Model, type ToolServer, type ModelParams, type AgentConfig } from "../lib/api";
+import { formatModelLabel } from "../lib/formatters";
 
 export interface ChatSettings {
   baseModel: string;
@@ -63,96 +64,68 @@ export function ChatSettingsDialog({
   useEffect(() => {
     if (!open) return;
 
-    let fetchedAgents: AgentConfig[] = [];
-    let fetchedModels: Record<string, { id: string; label: string }[]> = {};
-    let fetchedProviders: string[] = [];
+    let cancelled = false;
 
-    const loadAgents = async () => {
-      try {
-        const response = await api.listAgents();
-        setAgentConfigs(response.agents);
-        fetchedAgents = response.agents;
-      } catch (error) {
-        console.error("Failed to fetch agents:", error);
+    const loadDialogData = async () => {
+      const [toolsRes, agentsRes, modelsRes] = await Promise.all([
+        api.listTools().catch(() => ({ tool_servers: [] as ToolServer[] })),
+        api.listAgents().catch(() => ({ agents: [] as AgentConfig[] })),
+        api.listModels().catch(() => ({ data: [] as Model[] })),
+      ]);
+
+      if (cancelled) return;
+
+      const toolServers = toolsRes.tool_servers;
+      const agentConfigs = agentsRes.agents;
+      const grouped: Record<string, { id: string; label: string }[]> = {};
+      for (const model of modelsRes.data) {
+        if (model.owned_by === "mikoshi") continue;
+        const provider = model.owned_by || "Unknown";
+        if (!grouped[provider]) grouped[provider] = [];
+        grouped[provider].push({ id: model.id, label: formatModelLabel(model.id) });
       }
-    };
+      const providers = Object.keys(grouped).sort();
 
-    const loadModels = async () => {
-      try {
-        setIsLoadingModels(true);
-        const response = await api.listModels();
+      setIsLoadingModels(false);
+      setIsLoadingTools(false);
+      setAgentConfigs(agentConfigs);
+      setToolServers(toolServers);
+      setModelsByProvider(grouped);
+      setProviders(providers);
 
-        const grouped: Record<string, { id: string; label: string }[]> = {};
-        response.data
-          .filter((model: Model) => model.owned_by !== "mikoshi")
-          .forEach((model: Model) => {
-            const provider = model.owned_by || "Unknown";
-            if (!grouped[provider]) {
-              grouped[provider] = [];
-            }
-            grouped[provider].push({
-              id: model.id,
-              label: model.id.includes(":") ? model.id.split(":").slice(1).join(":") : model.id,
-            });
-          });
-
-        fetchedModels = grouped;
-        fetchedProviders = Object.keys(grouped).sort();
-        setModelsByProvider(grouped);
-        setProviders(fetchedProviders);
-      } catch (error) {
-        console.error("Failed to fetch models:", error);
-        setModelsByProvider({});
-        setProviders([]);
-      } finally {
-        setIsLoadingModels(false);
-      }
-    };
-
-    const loadTools = async () => {
-      try {
-        setIsLoadingTools(true);
-        const response = await api.listTools();
-        setToolServers(response.tool_servers);
-      } catch (error) {
-        console.error("Failed to fetch tools:", error);
-        setToolServers([]);
-      } finally {
-        setIsLoadingTools(false);
-      }
-    };
-
-    void Promise.all([loadTools(), loadAgents(), loadModels()]).then(() => {
       const baseModel = settings.baseModel;
+      const agent = baseModel ? agentConfigs.find((a) => a.name === baseModel) : undefined;
 
-      if (baseModel) {
-        const agent = fetchedAgents.find((a) => a.name === baseModel);
-        if (agent) {
-          setSelectedAgent(agent.name);
-          setSelectedProvider(agent.provider);
-          setLocalSettings((prev) => ({
-            ...prev,
-            baseModel: `${agent.provider}:${agent.model_id}`,
-          }));
-        } else if (baseModel.includes(":")) {
-          setSelectedProvider(baseModel.split(":")[0]);
-        } else if (fetchedProviders.length > 0) {
-          setSelectedProvider(fetchedProviders[0]);
-        }
-      } else if (fetchedProviders.length > 0) {
-        setSelectedProvider(fetchedProviders[0]);
-        const firstModel = fetchedModels[fetchedProviders[0]]?.[0];
-        if (firstModel) {
-          setLocalSettings((prev) => ({ ...prev, baseModel: firstModel.id }));
+      if (agent) {
+        setSelectedAgent(agent.name);
+        setSelectedProvider(agent.provider);
+        setLocalSettings((prev) => ({
+          ...prev,
+          baseModel: `${agent.provider}:${agent.model_id}`,
+        }));
+      } else if (baseModel?.includes(":")) {
+        setSelectedProvider(baseModel.split(":")[0]);
+      } else if (providers.length > 0) {
+        setSelectedProvider(providers[0]);
+        if (!baseModel) {
+          const firstModel = grouped[providers[0]]?.[0];
+          if (firstModel) {
+            setLocalSettings((prev) => ({ ...prev, baseModel: firstModel.id }));
+          }
         }
       }
 
       setToolsExpanded(false);
       setSystemPromptExpanded(false);
       setModelParamsExpanded(false);
-    });
+    };
+
+    setIsLoadingModels(true);
+    setIsLoadingTools(true);
+    loadDialogData();
 
     return () => {
+      cancelled = true;
       setSelectedAgent("");
     };
   }, [open, settings]);

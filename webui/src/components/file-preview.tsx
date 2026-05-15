@@ -1,61 +1,12 @@
 import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import remarkBreaks from "remark-breaks";
 import remarkMath from "remark-math";
-import rehypeHighlight from "rehype-highlight";
 import rehypeMathjax from "rehype-mathjax";
 import "highlight.js/styles/github-dark.css";
 import { Loader2, X, File } from "lucide-react";
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
 import { remarkWikiLinks, resolveTarget } from "../lib/remark-wiki-links";
-
-const markdownComponents = {
-  h1: ({ children, ...props }: any) => (
-    <h1 className="text-2xl font-bold mt-6 mb-4 first:mt-0 text-foreground" {...props}>{children}</h1>
-  ),
-  h2: ({ children, ...props }: any) => (
-    <h2 className="text-xl font-bold mt-5 mb-3 first:mt-0 text-foreground" {...props}>{children}</h2>
-  ),
-  h3: ({ children, ...props }: any) => (
-    <h3 className="text-lg font-bold mt-4 mb-2 first:mt-0 text-foreground" {...props}>{children}</h3>
-  ),
-  p: ({ children, ...props }: any) => (
-    <p className="mb-4 last:mb-0 text-foreground/90" {...props}>{children}</p>
-  ),
-  ul: ({ children, ...props }: any) => (
-    <ul className="list-disc pl-6 mb-4 space-y-1" {...props}>{children}</ul>
-  ),
-  ol: ({ children, ...props }: any) => (
-    <ol className="list-decimal pl-6 mb-4 space-y-1" {...props}>{children}</ol>
-  ),
-  code: ({ inline, className, children, ...props }: any) => {
-    return inline ? (
-      <code className="bg-[rgba(245,216,0,0.08)] px-1.5 py-0.5 text-xs text-primary/90" {...props}>
-        {children}
-      </code>
-    ) : (
-      <code className={className} {...props}>{children}</code>
-    );
-  },
-  table: ({ children, ...props }: any) => (
-    <div className="overflow-x-auto mb-4">
-      <table className="w-full border-collapse border border-[rgba(245,216,0,0.2)]" {...props}>{children}</table>
-    </div>
-  ),
-  thead: ({ children, ...props }: any) => (
-    <thead className="bg-[rgba(245,216,0,0.06)]" {...props}>{children}</thead>
-  ),
-  th: ({ children, ...props }: any) => (
-    <th className="border border-[rgba(245,216,0,0.2)] px-3 py-2 text-left text-sm font-bold text-foreground" {...props}>{children}</th>
-  ),
-  td: ({ children, ...props }: any) => (
-    <td className="border border-[rgba(245,216,0,0.15)] px-3 py-2 text-sm text-foreground/80" {...props}>{children}</td>
-  ),
-  tr: ({ children, ...props }: any) => (
-    <tr className="even:bg-[rgba(245,216,0,0.03)]" {...props}>{children}</tr>
-  ),
-};
+import { markdownComponents, REMARK_PLUGINS, REHYPE_PLUGINS } from "../lib/markdown-components";
 
 interface FilePreviewProps {
   filePath: string | null;
@@ -77,7 +28,7 @@ export function FilePreview({ filePath, fileContent, isLoading, onClose, workspa
   const fileName = filePath.split("/").pop() || filePath;
   const isMd = isMarkdownFile(filePath);
 
-  const remarkPlugins: any[] = [remarkGfm, remarkBreaks, remarkMath, remarkWikiLinks];
+  const remarkPlugins: any[] = [...REMARK_PLUGINS, remarkMath, remarkWikiLinks];
 
   const components: Record<string, React.ComponentType<any>> = {
     ...markdownComponents,
@@ -161,7 +112,7 @@ export function FilePreview({ filePath, fileContent, isLoading, onClose, workspa
             <div className="text-foreground/90" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', lineHeight: '1.6' }}>
               <ReactMarkdown
                 remarkPlugins={remarkPlugins}
-                rehypePlugins={[rehypeHighlight, rehypeMathjax]}
+                rehypePlugins={[...REHYPE_PLUGINS, rehypeMathjax]}
                 components={components}
                 urlTransform={(url) => {
                   if (url.startsWith("wiki://") || url.startsWith("wiki-image://")) return url;

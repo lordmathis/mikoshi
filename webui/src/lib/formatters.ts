@@ -1,10 +1,13 @@
 // Helper function to format tool server name as a display label
 export const getToolLabel = (toolId: string): string => {
-  // Convert snake_case or kebab-case to Title Case
   return toolId
     .split(/[-_]/)
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
+};
+
+export const formatModelLabel = (modelId: string): string => {
+  return modelId.includes(':') ? modelId.split(':').slice(1).join(':') : modelId;
 };
 
 // Format timestamp for display (e.g., "2 hours ago", "Yesterday")

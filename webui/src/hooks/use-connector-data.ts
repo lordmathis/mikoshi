@@ -106,17 +106,19 @@ export function useConnectorData(
       setLoadingPaths((prev) => new Set(prev).add(path));
       const subtree = await api.browseConnectorTree(selectedConnector, resource, path);
 
-      const updateNode = (node: FileNode): FileNode => {
-        if (node.path === path) {
-          return { ...node, children: subtree.children ? sortChildren(subtree.children) : undefined };
-        }
-        if (node.children) {
-          return { ...node, children: node.children.map(updateNode) };
-        }
-        return node;
-      };
-
-      setTreeRoot(updateNode(treeRoot));
+      setTreeRoot((prev) => {
+        if (!prev) return prev;
+        const updateNode = (node: FileNode): FileNode => {
+          if (node.path === path) {
+            return { ...node, children: subtree.children ? sortChildren(subtree.children) : undefined };
+          }
+          if (node.children) {
+            return { ...node, children: node.children.map(updateNode) };
+          }
+          return node;
+        };
+        return updateNode(prev);
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load directory");
     } finally {

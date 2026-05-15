@@ -2,11 +2,9 @@ import { Wrench } from "lucide-react";
 import { cn } from "../lib/utils";
 import { useState, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import remarkBreaks from "remark-breaks";
-import rehypeHighlight from "rehype-highlight";
 import "highlight.js/styles/github-dark.css";
 import type { Message } from "../lib/api";
+import { cyanMarkdownComponents, REMARK_PLUGINS, REHYPE_PLUGINS } from "../lib/markdown-components";
 
 interface ToolMessageProps {
   message: Message;
@@ -110,27 +108,9 @@ export function ToolMessage({ message }: ToolMessageProps) {
                style={{ clipPath: "polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%)" }}>
             <div className="text-foreground/90" style={{ fontFamily: 'var(--font-mono)', letterSpacing: '0.02em', lineHeight: '1.6' }}>
               <ReactMarkdown
-                remarkPlugins={[remarkGfm, remarkBreaks]}
-                rehypePlugins={[rehypeHighlight]}
-                components={{
-                  table: ({ children, ...props }: any) => (
-                    <div className="overflow-x-auto mb-4">
-                      <table className="w-full border-collapse border border-[rgba(0,212,255,0.2)]" {...props}>{children}</table>
-                    </div>
-                  ),
-                  thead: ({ children, ...props }: any) => (
-                    <thead className="bg-[rgba(0,212,255,0.06)]" {...props}>{children}</thead>
-                  ),
-                  th: ({ children, ...props }: any) => (
-                    <th className="border border-[rgba(0,212,255,0.2)] px-3 py-2 text-left text-sm font-bold text-foreground" {...props}>{children}</th>
-                  ),
-                  td: ({ children, ...props }: any) => (
-                    <td className="border border-[rgba(0,212,255,0.15)] px-3 py-2 text-sm text-foreground/80" {...props}>{children}</td>
-                  ),
-                  tr: ({ children, ...props }: any) => (
-                    <tr className="even:bg-[rgba(0,212,255,0.03)]" {...props}>{children}</tr>
-                  ),
-                }}
+                remarkPlugins={REMARK_PLUGINS}
+                rehypePlugins={REHYPE_PLUGINS}
+                components={cyanMarkdownComponents}
               >
                 {displayContent}
               </ReactMarkdown>
