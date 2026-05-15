@@ -32,7 +32,7 @@ export function SessionsTab({
       (c) => c.workspace_id === activeWorkspaceId,
     );
   } else {
-    filtered = conversations;
+    filtered = conversations.filter((c) => !c.workspace_id);
   }
 
   const activeWorkspaceName = activeWorkspaceId
