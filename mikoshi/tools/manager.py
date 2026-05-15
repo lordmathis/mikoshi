@@ -198,11 +198,10 @@ class ToolManager:
         if self._db is not None:
             self._db.update_approval_status(approval_id, "approved")
 
-        handler = self._server_map.get(_parse_tool_name(approval.tool_name)[0])
+        server_name, tool_name = _parse_tool_name(approval.tool_name)
+        handler = self._server_map.get(server_name)
         if handler is None:
             raise ValueError(f"Tool server not found for {approval.tool_name}")
-
-        tool_name = _parse_tool_name(approval.tool_name)[1]
         result = await handler.call_tool(
             tool_name, approval.arguments, approval.context
         )

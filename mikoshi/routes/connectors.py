@@ -1,5 +1,4 @@
 import logging
-import mimetypes
 import os
 from typing import List, Optional
 
@@ -173,11 +172,7 @@ async def fetch_repository_files(request: Request, connector: str, body: FilesRe
             content = await client.get_file_content(body.repo, path)
             filename = os.path.basename(path)
 
-            content_type, _ = mimetypes.guess_type(filename)
-            if not content_type:
-                content_type = "text/plain"
-
-            file_obj = save_upload_file(db, filename, content, content_type, source=source_str)
+            file_obj = save_upload_file(db, filename, content, source=source_str)
 
             result.append(
                 FileResponse(
