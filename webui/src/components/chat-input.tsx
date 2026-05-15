@@ -202,11 +202,10 @@ export function ChatInput({
       <div className="mx-auto max-w-3xl px-4 py-4 sm:px-6">
         {isEditingMode && (
           <div
-            className="mb-3 flex items-center justify-between border px-3 py-2"
+            className="mb-3 flex items-center justify-between border px-3 py-2 cp-cut-10"
             style={{
               borderColor: "rgb(var(--cp-rgb-cyan) / 0.3)",
               background: "rgb(var(--cp-rgb-cyan) / 0.06)",
-              clipPath: "polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%)",
             }}
           >
             <span className="cp-label" style={{ color: 'var(--color-cp-cyan)' }}>Editing message...</span>
@@ -225,11 +224,10 @@ export function ChatInput({
         
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <div
-            className="flex items-center gap-1.5 border px-2 py-1"
+            className="flex items-center gap-1.5 border px-2 py-1 cp-cut-8"
             style={{
               borderColor: "rgb(var(--cp-rgb-yellow) / 0.15)",
               background: "rgb(var(--cp-rgb-yellow) / 0.04)",
-              clipPath: "polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%)",
             }}
           >
             <Bot className="h-3.5 w-3.5 text-primary/60" />
@@ -237,11 +235,10 @@ export function ChatInput({
           </div>
           {chatSettings.enabledTools.length > 0 && (
             <div
-              className="flex items-center gap-1.5 border px-2 py-1"
+              className="flex items-center gap-1.5 border px-2 py-1 cp-cut-8"
               style={{
               borderColor: "rgb(var(--cp-rgb-yellow) / 0.15)",
               background: "rgb(var(--cp-rgb-yellow) / 0.04)",
-              clipPath: "polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%)",
             }}
           >
               <Zap className="h-3.5 w-3.5 text-primary/60" />
@@ -267,9 +264,8 @@ export function ChatInput({
             onChange={(e) => handleInputChangeWithMentions(e.target.value)}
             onKeyDown={handleKeyDownWithMentions}
             placeholder="Type command..."
-            className="typing-area min-h-[60px] resize-none pr-32 overflow-y-auto"
+            className="typing-area min-h-[60px] resize-none pr-32 overflow-y-auto cp-cut-12"
             style={{
-              clipPath: "polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%)",
               background: "var(--color-cp-surface3)",
               fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
             }}
@@ -279,9 +275,8 @@ export function ChatInput({
 
           {showMentions && filteredSkills.length > 0 && (
             <div
-              className="absolute bottom-full left-0 mb-2 w-64 border shadow-lg z-50 bg-cp-surface3"
+              className="absolute bottom-full left-0 mb-2 w-64 border shadow-lg z-50 bg-cp-surface3 cp-cut-x-10"
               style={{
-                clipPath: "polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px))",
                 borderColor: "rgb(var(--cp-rgb-yellow) / 0.25)",
               }}
             >

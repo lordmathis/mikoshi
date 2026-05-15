@@ -26,14 +26,11 @@ export function SidebarItem({
 }: SidebarItemProps) {
   return (
     <div
-      className={`group relative flex items-center transition-all duration-200 cursor-pointer border ${
+      className={`group relative flex items-center transition-all duration-200 cursor-pointer border cp-cut-br-8 ${
         isActive
           ? "bg-primary/5 border-primary/30 shadow-[0_0_15px_rgb(var(--cp-rgb-yellow)_/_0.05)]"
           : "bg-white/[0.02] border-white/5 hover:border-white/10 hover:bg-white/[0.04]"
       }`}
-      style={{
-        clipPath: "polygon(0 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%)",
-      }}
       onClick={onClick}
     >
       <div

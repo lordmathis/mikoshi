@@ -25,11 +25,10 @@ export function FileAttachments({
       {uploadedFiles.map((f, index) => (
         <div
           key={`${f.id}-${index}`}
-          className="flex items-center gap-1.5 border px-2 py-1 text-xs"
+          className="flex items-center gap-1.5 border px-2 py-1 text-xs cp-cut-8"
           style={{
             borderColor: "rgb(var(--cp-rgb-yellow) / 0.2)",
             background: "rgb(var(--cp-rgb-yellow) / 0.06)",
-            clipPath: "polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%)",
           }}
         >
           <File className="h-3.5 w-3.5 text-primary/70" />
@@ -52,11 +51,10 @@ export function FileAttachments({
         return (
           <div
             key={`${entry.connectorId}-${entry.resourceId}`}
-            className="flex items-center gap-1.5 border px-2 py-1 text-xs"
+            className="flex items-center gap-1.5 border px-2 py-1 text-xs cp-cut-8"
             style={{
               borderColor: "rgb(var(--cp-rgb-cyan) / 0.2)",
               background: "rgb(var(--cp-rgb-cyan) / 0.06)",
-              clipPath: "polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%)",
             }}
           >
             <LinkIcon className="h-3.5 w-3.5 text-[var(--color-cp-cyan)]" />

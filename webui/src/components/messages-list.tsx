@@ -84,22 +84,20 @@ export function MessagesList({
             })}
             {isSending && (
                 <div
-                  className="group relative flex gap-4 px-4 py-6 sm:px-6 bg-cp-surface4 overflow-hidden"
+                  className="group relative flex gap-4 px-4 py-6 sm:px-6 bg-cp-surface4 overflow-hidden cp-cut-z-16"
                   style={{
-                    clipPath: "polygon(0 16px, 16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%)",
                     border: "1px solid rgb(var(--cp-rgb-red) / 0.2)",
                   }}
                 >
                   <div
-                    className="absolute top-0 left-0 w-[16px] h-[16px] opacity-40"
-                    style={{ background: 'var(--color-cp-red)', clipPath: 'polygon(0 0, 100% 0, 0 100%)' }}
+                    className="absolute top-0 left-0 w-[16px] h-[16px] opacity-40 cp-tri-tr"
+                    style={{ background: 'var(--color-cp-red)' }}
                   />
                   <div className="flex-shrink-0">
                     <div
-                      className="flex h-8 w-8 items-center justify-center"
+                      className="flex h-8 w-8 items-center justify-center cp-cut-8"
                       style={{
                         background: "rgb(var(--cp-rgb-red) / 0.15)",
-                        clipPath: "polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%)",
                       }}
                     >
                       <Bot className="h-5 w-5 text-[var(--color-cp-red)]" />

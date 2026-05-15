@@ -56,8 +56,8 @@ export function ChatHeader({ sidebarOpen, onToggleSidebar, chatTitle }: ChatHead
         </div>
         <div className="flex items-center gap-1.5" style={{ animation: 'cp-status-glow 2s ease-in-out infinite' }}>
           <div className="relative w-2.5 h-2.5">
-            <div className="absolute inset-0 bg-cp-cyan-bright" style={{ clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)' }} />
-            <div className="absolute inset-0 bg-cp-cyan-bright" style={{ clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)', animation: 'cp-blink 1.5s ease-in-out infinite' }} />
+            <div className="absolute inset-0 bg-cp-cyan-bright cp-diamond" />
+            <div className="absolute inset-0 bg-cp-cyan-bright cp-diamond" style={{ animation: 'cp-blink 1.5s ease-in-out infinite' }} />
           </div>
           <span className="cp-label text-cp-cyan-bright/70">SYS</span>
           <span className="cp-label text-cp-cyan-bright/40">:</span>

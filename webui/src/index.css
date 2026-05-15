@@ -94,6 +94,50 @@ body {
   text-transform: uppercase;
 }
 
+.cp-cut-6  { clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 0 100%); }
+.cp-cut-8  { clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%); }
+.cp-cut-10 { clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%); }
+.cp-cut-12 { clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%); }
+
+.cp-cut-br-8 { clip-path: polygon(0 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%); }
+
+.cp-cut-x-10 { clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px)); }
+.cp-cut-x-14 { clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px)); }
+.cp-cut-x-16 { clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px)); }
+.cp-cut-x-20 { clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px)); }
+
+.cp-cut-z-16 { clip-path: polygon(0 16px, 16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%); }
+
+.cp-diamond { clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); }
+.cp-tri-bl  { clip-path: polygon(0 0, 100% 100%, 100% 0); }
+.cp-tri-tr  { clip-path: polygon(0 0, 100% 0, 0 100%); }
+
+.cp-hover-user {
+  border-color: rgb(var(--cp-rgb-yellow) / 0.2);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.cp-hover-user:hover {
+  border-color: rgb(var(--cp-rgb-yellow) / 0.4);
+  box-shadow: 0 0 12px rgb(var(--cp-rgb-yellow) / 0.08);
+}
+
+.cp-hover-assistant {
+  border-color: rgb(var(--cp-rgb-red) / 0.2);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.cp-hover-assistant:hover {
+  border-color: rgb(var(--cp-rgb-red) / 0.35);
+  box-shadow: 0 0 12px rgb(var(--cp-rgb-red) / 0.08);
+}
+
+.cp-hover-tool {
+  border-color: rgb(var(--cp-rgb-cyan) / 0.2);
+  transition: border-color 0.15s;
+}
+.cp-hover-tool:hover {
+  border-color: rgb(var(--cp-rgb-cyan) / 0.4);
+}
+
 .typing-area {
   border-color: rgba(245, 216, 0, 0.3);
   border-bottom: 2px solid var(--color-cp-yellow);

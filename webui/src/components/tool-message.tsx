@@ -26,22 +26,11 @@ export function ToolMessage({ message }: ToolMessageProps) {
 
   return (
     <div
-      className="group relative flex gap-4 px-4 py-3 sm:px-6 border overflow-hidden bg-cp-surface4"
-      style={{
-        borderColor: "rgb(var(--cp-rgb-cyan) / 0.2)",
-        clipPath: "polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px))",
-        transition: "border-color 0.15s",
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = "rgb(var(--cp-rgb-cyan) / 0.4)";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = "rgb(var(--cp-rgb-cyan) / 0.2)";
-      }}
+      className="group relative flex gap-4 px-4 py-3 sm:px-6 border overflow-hidden bg-cp-surface4 cp-cut-x-14 cp-hover-tool"
     >
       <div
-        className="absolute top-0 right-0 w-[14px] h-[14px] opacity-30"
-        style={{ background: 'var(--color-cp-cyan)', clipPath: 'polygon(0 0, 100% 100%, 100% 0)' }}
+        className="absolute top-0 right-0 w-[14px] h-[14px] opacity-30 cp-tri-bl"
+        style={{ background: 'var(--color-cp-cyan)' }}
       />
 
       <div
@@ -53,10 +42,9 @@ export function ToolMessage({ message }: ToolMessageProps) {
 
       <div className="flex-shrink-0 relative z-10">
         <div
-          className="flex h-8 w-8 items-center justify-center"
+          className="flex h-8 w-8 items-center justify-center cp-cut-8"
           style={{
             background: "rgb(var(--cp-rgb-cyan) / 0.1)",
-            clipPath: "polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%)",
           }}
         >
           <Wrench className="h-4 w-4 text-cp-cyan/70" />
@@ -104,8 +92,7 @@ export function ToolMessage({ message }: ToolMessageProps) {
         </button>
         
         {showToolResult && (
-          <div className="mt-2 border border-border bg-cp-cyan/3 p-3"
-               style={{ clipPath: "polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%)" }}>
+          <div className="mt-2 border border-border bg-cp-cyan/3 p-3 cp-cut-10">
             <div className="text-foreground/90" style={{ fontFamily: 'var(--font-mono)', letterSpacing: '0.02em', lineHeight: '1.6' }}>
               <ReactMarkdown
                 remarkPlugins={REMARK_PLUGINS}
