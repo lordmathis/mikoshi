@@ -56,7 +56,6 @@ export function ToolMessage({ message }: ToolMessageProps) {
             className="font-bold leading-none"
             style={{
               color: 'var(--color-cp-cyan)',
-              fontFamily: 'var(--font-mono)',
               fontSize: '14px',
               letterSpacing: '0.16em',
               textTransform: 'uppercase',
@@ -93,7 +92,7 @@ export function ToolMessage({ message }: ToolMessageProps) {
         
         {showToolResult && (
           <div className="mt-2 border border-border bg-cp-cyan/3 p-3 cp-cut-10">
-            <div className="text-foreground/90" style={{ fontFamily: 'var(--font-mono)', letterSpacing: '0.02em', lineHeight: '1.6' }}>
+            <div className="text-foreground/90" style={{ letterSpacing: '0.02em', lineHeight: '1.6' }}>
               <ReactMarkdown
                 remarkPlugins={REMARK_PLUGINS}
                 rehypePlugins={REHYPE_PLUGINS}

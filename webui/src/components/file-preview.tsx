@@ -109,7 +109,7 @@ export function FilePreview({ filePath, fileContent, isLoading, onClose, workspa
               Failed to load file
             </div>
           ) : isMd ? (
-            <div className="text-foreground/90" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', lineHeight: '1.6' }}>
+            <div className="text-foreground/90 font-sans" style={{ lineHeight: '1.6' }}>
               <ReactMarkdown
                 remarkPlugins={remarkPlugins}
                 rehypePlugins={[...REHYPE_PLUGINS, rehypeMathjax]}

@@ -47,7 +47,7 @@ export function MessagesList({
         ) : messages.length === 0 ? (
           <div className="flex items-center justify-center py-12">
             <div className="text-center">
-              <div className="text-2xl font-bold text-primary mb-2" style={{ fontFamily: 'var(--font-mono)', letterSpacing: '0.1em' }}>
+              <div className="text-2xl font-bold text-primary mb-2" style={{ letterSpacing: '0.1em' }}>
                 &gt;_
               </div>
               <p className="cp-label text-foreground mb-2" style={{ color: 'var(--color-cp-yellow)' }}>

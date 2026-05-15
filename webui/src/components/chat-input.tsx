@@ -264,10 +264,9 @@ export function ChatInput({
             onChange={(e) => handleInputChangeWithMentions(e.target.value)}
             onKeyDown={handleKeyDownWithMentions}
             placeholder="Type command..."
-            className="typing-area min-h-[60px] resize-none pr-32 overflow-y-auto cp-cut-12"
+            className="typing-area min-h-[60px] resize-none pr-32 overflow-y-auto cp-cut-12 font-sans"
             style={{
               background: "var(--color-cp-surface3)",
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
             }}
             rows={1}
             disabled={isSending || !currentConversationId}
@@ -294,7 +293,7 @@ export function ChatInput({
                     onMouseEnter={() => setSelectedMentionIndex(index)}
                   >
                     <AtSign className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <span className="truncate font-medium" style={{ fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}>{skill.name}</span>
+                    <span className="truncate font-medium" style={{ letterSpacing: '0.04em' }}>{skill.name}</span>
                   </button>
                 ))}
               </div>

@@ -166,7 +166,6 @@ export function ChatMessage({ message, onBranch, onRetry, onEdit, isLastUserMess
             className="font-bold leading-none"
             style={{
               color: isUser ? 'var(--color-cp-yellow)' : 'var(--color-cp-red)',
-              fontFamily: 'var(--font-mono)',
               fontSize: '14px',
               letterSpacing: '0.16em',
               textTransform: 'uppercase',
@@ -243,7 +242,6 @@ export function ChatMessage({ message, onBranch, onRetry, onEdit, isLastUserMess
                         <span
                           className="inline-flex items-center gap-1 border border-cp-text-muted/20 bg-cp-text-muted/5 px-2 py-0.5 text-xs hover:border-cp-text-muted/35 transition-colors cursor-default cp-cut-6"
                           style={{
-                            fontFamily: 'var(--font-mono)',
                             color: 'var(--color-cp-text-warm)',
                           }}
                         >
@@ -271,7 +269,7 @@ export function ChatMessage({ message, onBranch, onRetry, onEdit, isLastUserMess
           </div>
         )}
         
-        <div className="text-foreground/90" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', lineHeight: '1.6' }}>
+        <div className="text-foreground/90 font-sans" style={{ lineHeight: '1.6' }}>
           <ReactMarkdown
             remarkPlugins={REMARK_PLUGINS}
             rehypePlugins={REHYPE_PLUGINS}

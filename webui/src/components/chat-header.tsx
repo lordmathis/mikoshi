@@ -44,7 +44,7 @@ export function ChatHeader({ sidebarOpen, onToggleSidebar, chatTitle }: ChatHead
         <div className="flex flex-col min-w-0 flex-1">
           <h1
             className="text-sm font-bold text-primary uppercase tracking-[0.15em]"
-            style={{ fontFamily: 'var(--font-mono)', fontSize: '16px' }}
+            style={{ fontSize: '16px' }}
           >
             Mikoshi
           </h1>
