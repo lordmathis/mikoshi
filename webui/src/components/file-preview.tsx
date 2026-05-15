@@ -49,7 +49,7 @@ export function FilePreview({ filePath, fileContent, isLoading, onClose, workspa
         }
         return (
           <span
-            style={{ color: "rgba(245, 216, 0, 0.5)", background: "rgba(245, 216, 0, 0.06)", padding: "0 3px", borderRadius: "3px", fontSize: "0.9em" }}
+            style={{ color: "rgb(var(--cp-rgb-yellow) / 0.5)", background: "rgb(var(--cp-rgb-yellow) / 0.06)", padding: "0 3px", borderRadius: "3px", fontSize: "0.9em" }}
           >
             {`![[${target}]]`}
           </span>
@@ -71,7 +71,7 @@ export function FilePreview({ filePath, fileContent, isLoading, onClose, workspa
         }
         return (
           <span
-            style={{ color: "rgba(245, 216, 0, 0.5)", background: "rgba(245, 216, 0, 0.06)", padding: "0 3px", borderRadius: "3px", fontSize: "0.9em" }}
+            style={{ color: "rgb(var(--cp-rgb-yellow) / 0.5)", background: "rgb(var(--cp-rgb-yellow) / 0.06)", padding: "0 3px", borderRadius: "3px", fontSize: "0.9em" }}
           >
             {`[[${target}]]`}
           </span>
@@ -82,12 +82,12 @@ export function FilePreview({ filePath, fileContent, isLoading, onClose, workspa
   };
 
   return (
-    <div className="flex flex-col h-full overflow-hidden border-r" style={{ borderColor: "rgba(245, 216, 0, 0.1)" }}>
+    <div className="flex flex-col h-full overflow-hidden border-r" style={{ borderColor: "rgb(var(--cp-rgb-yellow) / 0.1)" }}>
       <div
         className="flex items-center justify-between px-4 py-2 shrink-0 border-b"
         style={{
-          borderColor: "rgba(245, 216, 0, 0.1)",
-          background: "rgba(16,16,14,0.95)",
+          borderColor: "rgb(var(--cp-rgb-yellow) / 0.1)",
+          background: "rgb(var(--cp-rgb-surface3) / 0.95)",
         }}
       >
         <div className="flex items-center gap-2 min-w-0">

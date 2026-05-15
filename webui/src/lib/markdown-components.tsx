@@ -5,23 +5,23 @@ import rehypeHighlight from "rehype-highlight";
 export const REMARK_PLUGINS: any[] = [remarkGfm, remarkBreaks];
 export const REHYPE_PLUGINS: any[] = [rehypeHighlight];
 
-const baseTableComponents = (color: string) => ({
+const baseTableComponents = (rgbVar: string) => ({
   table: ({ children, ...props }: any) => (
     <div className="overflow-x-auto mb-4">
-      <table className={`w-full border-collapse border border-[rgba(${color},0.2)]`} {...props}>{children}</table>
+      <table className="w-full border-collapse border" style={{ borderColor: `rgb(var(${rgbVar}) / 0.2)` }} {...props}>{children}</table>
     </div>
   ),
   thead: ({ children, ...props }: any) => (
-    <thead className={`bg-[rgba(${color},0.06)]`} {...props}>{children}</thead>
+    <thead style={{ backgroundColor: `rgb(var(${rgbVar}) / 0.06)` }} {...props}>{children}</thead>
   ),
   th: ({ children, ...props }: any) => (
-    <th className={`border border-[rgba(${color},0.2)] px-3 py-2 text-left text-sm font-bold text-foreground`} {...props}>{children}</th>
+    <th className="px-3 py-2 text-left text-sm font-bold text-foreground" style={{ borderWidth: '1px', borderStyle: 'solid', borderColor: `rgb(var(${rgbVar}) / 0.2)` }} {...props}>{children}</th>
   ),
   td: ({ children, ...props }: any) => (
-    <td className={`border border-[rgba(${color},0.15)] px-3 py-2 text-sm text-foreground/80`} {...props}>{children}</td>
+    <td className="px-3 py-2 text-sm text-foreground/80" style={{ borderWidth: '1px', borderStyle: 'solid', borderColor: `rgb(var(${rgbVar}) / 0.15)` }} {...props}>{children}</td>
   ),
   tr: ({ children, ...props }: any) => (
-    <tr className={`even:bg-[rgba(${color},0.03)]`} {...props}>{children}</tr>
+    <tr className="even:bg-primary/3" {...props}>{children}</tr>
   ),
 });
 
@@ -64,7 +64,7 @@ export const markdownComponents = {
   ),
   code: ({ inline, className, children, ...props }: any) => {
     return inline ? (
-      <code className="bg-[rgba(245,216,0,0.08)] px-1.5 py-0.5 text-xs text-primary/90" {...props}>
+      <code className="bg-primary/[0.08] px-1.5 py-0.5 text-xs text-primary/90" {...props}>
         {children}
       </code>
     ) : (
@@ -84,9 +84,9 @@ export const markdownComponents = {
       {children}
     </a>
   ),
-  ...baseTableComponents("245,216,0"),
+  ...baseTableComponents("--cp-rgb-yellow"),
 };
 
 export const cyanMarkdownComponents = {
-  ...baseTableComponents("0,212,255"),
+  ...baseTableComponents("--cp-rgb-cyan"),
 };

@@ -98,7 +98,7 @@ export function ChatMessage({ message, onBranch, onRetry, onEdit, isLastUserMess
   const renderFileChip = (file: { id: string; filename: string }) => (
     <div
       key={file.id}
-      className="flex items-center gap-1.5 border border-border bg-[rgba(245,216,0,0.06)] px-2 py-1 text-xs"
+      className="flex items-center gap-1.5 border border-border bg-primary/6 px-2 py-1 text-xs"
       style={{ clipPath: "polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%)" }}
     >
       <File className="h-3.5 w-3.5 text-primary/60" />
@@ -110,7 +110,7 @@ export function ChatMessage({ message, onBranch, onRetry, onEdit, isLastUserMess
     const repo = source.includes(':') ? source.split(':').slice(1).join(':') : source;
     return (
       <div
-        className="flex items-center gap-1.5 border border-[rgba(0,212,255,0.2)] bg-[rgba(0,212,255,0.06)] px-2 py-1 text-xs"
+        className="flex items-center gap-1.5 border border-cp-cyan/20 bg-cp-cyan/6 px-2 py-1 text-xs"
         style={{ clipPath: "polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%)" }}
       >
         <Link className="h-3.5 w-3.5 text-[var(--color-cp-cyan)]" />
@@ -128,34 +128,34 @@ export function ChatMessage({ message, onBranch, onRetry, onEdit, isLastUserMess
     <div
       className={cn(
         "group relative flex gap-4 px-4 py-6 sm:px-6 border overflow-hidden",
-        isUser ? "bg-[#0f0f0d]" : "bg-[#12110e]"
+        isUser ? "bg-background" : "bg-cp-surface4"
       )}
       style={{
-        borderColor: isUser ? "rgba(245, 216, 0, 0.2)" : "rgba(230, 51, 41, 0.2)",
+        borderColor: isUser ? "rgb(var(--cp-rgb-yellow) / 0.2)" : "rgb(var(--cp-rgb-red) / 0.2)",
         clipPath: isUser ? userClipPath : assistantClipPath,
         boxShadow: "none",
         transition: "border-color 0.15s, box-shadow 0.15s",
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = isUser ? "rgba(245, 216, 0, 0.4)" : "rgba(230, 51, 41, 0.35)";
+        e.currentTarget.style.borderColor = isUser ? "rgb(var(--cp-rgb-yellow) / 0.4)" : "rgb(var(--cp-rgb-red) / 0.35)";
         e.currentTarget.style.boxShadow = isUser
-          ? "0 0 12px rgba(245, 216, 0, 0.08)"
-          : "0 0 12px rgba(230, 51, 41, 0.08)";
+          ? "0 0 12px rgb(var(--cp-rgb-yellow) / 0.08)"
+          : "0 0 12px rgb(var(--cp-rgb-red) / 0.08)";
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = isUser ? "rgba(245, 216, 0, 0.2)" : "rgba(230, 51, 41, 0.2)";
+        e.currentTarget.style.borderColor = isUser ? "rgb(var(--cp-rgb-yellow) / 0.2)" : "rgb(var(--cp-rgb-red) / 0.2)";
         e.currentTarget.style.boxShadow = "none";
       }}
     >
       {isUser ? (
         <div
           className="absolute top-0 right-0 w-[16px] h-[16px] opacity-40"
-          style={{ background: '#f5d800', clipPath: 'polygon(0 0, 100% 100%, 100% 0)' }}
+          style={{ background: 'var(--color-cp-yellow)', clipPath: 'polygon(0 0, 100% 100%, 100% 0)' }}
         />
       ) : (
         <div
           className="absolute top-0 left-0 w-[16px] h-[16px] opacity-40"
-          style={{ background: '#e63329', clipPath: 'polygon(0 0, 100% 0, 0 100%)' }}
+          style={{ background: 'var(--color-cp-red)', clipPath: 'polygon(0 0, 100% 0, 0 100%)' }}
         />
       )}
 
@@ -163,7 +163,7 @@ export function ChatMessage({ message, onBranch, onRetry, onEdit, isLastUserMess
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
-          backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(245,216,0,0.012) 3px, rgba(245,216,0,0.012) 4px)",
+          backgroundImage: `repeating-linear-gradient(0deg, transparent, transparent 3px, rgb(var(--cp-rgb-yellow) / 0.012) 3px, rgb(var(--cp-rgb-yellow) / 0.012) 4px)`,
         }}
       />
 
@@ -171,7 +171,7 @@ export function ChatMessage({ message, onBranch, onRetry, onEdit, isLastUserMess
         <div
           className="flex h-8 w-8 items-center justify-center"
           style={{
-            background: isUser ? "rgba(245, 216, 0, 0.15)" : "rgba(230, 51, 41, 0.15)",
+            background: isUser ? "rgb(var(--cp-rgb-yellow) / 0.15)" : "rgb(var(--cp-rgb-red) / 0.15)",
             clipPath: "polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%)",
           }}
         >
@@ -187,7 +187,7 @@ export function ChatMessage({ message, onBranch, onRetry, onEdit, isLastUserMess
           <p
             className="font-bold leading-none"
             style={{
-              color: isUser ? '#f5d800' : '#e63329',
+              color: isUser ? 'var(--color-cp-yellow)' : 'var(--color-cp-red)',
               fontFamily: 'var(--font-mono)',
               fontSize: '14px',
               letterSpacing: '0.16em',
@@ -215,7 +215,7 @@ export function ChatMessage({ message, onBranch, onRetry, onEdit, isLastUserMess
             <button
               onClick={() => setShowReasoning(!showReasoning)}
               className="flex items-center gap-2 cp-label hover:text-foreground transition-colors"
-              style={{ color: '#a89e88' }}
+              style={{ color: 'var(--color-cp-text-muted)' }}
             >
               <Brain className="h-3.5 w-3.5" />
               <span>{showReasoning ? "Hide" : "Show"} reasoning</span>
@@ -238,7 +238,7 @@ export function ChatMessage({ message, onBranch, onRetry, onEdit, isLastUserMess
             </button>
             
             {showReasoning && (
-              <div className="mt-2 border border-border bg-[rgba(0,212,255,0.03)] p-3"
+              <div className="mt-2 border border-border bg-cp-cyan/3 p-3"
                    style={{ clipPath: "polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%)" }}>
                 <div className="text-muted-foreground">
                   <ReactMarkdown
@@ -264,11 +264,11 @@ export function ChatMessage({ message, onBranch, onRetry, onEdit, isLastUserMess
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span
-                          className="inline-flex items-center gap-1 border border-[rgba(138,130,112,0.2)] bg-[rgba(138,130,112,0.05)] px-2 py-0.5 text-xs hover:border-[rgba(138,130,112,0.35)] transition-colors cursor-default"
+                          className="inline-flex items-center gap-1 border border-cp-text-muted/20 bg-cp-text-muted/5 px-2 py-0.5 text-xs hover:border-cp-text-muted/35 transition-colors cursor-default"
                           style={{
                             fontFamily: 'var(--font-mono)',
                             clipPath: "polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 0 100%)",
-                            color: '#e8e0c8',
+                            color: 'var(--color-cp-text-warm)',
                           }}
                         >
                           {tool.name.replace(/^\w+__/, '')}

@@ -196,16 +196,16 @@ export function ChatInput({
 
   return (
     <div
-      className="sticky bottom-0 z-20 shrink-0 bg-[#0a0a0c]"
-      style={{ borderTop: "1px solid rgba(245, 216, 0, 0.15)" }}
+      className="sticky bottom-0 z-20 shrink-0 bg-background"
+      style={{ borderTop: "1px solid rgb(var(--cp-rgb-yellow) / 0.15)" }}
     >
       <div className="mx-auto max-w-3xl px-4 py-4 sm:px-6">
         {isEditingMode && (
           <div
             className="mb-3 flex items-center justify-between border px-3 py-2"
             style={{
-              borderColor: "rgba(0, 212, 255, 0.3)",
-              background: "rgba(0, 212, 255, 0.06)",
+              borderColor: "rgb(var(--cp-rgb-cyan) / 0.3)",
+              background: "rgb(var(--cp-rgb-cyan) / 0.06)",
               clipPath: "polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%)",
             }}
           >
@@ -227,23 +227,23 @@ export function ChatInput({
           <div
             className="flex items-center gap-1.5 border px-2 py-1"
             style={{
-              borderColor: "rgba(245, 216, 0, 0.15)",
-              background: "rgba(245, 216, 0, 0.04)",
+              borderColor: "rgb(var(--cp-rgb-yellow) / 0.15)",
+              background: "rgb(var(--cp-rgb-yellow) / 0.04)",
               clipPath: "polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%)",
             }}
           >
             <Bot className="h-3.5 w-3.5 text-primary/60" />
-            <span className="cp-label" style={{ color: '#f5d800' }}>{formatModelLabel(chatSettings.baseModel)}</span>
+            <span className="cp-label" style={{ color: 'var(--color-cp-yellow)' }}>{formatModelLabel(chatSettings.baseModel)}</span>
           </div>
           {chatSettings.enabledTools.length > 0 && (
             <div
               className="flex items-center gap-1.5 border px-2 py-1"
               style={{
-                borderColor: "rgba(245, 216, 0, 0.15)",
-                background: "rgba(245, 216, 0, 0.04)",
-                clipPath: "polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%)",
-              }}
-            >
+              borderColor: "rgb(var(--cp-rgb-yellow) / 0.15)",
+              background: "rgb(var(--cp-rgb-yellow) / 0.04)",
+              clipPath: "polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%)",
+            }}
+          >
               <Zap className="h-3.5 w-3.5 text-primary/60" />
               <span className="cp-label text-muted-foreground">
                 {chatSettings.enabledTools.map((t) => getToolLabel(t)).join(", ")}
@@ -270,7 +270,7 @@ export function ChatInput({
             className="typing-area min-h-[60px] resize-none pr-32 overflow-y-auto"
             style={{
               clipPath: "polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%)",
-              background: "#10100e",
+              background: "var(--color-cp-surface3)",
               fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
             }}
             rows={1}
@@ -279,10 +279,10 @@ export function ChatInput({
 
           {showMentions && filteredSkills.length > 0 && (
             <div
-              className="absolute bottom-full left-0 mb-2 w-64 border shadow-lg z-50 bg-[#10100e]"
+              className="absolute bottom-full left-0 mb-2 w-64 border shadow-lg z-50 bg-cp-surface3"
               style={{
                 clipPath: "polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px))",
-                borderColor: "rgba(245, 216, 0, 0.25)",
+                borderColor: "rgb(var(--cp-rgb-yellow) / 0.25)",
               }}
             >
               <div className="max-h-60 overflow-y-auto p-1">

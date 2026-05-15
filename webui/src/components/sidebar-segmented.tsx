@@ -77,10 +77,10 @@ export function SidebarSegmentedControl({
       )}
 
       <div
-        className={`fixed left-0 top-0 z-40 h-screen w-[290px] transform border-r bg-[#0a0a0c]/95 backdrop-blur-md transition-transform duration-200 ease-in-out lg:relative lg:z-0 ${
+        className={`fixed left-0 top-0 z-40 h-screen w-[290px] transform border-r bg-background/95 backdrop-blur-md transition-transform duration-200 ease-in-out lg:relative lg:z-0 ${
           isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0 lg:w-0 lg:border-0"
         }`}
-        style={{ borderRightColor: "rgba(245, 216, 0, 0.1)" }}
+        style={{ borderRightColor: "rgb(var(--cp-rgb-yellow) / 0.1)" }}
       >
         <div className={`flex h-full flex-col overflow-hidden ${isOpen ? "" : "lg:hidden"}`}>
           <div className="flex shrink-0 items-center justify-between px-4 py-4 border-b border-white/5">

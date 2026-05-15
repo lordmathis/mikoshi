@@ -26,28 +26,28 @@ export function ToolMessage({ message }: ToolMessageProps) {
 
   return (
     <div
-      className="group relative flex gap-4 px-4 py-3 sm:px-6 border overflow-hidden bg-[#12110e]"
+      className="group relative flex gap-4 px-4 py-3 sm:px-6 border overflow-hidden bg-cp-surface4"
       style={{
-        borderColor: "rgba(0, 212, 255, 0.2)",
+        borderColor: "rgb(var(--cp-rgb-cyan) / 0.2)",
         clipPath: "polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px))",
         transition: "border-color 0.15s",
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = "rgba(0, 212, 255, 0.4)";
+        e.currentTarget.style.borderColor = "rgb(var(--cp-rgb-cyan) / 0.4)";
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = "rgba(0, 212, 255, 0.2)";
+        e.currentTarget.style.borderColor = "rgb(var(--cp-rgb-cyan) / 0.2)";
       }}
     >
       <div
         className="absolute top-0 right-0 w-[14px] h-[14px] opacity-30"
-        style={{ background: '#00d4ff', clipPath: 'polygon(0 0, 100% 100%, 100% 0)' }}
+        style={{ background: 'var(--color-cp-cyan)', clipPath: 'polygon(0 0, 100% 100%, 100% 0)' }}
       />
 
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
-          backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(245,216,0,0.012) 3px, rgba(245,216,0,0.012) 4px)",
+          backgroundImage: `repeating-linear-gradient(0deg, transparent, transparent 3px, rgb(var(--cp-rgb-yellow) / 0.012) 3px, rgb(var(--cp-rgb-yellow) / 0.012) 4px)`,
         }}
       />
 
@@ -55,11 +55,11 @@ export function ToolMessage({ message }: ToolMessageProps) {
         <div
           className="flex h-8 w-8 items-center justify-center"
           style={{
-            background: "rgba(0, 212, 255, 0.1)",
+            background: "rgb(var(--cp-rgb-cyan) / 0.1)",
             clipPath: "polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%)",
           }}
         >
-          <Wrench className="h-4 w-4 text-[#00d4ff]/70" />
+          <Wrench className="h-4 w-4 text-cp-cyan/70" />
         </div>
       </div>
       <div className="flex-1 space-y-2 overflow-hidden relative z-10">
@@ -67,7 +67,7 @@ export function ToolMessage({ message }: ToolMessageProps) {
           <p
             className="font-bold leading-none"
             style={{
-              color: '#00d4ff',
+              color: 'var(--color-cp-cyan)',
               fontFamily: 'var(--font-mono)',
               fontSize: '14px',
               letterSpacing: '0.16em',
@@ -81,7 +81,7 @@ export function ToolMessage({ message }: ToolMessageProps) {
         <button
           onClick={() => setShowToolResult(!showToolResult)}
           className="flex items-center gap-2 cp-label transition-colors"
-          style={{ color: '#a89e88' }}
+          style={{ color: 'var(--color-cp-text-muted)' }}
         >
           <Wrench className="h-3.5 w-3.5" />
           <span>{showToolResult ? "Hide" : "Show"} result</span>
@@ -104,7 +104,7 @@ export function ToolMessage({ message }: ToolMessageProps) {
         </button>
         
         {showToolResult && (
-          <div className="mt-2 border border-border bg-[rgba(0,212,255,0.03)] p-3"
+          <div className="mt-2 border border-border bg-cp-cyan/3 p-3"
                style={{ clipPath: "polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%)" }}>
             <div className="text-foreground/90" style={{ fontFamily: 'var(--font-mono)', letterSpacing: '0.02em', lineHeight: '1.6' }}>
               <ReactMarkdown

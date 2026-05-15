@@ -64,7 +64,7 @@ function DialogContent({
         )}
         style={{
           borderColor: "var(--color-cp-border)",
-          boxShadow: "var(--tw-shadow), 0 0 18px rgba(245, 216, 0, 0.12)",
+          boxShadow: "var(--tw-shadow), 0 0 18px rgb(var(--cp-rgb-yellow) / 0.12)",
           clipPath: "polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px))",
           ...style
         }}

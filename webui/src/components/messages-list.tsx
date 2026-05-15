@@ -50,7 +50,7 @@ export function MessagesList({
               <div className="text-2xl font-bold text-primary mb-2" style={{ fontFamily: 'var(--font-mono)', letterSpacing: '0.1em' }}>
                 &gt;_
               </div>
-              <p className="cp-label text-foreground mb-2" style={{ color: '#f5d800' }}>
+              <p className="cp-label text-foreground mb-2" style={{ color: 'var(--color-cp-yellow)' }}>
                 SYSTEM READY
               </p>
               <p className="cp-label text-muted-foreground">
@@ -84,21 +84,21 @@ export function MessagesList({
             })}
             {isSending && (
                 <div
-                  className="group relative flex gap-4 px-4 py-6 sm:px-6 bg-[#12110e] overflow-hidden"
+                  className="group relative flex gap-4 px-4 py-6 sm:px-6 bg-cp-surface4 overflow-hidden"
                   style={{
                     clipPath: "polygon(0 16px, 16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%)",
-                    border: "1px solid rgba(230, 51, 41, 0.2)",
+                    border: "1px solid rgb(var(--cp-rgb-red) / 0.2)",
                   }}
                 >
                   <div
                     className="absolute top-0 left-0 w-[16px] h-[16px] opacity-40"
-                    style={{ background: '#e63329', clipPath: 'polygon(0 0, 100% 0, 0 100%)' }}
+                    style={{ background: 'var(--color-cp-red)', clipPath: 'polygon(0 0, 100% 0, 0 100%)' }}
                   />
                   <div className="flex-shrink-0">
                     <div
                       className="flex h-8 w-8 items-center justify-center"
                       style={{
-                        background: "rgba(230, 51, 41, 0.15)",
+                        background: "rgb(var(--cp-rgb-red) / 0.15)",
                         clipPath: "polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%)",
                       }}
                     >
@@ -107,7 +107,7 @@ export function MessagesList({
                   </div>
                   <div className="flex-1 space-y-2 overflow-hidden">
                     <div className="flex items-center gap-2">
-                      <p className="cp-label font-bold" style={{ color: '#e63329' }}>
+                       <p className="cp-label font-bold" style={{ color: 'var(--color-cp-red)' }}>
                         // DAEMON
                       </p>
                     </div>

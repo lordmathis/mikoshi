@@ -28,7 +28,7 @@ export function SidebarItem({
     <div
       className={`group relative flex items-center transition-all duration-200 cursor-pointer border ${
         isActive
-          ? "bg-primary/5 border-primary/30 shadow-[0_0_15px_rgba(245,216,0,0.05)]"
+          ? "bg-primary/5 border-primary/30 shadow-[0_0_15px_rgb(var(--cp-rgb-yellow)_/_0.05)]"
           : "bg-white/[0.02] border-white/5 hover:border-white/10 hover:bg-white/[0.04]"
       }`}
       style={{

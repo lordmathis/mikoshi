@@ -11,9 +11,9 @@ export function ChatHeader({ sidebarOpen, onToggleSidebar, chatTitle }: ChatHead
     <div
       className="sticky top-0 z-20 shrink-0 px-4 py-3 sm:px-6 overflow-hidden"
       style={{
-        background: "linear-gradient(180deg, rgba(16,16,14,0.95) 0%, rgba(16,16,14,0.8) 100%)",
+        background: "linear-gradient(180deg, rgb(var(--cp-rgb-surface3) / 0.95) 0%, rgb(var(--cp-rgb-surface3) / 0.8) 100%)",
         backdropFilter: "blur(8px)",
-        borderBottom: "1px solid rgba(245, 216, 0, 0.15)",
+        borderBottom: "1px solid rgb(var(--cp-rgb-yellow) / 0.15)",
       }}
     >
       <div className="flex items-center gap-3">
@@ -56,12 +56,12 @@ export function ChatHeader({ sidebarOpen, onToggleSidebar, chatTitle }: ChatHead
         </div>
         <div className="flex items-center gap-1.5" style={{ animation: 'cp-status-glow 2s ease-in-out infinite' }}>
           <div className="relative w-2.5 h-2.5">
-            <div className="absolute inset-0 bg-[#00f0ff]" style={{ clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)' }} />
-            <div className="absolute inset-0 bg-[#00f0ff]" style={{ clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)', animation: 'cp-blink 1.5s ease-in-out infinite' }} />
+            <div className="absolute inset-0 bg-cp-cyan-bright" style={{ clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)' }} />
+            <div className="absolute inset-0 bg-cp-cyan-bright" style={{ clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)', animation: 'cp-blink 1.5s ease-in-out infinite' }} />
           </div>
-          <span className="cp-label text-[#00f0ff]/70">SYS</span>
-          <span className="cp-label text-[#00f0ff]/40">:</span>
-          <span className="cp-label text-[#00f0ff]/70">OK</span>
+          <span className="cp-label text-cp-cyan-bright/70">SYS</span>
+          <span className="cp-label text-cp-cyan-bright/40">:</span>
+          <span className="cp-label text-cp-cyan-bright/70">OK</span>
         </div>
       </div>
       <div className="h-[2px] mt-2 bg-gradient-to-r from-primary/40 via-primary/10 to-transparent" />

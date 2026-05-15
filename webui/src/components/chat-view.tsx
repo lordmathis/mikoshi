@@ -140,7 +140,7 @@ export function ChatView() {
   const showPreview = filePreview.filePath !== null;
 
   return (
-    <div className="relative flex h-screen" style={{ background: "#0a0a0c" }}>
+    <div className="relative flex h-screen" style={{ background: "var(--color-background)" }}>
       <SidebarSegmentedControl
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen(!sidebarOpen)}
