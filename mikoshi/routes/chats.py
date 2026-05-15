@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 from dataclasses import asdict
 from typing import AsyncGenerator, List, Optional
 
@@ -8,20 +9,50 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from mikoshi.agents.manager import AgentManager
-from mikoshi.agents.streaming import StreamEvent
+from mikoshi.agents.streaming import STREAM_DONE, StreamEvent
 from mikoshi.routes.schemas import serialize_chat
+
+logger = logging.getLogger(__name__)
+
+
+async def _run_with_done_guard(coro, queue: asyncio.Queue, chat_id: str):
+    """Wrap a streaming coroutine and guarantee STREAM_DONE is always emitted.
+
+    Without this, if the coroutine crashes before entering _loop (e.g. in
+    _save_message) or is cancelled (CancelledError bypasses except Exception),
+    the queue never receives a done event and event_stream hangs forever on
+    queue.get(), leaving the frontend stuck on "Breaching...".
+    """
+    try:
+        await coro
+    except asyncio.CancelledError:
+        logger.warning("chat_id=%s stream task cancelled", chat_id)
+        raise
+    except Exception as e:
+        logger.error(
+            "chat_id=%s stream task failed outside _loop: %s", chat_id, e, exc_info=True
+        )
+        await queue.put(StreamEvent(type="error", data={"message": str(e)}))
+    finally:
+        await queue.put(STREAM_DONE)
+        logger.debug("chat_id=%s done guard fired", chat_id)
 
 
 async def event_stream(
-    task: asyncio.Task, queue: asyncio.Queue
+    task: asyncio.Task, queue: asyncio.Queue, chat_id: str
 ) -> AsyncGenerator[str, None]:
     try:
         while True:
             event: StreamEvent = await queue.get()
+            logger.debug(
+                "chat_id=%s SSE event: type=%s", chat_id, event.type
+            )
             yield f"data: {json.dumps(asdict(event))}\n\n"
             if event.type == "done":
+                logger.debug("chat_id=%s SSE stream complete", chat_id)
                 break
     except GeneratorExit:
+        logger.warning("chat_id=%s SSE client disconnected, cancelling task", chat_id)
         task.cancel()
         raise
 
@@ -263,10 +294,16 @@ async def send_message(request: Request, chat_id: str, body: SendMessageRequest)
     if body.stream:
         queue: asyncio.Queue = asyncio.Queue()
         task = asyncio.create_task(
-            agent.chat_stream(message=body.message, queue=queue, file_ids=body.file_ids)
+            _run_with_done_guard(
+                agent.chat_stream(
+                    message=body.message, queue=queue, file_ids=body.file_ids
+                ),
+                queue,
+                chat_id,
+            )
         )
         return StreamingResponse(
-            event_stream(task, queue),
+            event_stream(task, queue, chat_id),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
@@ -297,9 +334,11 @@ async def retry_message(request: Request, chat_id: str, body: RetryRequest):
 
     if body.stream:
         queue: asyncio.Queue = asyncio.Queue()
-        task = asyncio.create_task(agent.retry_stream(queue=queue))
+        task = asyncio.create_task(
+            _run_with_done_guard(agent.retry_stream(queue=queue), queue, chat_id)
+        )
         return StreamingResponse(
-            event_stream(task, queue),
+            event_stream(task, queue, chat_id),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
@@ -332,10 +371,14 @@ async def edit_last_user_message(
     if body.stream:
         queue: asyncio.Queue = asyncio.Queue()
         task = asyncio.create_task(
-            agent.edit_stream(new_message=body.message, queue=queue)
+            _run_with_done_guard(
+                agent.edit_stream(new_message=body.message, queue=queue),
+                queue,
+                chat_id,
+            )
         )
         return StreamingResponse(
-            event_stream(task, queue),
+            event_stream(task, queue, chat_id),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )

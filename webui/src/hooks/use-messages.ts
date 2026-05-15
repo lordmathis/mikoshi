@@ -80,6 +80,7 @@ export function useMessages(
     (event: { type: string; data: unknown }) => {
       if (event.type === "message") {
         const msg = event.data as Message;
+        console.debug('[Messages] received:', msg.role, msg.id, msg.content?.slice(0, 80));
         setMessages((prev) => [...prev, msg]);
 
         if (msg.role === "tool") {
@@ -89,7 +90,9 @@ export function useMessages(
           }
         }
       } else if (event.type === "error") {
-        throw new Error((event.data as { message: string }).message);
+        const errMsg = (event.data as { message: string }).message;
+        console.error('[Messages] error event:', errMsg);
+        throw new Error(errMsg);
       }
     },
     [onWorkspaceChange]
@@ -115,6 +118,7 @@ export function useMessages(
 
     setMessages((prev) => [...prev, optimisticMessage]);
 
+    console.debug('[Messages] send() START — streaming message to chat', chatId);
     try {
       setIsSending(true);
       for await (const event of api.streamMessage(chatId, {
@@ -123,10 +127,13 @@ export function useMessages(
       })) {
         handleEvent(event);
       }
+      console.debug('[Messages] send() COMPLETE — stream ended normally');
     } catch (error) {
+      console.error('[Messages] send() ERROR:', error);
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
       throw error;
     } finally {
+      console.debug('[Messages] send() finally — setting isSending=false');
       setIsSending(false);
     }
   };

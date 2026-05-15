@@ -292,11 +292,15 @@ class ApiClient {
 
     const decoder = new TextDecoder();
     let buffer = '';
+    let eventCount = 0;
 
     try {
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          console.debug('[SSE] reader done (stream ended), events received:', eventCount);
+          break;
+        }
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n\n');
@@ -307,10 +311,15 @@ class ApiClient {
             const jsonStr = line.slice(6);
             try {
               const event = JSON.parse(jsonStr) as StreamEvent;
+              eventCount++;
+              console.debug('[SSE] event #%d:', eventCount, event.type, event.type === 'message' ? (event.data as any)?.role : '');
               yield event;
-              if (event.type === 'done') return;
+              if (event.type === 'done') {
+                console.debug('[SSE] done event received, total events:', eventCount);
+                return;
+              }
             } catch (e) {
-              console.error('Failed to parse SSE event:', jsonStr, e);
+              console.error('[SSE] Failed to parse SSE event:', jsonStr, e);
             }
           }
         }

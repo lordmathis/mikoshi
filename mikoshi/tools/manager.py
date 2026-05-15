@@ -163,6 +163,9 @@ class ToolManager:
         context: ToolCallContext,
     ) -> Any:
         """Route tool calls to the appropriate handler"""
+        logger.info(
+            "call_tool START name=%s chat_id=%s", call_name, context.chat_id
+        )
         try:
             server_name, tool_name = call_name.split("__", 1)
         except ValueError:
@@ -179,7 +182,15 @@ class ToolManager:
             logger.warning(f"Tool '{call_name}' requires approval - auto-denying")
             raise ToolDeniedError(call_name)
 
+        logger.info(
+            "call_tool EXECUTING %s via handler %s", call_name, type(handler).__name__
+        )
         result = await handler.call_tool(tool_name, arguments, context)
+        logger.info(
+            "call_tool COMPLETE %s result_type=%s",
+            call_name,
+            type(result).__name__,
+        )
         return result
 
     async def list_tools(self, server_name: str) -> list:

@@ -69,9 +69,17 @@ class ReActAgent(BaseAgent):
         message_data: Dict[str, Any],
         queue: Optional[Any],
     ) -> Dict[str, Any]:
+        logger.info(
+            "chat_id=%s _process_final_response — saving assistant message",
+            self.chat_id,
+        )
         msg = await self._save_message("assistant", response)
         await self._emit(
             queue, StreamEvent(type="message", data=self._format_message(msg))
+        )
+        logger.info(
+            "chat_id=%s _process_final_response — emitting STREAM_DONE",
+            self.chat_id,
         )
         await self._emit(queue, STREAM_DONE)
         return response

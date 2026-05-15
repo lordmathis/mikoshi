@@ -88,14 +88,22 @@ class BaseAgent(ABC):
     async def _loop(
         self, message: str, queue: Optional[asyncio.Queue] = None
     ) -> Dict[str, Any]:
+        logger.info(
+            "chat_id=%s _loop START message_len=%d streaming=%s",
+            self.chat_id,
+            len(message),
+            queue is not None,
+        )
         messages = await self._get_iteration_context(message)
         tools = await self._get_tools(self.tool_servers)
 
         try:
             for iteration in range(self.max_iterations):
-                logger.debug(
-                    "Iteration %d — Sending %d messages to LLM (model=%s)",
+                logger.info(
+                    "chat_id=%s iteration %d/%d — Sending %d messages to LLM (model=%s)",
+                    self.chat_id,
                     iteration + 1,
+                    self.max_iterations,
                     len(messages),
                     self.model_id,
                 )
@@ -115,38 +123,60 @@ class BaseAgent(ABC):
                     tool_names = [t["function"]["name"] for t in tools]
                     logger.debug("Available tools: %s", tool_names)
 
+                logger.info(
+                    "chat_id=%s iteration %d — calling LLM provider...",
+                    self.chat_id,
+                    iteration + 1,
+                )
                 response = await self._llm(messages, tools if tools else None)
+                logger.info(
+                    "chat_id=%s iteration %d — LLM response received",
+                    self.chat_id,
+                    iteration + 1,
+                )
                 logger.debug(
                     "LLM raw response: %s",
                     json.dumps(response, default=str, ensure_ascii=False)[:2000],
                 )
 
                 message_data = response["choices"][0]["message"]
-                logger.debug(
-                    "LLM message — finish_reason=%s, has_tool_calls=%s, content=%s",
-                    response["choices"][0].get("finish_reason"),
-                    bool(message_data.get("tool_calls")),
-                    (
-                        message_data.get("content", "")[:500]
-                        if message_data.get("content")
-                        else None
-                    ),
+                finish_reason = response["choices"][0].get("finish_reason")
+                has_tool_calls = bool(message_data.get("tool_calls"))
+                logger.info(
+                    "chat_id=%s iteration %d — finish_reason=%s, has_tool_calls=%s, content_len=%s",
+                    self.chat_id,
+                    iteration + 1,
+                    finish_reason,
+                    has_tool_calls,
+                    len(message_data.get("content", "") or ""),
                 )
 
                 if (
                     not message_data.get("tool_calls")
                     or len(message_data.get("tool_calls", [])) == 0
                 ):
+                    logger.info(
+                        "chat_id=%s no tool calls — processing final response",
+                        self.chat_id,
+                    )
                     return await self._process_final_response(
                         response, message_data, queue
                     )
+
+                tool_calls_raw = message_data["tool_calls"]
+                logger.info(
+                    "chat_id=%s iteration %d — %d tool call(s) to execute: %s",
+                    self.chat_id,
+                    iteration + 1,
+                    len(tool_calls_raw),
+                    [tc["function"]["name"] for tc in tool_calls_raw],
+                )
 
                 msg = await self._save_message("assistant", response)
                 await self._emit(
                     queue, StreamEvent(type="message", data=self._format_message(msg))
                 )
 
-                tool_calls_raw = message_data["tool_calls"]
                 messages.append(
                     {
                         "role": "assistant",
@@ -155,7 +185,7 @@ class BaseAgent(ABC):
                     }
                 )
 
-                for tool_call in tool_calls_raw:
+                for tc_idx, tool_call in enumerate(tool_calls_raw):
                     tool_name = tool_call["function"]["name"]
                     tool_args_str = tool_call["function"]["arguments"]
 
@@ -164,8 +194,11 @@ class BaseAgent(ABC):
                     else:
                         tool_args = tool_args_str
 
-                    logger.debug(
-                        "Calling tool: %s args=%s",
+                    logger.info(
+                        "chat_id=%s tool call %d/%d: %s args=%s",
+                        self.chat_id,
+                        tc_idx + 1,
+                        len(tool_calls_raw),
                         tool_name,
                         json.dumps(tool_args, default=str, ensure_ascii=False)[:1000],
                     )
@@ -196,12 +229,22 @@ class BaseAgent(ABC):
                         )
                     except ToolDeniedError as e:
                         result = f"Tool '{e.tool_name}' was denied by the user."
+                        logger.info(
+                            "chat_id=%s tool %s denied by user",
+                            self.chat_id,
+                            tool_name,
+                        )
 
                     result_str = str(result)
-                    logger.debug(
-                        "Tool %s result (len=%d): %s",
+                    logger.info(
+                        "chat_id=%s tool %s completed (result_len=%d)",
+                        self.chat_id,
                         tool_name,
                         len(result_str),
+                    )
+                    logger.debug(
+                        "Tool %s result: %s",
+                        tool_name,
                         result_str[:1000],
                     )
 
@@ -221,6 +264,11 @@ class BaseAgent(ABC):
                         }
                     )
 
+            logger.warning(
+                "chat_id=%s max iterations (%d) reached without final response",
+                self.chat_id,
+                self.max_iterations,
+            )
             msg = await self._save_message(
                 "assistant", {"error": "Max iterations reached without final response"}
             )
@@ -230,24 +278,45 @@ class BaseAgent(ABC):
             await self._emit(queue, STREAM_DONE)
             return {"error": "Max iterations reached without final response"}
         except Exception as e:
+            logger.error(
+                "chat_id=%s agent loop error: %s",
+                self.chat_id,
+                e,
+                exc_info=True,
+            )
             await self._emit(queue, StreamEvent(type="error", data={"message": str(e)}))
             await self._emit(queue, STREAM_DONE)
             if queue is None:
                 raise
-            logger.error(f"Agent loop error: {e}")
 
     async def chat(self, message: str, file_ids: List[str] = []) -> Dict[str, Any]:
+        logger.info("chat_id=%s chat() saving user message", self.chat_id)
         await self._save_message("user", message, file_ids=file_ids)
         result = await self._loop(message)
         await self._generate_title()
+        logger.info("chat_id=%s chat() complete", self.chat_id)
         return result
 
     async def chat_stream(
         self, message: str, queue: asyncio.Queue, file_ids: List[str] = []
     ) -> None:
-        await self._save_message("user", message, file_ids=file_ids)
-        await self._loop(message, queue=queue)
-        await self._generate_title()
+        logger.info("chat_id=%s chat_stream() START", self.chat_id)
+        try:
+            logger.info("chat_id=%s saving user message...", self.chat_id)
+            await self._save_message("user", message, file_ids=file_ids)
+            logger.info("chat_id=%s user message saved, entering _loop...", self.chat_id)
+            await self._loop(message, queue=queue)
+            logger.info("chat_id=%s _loop returned, generating title...", self.chat_id)
+            await self._generate_title()
+            logger.info("chat_id=%s chat_stream() COMPLETE", self.chat_id)
+        except Exception as e:
+            logger.error(
+                "chat_id=%s chat_stream() unexpected error: %s",
+                self.chat_id,
+                e,
+                exc_info=True,
+            )
+            raise
 
     def _prepare_retry(self) -> Optional[str]:
         history = self.db.get_chat_history(self.chat_id)
@@ -279,14 +348,18 @@ class BaseAgent(ABC):
         return await self._loop(message)
 
     async def retry_stream(self, queue: asyncio.Queue) -> None:
+        logger.info("chat_id=%s retry_stream() START", self.chat_id)
         message = self._prepare_retry()
         if not message:
+            logger.warning("chat_id=%s retry_stream() no user message to retry", self.chat_id)
             await queue.put(
                 StreamEvent(type="error", data={"message": "No user message to retry"})
             )
             await queue.put(STREAM_DONE)
             return
+        logger.info("chat_id=%s retry_stream() entering _loop...", self.chat_id)
         await self._loop(message, queue=queue)
+        logger.info("chat_id=%s retry_stream() COMPLETE", self.chat_id)
 
     def _prepare_edit(self) -> Optional[Message]:
         history = self.db.get_chat_history(self.chat_id)
@@ -325,9 +398,11 @@ class BaseAgent(ABC):
         return await self._loop(new_message)
 
     async def edit_stream(self, new_message: str, queue: asyncio.Queue) -> None:
+        logger.info("chat_id=%s edit_stream() START", self.chat_id)
         last_user = self._prepare_edit()
 
         if not last_user:
+            logger.warning("chat_id=%s edit_stream() no user message to edit", self.chat_id)
             await queue.put(
                 StreamEvent(type="error", data={"message": "No user message to edit"})
             )
@@ -340,7 +415,9 @@ class BaseAgent(ABC):
         self.db.delete_message(last_user.id)
         await self._save_message("user", new_message, file_ids=file_ids)
 
+        logger.info("chat_id=%s edit_stream() entering _loop...", self.chat_id)
         await self._loop(new_message, queue=queue)
+        logger.info("chat_id=%s edit_stream() COMPLETE", self.chat_id)
 
     @staticmethod
     def _format_message(msg: Message) -> dict:
