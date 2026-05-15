@@ -91,11 +91,6 @@ class AnthropicClient(LLMClient):
     """Client for Anthropic API."""
 
     def __init__(self, client: Any):
-        """Initialize with an Anthropic client instance.
-
-        Args:
-            client: anthropic.Anthropic instance
-        """
         self.client = client
 
     async def chat_completion(
@@ -106,119 +101,92 @@ class AnthropicClient(LLMClient):
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
     ) -> Dict[str, Any]:
-        """Create a chat completion using Anthropic API.
+        system_prompt, anthropic_messages = self._convert_messages(messages)
+        anthropic_tools = self._convert_tools(tools) if tools else None
 
-        Converts OpenAI-style messages to Anthropic format and response back to OpenAI format.
-        """
-        # Extract system messages
-        system_messages = [
-            m
-            for m in messages
-            if m.get("role") == "system" or m.get("role") == "developer"
-        ]
-        system_prompt = (
-            "\n\n".join(m.get("content", "") for m in system_messages)
-            if system_messages
-            else None
-        )
-
-        # Convert messages to Anthropic format (exclude system messages)
-        anthropic_messages = []
-        for msg in messages:
-            role = msg.get("role")
-            if role in ["system", "developer"]:
-                continue
-
-            # Map OpenAI roles to Anthropic roles
-            if role == "assistant":
-                anthropic_role = "assistant"
-            elif role == "user":
-                anthropic_role = "user"
-            elif role == "tool":
-                # Tool results in Anthropic are handled differently
-                anthropic_role = "user"
-            else:
-                continue
-
-            content = msg.get("content", "")
-            tool_calls = msg.get("tool_calls")
-
-            anthropic_msg: Dict[str, Any] = {"role": anthropic_role}
-
-            # Handle tool calls
-            if tool_calls:
-                anthropic_msg["content"] = []
-                if content:
-                    anthropic_msg["content"].append({"type": "text", "text": content})
-
-                for tc in tool_calls:
-                    # Parse arguments if they're a JSON string
-                    args = tc["function"]["arguments"]
-                    if isinstance(args, str):
-                        try:
-                            args = json.loads(args)
-                        except json.JSONDecodeError:
-                            args = {}
-
-                    anthropic_msg["content"].append(
-                        {
-                            "type": "tool_use",
-                            "id": tc["id"],
-                            "name": tc["function"]["name"],
-                            "input": args,
-                        }
-                    )
-            elif role == "tool":
-                # Tool result
-                anthropic_msg["content"] = [
-                    {
-                        "type": "tool_result",
-                        "tool_use_id": msg.get("tool_call_id"),
-                        "content": content,
-                    }
-                ]
-            else:
-                anthropic_msg["content"] = content
-
-            anthropic_messages.append(anthropic_msg)
-
-        # Convert tools to Anthropic format
-        anthropic_tools = None
-        if tools:
-            anthropic_tools = []
-            for tool in tools:
-                if tool.get("type") == "function":
-                    func = tool.get("function", {})
-                    anthropic_tools.append(
-                        {
-                            "name": func.get("name"),
-                            "description": func.get("description"),
-                            "input_schema": func.get("parameters", {}),
-                        }
-                    )
-
-        # Prepare API call
         api_params: Dict[str, Any] = {
             "model": model,
             "messages": anthropic_messages,
-            "max_tokens": max_tokens or 4096,  # Anthropic requires max_tokens
+            "max_tokens": max_tokens or 4096,
         }
 
         if system_prompt:
             api_params["system"] = system_prompt
-
         if temperature is not None:
             api_params["temperature"] = temperature
-
         if anthropic_tools:
             api_params["tools"] = anthropic_tools
 
         response = await self.client.messages.create(**api_params)
         return self._convert_response_to_openai(response)
 
+    def _convert_messages(
+        self, messages: Sequence[Any]
+    ) -> tuple[Optional[str], List[Dict[str, Any]]]:
+        system_parts = [
+            m.get("content", "")
+            for m in messages
+            if m.get("role") in ("system", "developer")
+        ]
+        system_prompt = "\n\n".join(system_parts) if system_parts else None
+
+        anthropic_messages: List[Dict[str, Any]] = []
+        for msg in messages:
+            role = msg.get("role")
+            if role in ("system", "developer"):
+                continue
+
+            if role == "tool":
+                anthropic_messages.append({
+                    "role": "user",
+                    "content": [{
+                        "type": "tool_result",
+                        "tool_use_id": msg.get("tool_call_id"),
+                        "content": msg.get("content", ""),
+                    }],
+                })
+            elif role == "assistant":
+                tool_calls = msg.get("tool_calls")
+                if tool_calls:
+                    content_parts: list = []
+                    text = msg.get("content")
+                    if text:
+                        content_parts.append({"type": "text", "text": text})
+                    for tc in tool_calls:
+                        args = tc["function"]["arguments"]
+                        if isinstance(args, str):
+                            try:
+                                args = json.loads(args)
+                            except json.JSONDecodeError:
+                                args = {}
+                        content_parts.append({
+                            "type": "tool_use",
+                            "id": tc["id"],
+                            "name": tc["function"]["name"],
+                            "input": args,
+                        })
+                    anthropic_messages.append({"role": "assistant", "content": content_parts})
+                else:
+                    anthropic_messages.append({"role": "assistant", "content": msg.get("content", "")})
+            elif role == "user":
+                anthropic_messages.append({"role": "user", "content": msg.get("content", "")})
+
+        return system_prompt, anthropic_messages
+
+    @staticmethod
+    def _convert_tools(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        result = []
+        for tool in tools:
+            if tool.get("type") == "function":
+                func = tool.get("function", {})
+                result.append({
+                    "name": func.get("name"),
+                    "description": func.get("description"),
+                    "input_schema": func.get("parameters", {}),
+                })
+        return result
+
     def _convert_response_to_openai(self, response: Any) -> Dict[str, Any]:
-        """Convert Anthropic response to OpenAI format."""
-        # Extract content and tool calls from Anthropic response
         content_parts = []
         tool_calls = []
 
@@ -226,22 +194,19 @@ class AnthropicClient(LLMClient):
             if block.type == "text":
                 content_parts.append(block.text)
             elif block.type == "tool_use":
-                tool_calls.append(
-                    {
-                        "id": block.id,
-                        "type": "function",
-                        "function": {
-                            "name": block.name,
-                            "arguments": json.dumps(block.input)
-                            if isinstance(block.input, dict)
-                            else block.input,
-                        },
-                    }
-                )
+                tool_calls.append({
+                    "id": block.id,
+                    "type": "function",
+                    "function": {
+                        "name": block.name,
+                        "arguments": json.dumps(block.input)
+                        if isinstance(block.input, dict)
+                        else block.input,
+                    },
+                })
 
         content = "\n".join(content_parts) if content_parts else None
 
-        # Build OpenAI-style response
         message: Dict[str, Any] = {
             "role": "assistant",
             "content": content,

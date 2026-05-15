@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 class EstimateTokensRequest(BaseModel):
     repo: str
     paths: List[str]
-    exclude_paths: Optional[List[str]] = []
+    exclude_paths: Optional[List[str]] = None
 
 
 class Connector(BaseModel):
@@ -28,7 +28,7 @@ class Connector(BaseModel):
 class FilesRequest(BaseModel):
     repo: str
     paths: List[str]
-    exclude_paths: List[str] = []
+    exclude_paths: Optional[List[str]] = None
 
 
 def _get_connector(request: Request, name: str):
@@ -157,7 +157,7 @@ async def fetch_repository_files(request: Request, connector: str, body: FilesRe
 
     try:
         file_paths = await _expand_paths_to_files(
-            client, body.repo, body.paths, body.exclude_paths
+            client, body.repo, body.paths, body.exclude_paths or []
         )
     except Exception as e:
         logger.error(f"Failed to expand repository paths: {e}")

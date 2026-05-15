@@ -1,5 +1,6 @@
+import asyncio
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from openai.types.chat import ChatCompletionMessageParam
 
@@ -22,7 +23,7 @@ class ReActAgent(BaseAgent):
         self,
         response: Dict[str, Any],
         message_data: Dict[str, Any],
-        queue: Optional[Any],
+        queue: asyncio.Queue,
     ) -> Dict[str, Any]:
         logger.info(
             "chat_id=%s _process_final_response — saving assistant message",

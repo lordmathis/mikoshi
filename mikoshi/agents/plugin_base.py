@@ -9,7 +9,7 @@ class AgentPluginBase:
     provider_id: str = ""
     model_id: str = ""
     system_prompt: str = ""
-    tool_servers: List[str] = []
+    tool_servers: Optional[List[str]] = None
     max_iterations: int = 5
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None

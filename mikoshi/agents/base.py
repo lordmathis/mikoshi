@@ -61,7 +61,7 @@ class BaseAgent(ABC):
         self,
         response: Dict[str, Any],
         message_data: Dict[str, Any],
-        queue: Optional[asyncio.Queue],
+        queue: asyncio.Queue,
     ) -> Dict[str, Any]:
         ...
 
@@ -78,7 +78,7 @@ class BaseAgent(ABC):
         )
 
     async def _execute_tool_calls(
-        self, tool_calls_raw: list, messages: List[dict], queue: Optional[asyncio.Queue]
+        self, tool_calls_raw: list, messages: List[dict], queue: asyncio.Queue
     ) -> None:
         for tc_idx, tool_call in enumerate(tool_calls_raw):
             tool_name = tool_call["function"]["name"]
@@ -126,7 +126,7 @@ class BaseAgent(ABC):
                 {"role": "tool", "tool_call_id": tool_call["id"], "content": str(result)}
             )
 
-    async def _handle_max_iterations(self, queue: Optional[asyncio.Queue]) -> Dict[str, Any]:
+    async def _handle_max_iterations(self, queue: asyncio.Queue) -> Dict[str, Any]:
         logger.warning(
             "chat_id=%s max iterations (%d) reached without final response",
             self.chat_id,
@@ -140,11 +140,11 @@ class BaseAgent(ABC):
         return {"error": "Max iterations reached without final response"}
 
     async def _loop(
-        self, message: str, queue: Optional[asyncio.Queue] = None
+        self, message: str, queue: asyncio.Queue
     ) -> Dict[str, Any]:
         logger.info(
-            "chat_id=%s _loop START message_len=%d streaming=%s",
-            self.chat_id, len(message), queue is not None,
+            "chat_id=%s _loop START message_len=%d",
+            self.chat_id, len(message),
         )
         messages = await self._get_iteration_context(message)
         tools = await self._get_tools(self.tool_servers)
@@ -210,8 +210,6 @@ class BaseAgent(ABC):
             logger.error("chat_id=%s agent loop error: %s", self.chat_id, e, exc_info=True)
             await self._emit(queue, StreamEvent(type="error", data={"message": str(e)}))
             await self._emit(queue, STREAM_DONE)
-            if queue is None:
-                raise
 
     async def chat(self, message: str, queue: asyncio.Queue, file_ids: Optional[List[str]] = None) -> None:
         logger.info("chat_id=%s chat() START", self.chat_id)
@@ -242,11 +240,7 @@ class BaseAgent(ABC):
         if not last_user:
             return None
         if last_assistant:
-            history = self.db.get_chat_history(self.chat_id)
-            for msg in history:
-                if msg.role == "tool" and msg.sequence > last_assistant.sequence:
-                    self.db.delete_message(msg.id)
-            self.db.delete_message(last_assistant.id)
+            self.db.delete_messages_after(self.chat_id, last_assistant.sequence)
         return last_user.content
 
     async def retry(self, queue: asyncio.Queue) -> None:
@@ -266,10 +260,7 @@ class BaseAgent(ABC):
         if not last_user:
             return None
         if last_assistant:
-            history = self.db.get_chat_history(self.chat_id)
-            for msg in history:
-                if msg.sequence > last_user.sequence:
-                    self.db.delete_message(msg.id)
+            self.db.delete_messages_after(self.chat_id, last_user.sequence + 1)
         return last_user
 
     async def edit(self, new_message: str, queue: asyncio.Queue) -> None:
@@ -293,22 +284,26 @@ class BaseAgent(ABC):
 
     @staticmethod
     def _format_message(msg: Message) -> dict:
+        tool_calls = None
+        if msg.tool_calls:
+            try:
+                tool_calls = json.loads(msg.tool_calls)
+            except (json.JSONDecodeError, TypeError):
+                tool_calls = None
         return {
             "id": msg.id,
             "role": msg.role,
             "content": msg.content,
             "reasoning_content": msg.reasoning_content,
-            "tool_calls": json.loads(msg.tool_calls) if msg.tool_calls else None,
+            "tool_calls": tool_calls,
             "tool_call_id": msg.tool_call_id,
             "sequence": msg.sequence,
             "created_at": msg.created_at.isoformat() if msg.created_at else None,
-            "files": [],
         }
 
     @staticmethod
-    async def _emit(queue: Optional[asyncio.Queue], event: StreamEvent) -> None:
-        if queue is not None:
-            await queue.put(event)
+    async def _emit(queue: asyncio.Queue, event: StreamEvent) -> None:
+        await queue.put(event)
 
     async def _save_message(
         self,

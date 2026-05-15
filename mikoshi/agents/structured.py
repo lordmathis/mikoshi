@@ -1,6 +1,7 @@
+import asyncio
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from openai.types.chat import ChatCompletionMessageParam
 
@@ -54,7 +55,7 @@ class StructuredAgent(BaseAgent):
         self,
         response: Dict[str, Any],
         message_data: Dict[str, Any],
-        queue: Optional[Any],
+        queue: asyncio.Queue,
     ) -> Dict[str, Any]:
         user_msg, new_state = self._parse_final_response(
             message_data.get("content", "")

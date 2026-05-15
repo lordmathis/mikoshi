@@ -88,7 +88,7 @@ async def list_agents(request: Request):
                     "system_prompt": agent_cls.system_prompt,
                     "provider": agent_cls.provider_id,
                     "model_id": agent_cls.model_id,
-                    "tool_servers": list(agent_cls.tool_servers),
+                    "tool_servers": list(agent_cls.tool_servers or []),
                     "temperature": agent_cls.temperature,
                     "max_tokens": agent_cls.max_tokens,
                     "max_iterations": agent_cls.max_iterations,

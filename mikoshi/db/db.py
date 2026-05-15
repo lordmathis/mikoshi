@@ -234,16 +234,29 @@ class Database:
             if not message:
                 return False
 
-            # Delete message
             session.delete(message)
 
-            # Update chat's updated_at
             chat = session.get(Chat, message.chat_id)
             if chat:
                 chat.updated_at = datetime.now(UTC)
 
             session.commit()
             return True
+
+    def delete_messages_after(self, chat_id: str, min_sequence: int) -> None:
+        """Delete all messages with sequence >= min_sequence in a single transaction."""
+        with self.SessionLocal() as session:
+            stmt = (
+                select(Message)
+                .where(Message.chat_id == chat_id, Message.sequence >= min_sequence)
+            )
+            messages = session.execute(stmt).scalars().all()
+            for msg in messages:
+                session.delete(msg)
+            chat = session.get(Chat, chat_id)
+            if chat:
+                chat.updated_at = datetime.now(UTC)
+            session.commit()
 
     def branch_chat(
         self,

@@ -98,7 +98,7 @@ class UpdateChatRequest(BaseModel):
 
 class SendMessageRequest(BaseModel):
     message: str
-    file_ids: List[str] = []
+    file_ids: Optional[List[str]] = None
 
 
 class BranchChatRequest(BaseModel):

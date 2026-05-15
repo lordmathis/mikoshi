@@ -6,7 +6,6 @@ from fastapi.responses import PlainTextResponse, Response
 from pydantic import BaseModel
 
 from mikoshi.routes.schemas import format_timestamp, serialize_chat
-from mikoshi.workspace import WorkspaceError, WorkspaceNotFoundError
 
 router = APIRouter(prefix="/workspaces")
 logger = logging.getLogger(__name__)
@@ -86,13 +85,8 @@ async def get_workspace_tree(request: Request, workspace_id: str, path: str = ""
     workspace_service = _get_workspace_service(request)
     _require_workspace(database, workspace_id)
 
-    try:
-        tree = workspace_service.get_file_tree(workspace_id, path)
-        return tree.model_dump()
-    except WorkspaceNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except WorkspaceError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    tree = workspace_service.get_file_tree(workspace_id, path)
+    return tree.model_dump()
 
 
 @router.get("/{workspace_id}/files/{path:path}")
@@ -101,19 +95,14 @@ async def get_workspace_file(request: Request, workspace_id: str, path: str):
     workspace_service = _get_workspace_service(request)
     _require_workspace(database, workspace_id)
 
-    try:
-        content, mime_type = workspace_service.read_file_raw(workspace_id, path)
-        if mime_type.startswith("text/") or mime_type in (
-            "application/json",
-            "application/javascript",
-            "application/xml",
-        ):
-            return PlainTextResponse(content.decode("utf-8", errors="replace"))
-        return Response(content=content, media_type=mime_type)
-    except WorkspaceNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except WorkspaceError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    content, mime_type = workspace_service.read_file_raw(workspace_id, path)
+    if mime_type.startswith("text/") or mime_type in (
+        "application/json",
+        "application/javascript",
+        "application/xml",
+    ):
+        return PlainTextResponse(content.decode("utf-8", errors="replace"))
+    return Response(content=content, media_type=mime_type)
 
 
 @router.get("/{workspace_id}/ls")
@@ -122,13 +111,8 @@ async def list_workspace_files(request: Request, workspace_id: str):
     workspace_service = _get_workspace_service(request)
     _require_workspace(database, workspace_id)
 
-    try:
-        files = workspace_service.list_files_flat(workspace_id)
-        return {"files": files}
-    except WorkspaceNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except WorkspaceError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    files = workspace_service.list_files_flat(workspace_id)
+    return {"files": files}
 
 
 @router.delete("/{workspace_id}")
