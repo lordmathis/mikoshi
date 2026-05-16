@@ -14,6 +14,11 @@ interface FileEditorProps {
 export function FileEditor({ content, onContentChange, onSave }: FileEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
+  const onContentChangeRef = useRef(onContentChange);
+  const onSaveRef = useRef(onSave);
+
+  onContentChangeRef.current = onContentChange;
+  onSaveRef.current = onSave;
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -28,14 +33,14 @@ export function FileEditor({ content, onContentChange, onSave }: FileEditorProps
           {
             key: "Mod-s",
             run: () => {
-              onSave();
+              onSaveRef.current();
               return true;
             },
           },
         ]),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
-            onContentChange(update.state.doc.toString());
+            onContentChangeRef.current(update.state.doc.toString());
           }
         }),
         EditorView.theme({

@@ -6,19 +6,30 @@ export function useFilePreview(workspaceId: string | null) {
   const [fileContent, setFileContent] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [mode, setModeState] = useState<"preview" | "edit">("preview");
+  const [editContent, setEditContent] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
   const modeRef = useRef(mode);
+  const editContentRef = useRef(editContent);
+  const filePathRef = useRef(filePath);
+  const isSavingRef = useRef(isSaving);
+
+  modeRef.current = mode;
+  editContentRef.current = editContent;
+  filePathRef.current = filePath;
+  isSavingRef.current = isSaving;
+
   const setMode = useCallback((m: "preview" | "edit") => {
     modeRef.current = m;
     setModeState(m);
   }, []);
-  const [editContent, setEditContent] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
 
   const isDirty = editContent !== null && editContent !== fileContent;
 
   const openFile = useCallback(async (path: string) => {
     if (!workspaceId) return;
     setFilePath(path);
+    filePathRef.current = path;
     setFileContent(null);
     setIsLoading(true);
     setEditContent(null);
@@ -36,19 +47,19 @@ export function useFilePreview(workspaceId: string | null) {
   }, [workspaceId]);
 
   const refreshCurrentFile = useCallback(async () => {
-    if (!workspaceId || !filePath) return;
+    if (!workspaceId || !filePathRef.current) return;
     try {
-      const content = await api.getWorkspaceFile(workspaceId, filePath);
+      const content = await api.getWorkspaceFile(workspaceId, filePathRef.current);
       setFileContent(content);
     } catch {}
-  }, [workspaceId, filePath]);
+  }, [workspaceId]);
 
   const saveFile = useCallback(async () => {
-    if (!workspaceId || !filePath || editContent === null || isSaving) return;
+    if (!workspaceId || !filePathRef.current || editContentRef.current === null || isSavingRef.current) return;
     setIsSaving(true);
     try {
-      await api.writeWorkspaceFile(workspaceId, filePath, editContent);
-      const content = await api.getWorkspaceFile(workspaceId, filePath);
+      await api.writeWorkspaceFile(workspaceId, filePathRef.current, editContentRef.current);
+      const content = await api.getWorkspaceFile(workspaceId, filePathRef.current);
       setFileContent(content);
       setEditContent(content);
     } catch (error) {
@@ -56,7 +67,7 @@ export function useFilePreview(workspaceId: string | null) {
     } finally {
       setIsSaving(false);
     }
-  }, [workspaceId, filePath, editContent, isSaving]);
+  }, [workspaceId]);
 
   const closePreview = useCallback(() => {
     setFilePath(null);
