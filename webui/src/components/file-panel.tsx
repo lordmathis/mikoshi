@@ -60,7 +60,7 @@ export function FilePanel({
           <File className="h-4 w-4 text-primary/60 flex-shrink-0" />
           <span className="cp-label text-foreground truncate">
             {fileName}
-            {isDirty && <span className="text-primary/60 ml-0.5">*</span>}
+            {isDirty && <span className="ml-1.5 inline-block h-2 w-2 rounded-full bg-cp-yellow" />}
           </span>
         </div>
         <div className="flex items-center gap-1">

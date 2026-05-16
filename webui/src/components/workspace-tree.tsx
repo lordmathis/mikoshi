@@ -412,7 +412,22 @@ export function WorkspaceTree({ tree, activeFilePath, onFileClick, workspaceId, 
         }
       }}
     >
-      <div className="flex items-center justify-end px-1 pb-1 gap-0.5">
+      <div className="flex items-center px-1 pb-1 gap-0.5 border-b border-primary/6">
+        <button
+          className="p-1 rounded hover:bg-accent transition-colors [&:hover>svg]:text-accent-foreground"
+          onClick={() => setIsCreating(true)}
+          title="New file"
+        >
+          <Plus className="h-3.5 w-3.5 text-foreground" />
+        </button>
+        <button
+          className={btnClass("commit")}
+          onClick={() => setIsCommitting(true)}
+          disabled={git.isLoading}
+          title="Commit"
+        >
+          <Check className="h-3.5 w-3.5 text-foreground" />
+        </button>
         <button
           className={btnClass("pull")}
           onClick={handleGitPull}
@@ -436,21 +451,6 @@ export function WorkspaceTree({ tree, activeFilePath, onFileClick, workspaceId, 
           ) : (
             <ArrowUpFromLine className="h-3.5 w-3.5 text-foreground" />
           )}
-        </button>
-        <button
-          className={btnClass("commit")}
-          onClick={() => setIsCommitting(true)}
-          disabled={git.isLoading}
-          title="Commit"
-        >
-          <Check className="h-3.5 w-3.5 text-foreground" />
-        </button>
-        <button
-          className="p-1 rounded hover:bg-accent transition-colors [&:hover>svg]:text-accent-foreground"
-          onClick={() => setIsCreating(true)}
-          title="New file"
-        >
-          <Plus className="h-3.5 w-3.5 text-foreground" />
         </button>
       </div>
       {isCommitting && (
