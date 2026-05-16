@@ -468,6 +468,26 @@ class ApiClient {
     });
   }
 
+  async createWorkspaceFile(id: string, path: string, content: string = ""): Promise<{ success: boolean }> {
+    return this.request(`/workspaces/${id}/files/${path}`, {
+      method: 'POST',
+      body: JSON.stringify({ content }),
+    });
+  }
+
+  async deleteWorkspaceFile(id: string, path: string): Promise<{ success: boolean }> {
+    return this.request(`/workspaces/${id}/files/${path}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async renameWorkspaceFile(id: string, oldPath: string, newPath: string): Promise<{ success: boolean; new_path: string }> {
+    return this.request(`/workspaces/${id}/files/${oldPath}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ new_path: newPath }),
+    });
+  }
+
   async getWorkspaceFileList(id: string): Promise<string[]> {
     const result = await this.request<{ files: string[] }>(`/workspaces/${id}/ls`);
     return result.files;

@@ -69,6 +69,22 @@ export function useFilePreview(workspaceId: string | null) {
     }
   }, [workspaceId]);
 
+  const handleFileDeleted = useCallback((path: string) => {
+    if (filePathRef.current === path) {
+      setFilePath(null);
+      setFileContent(null);
+      setMode("preview");
+      setEditContent(null);
+    }
+  }, []);
+
+  const handleFileRenamed = useCallback((oldPath: string, newPath: string) => {
+    if (filePathRef.current === oldPath) {
+      setFilePath(newPath);
+      filePathRef.current = newPath;
+    }
+  }, []);
+
   const closePreview = useCallback(() => {
     setFilePath(null);
     setFileContent(null);
@@ -90,5 +106,7 @@ export function useFilePreview(workspaceId: string | null) {
     isDirty,
     isSaving,
     saveFile,
+    handleFileDeleted,
+    handleFileRenamed,
   };
 }

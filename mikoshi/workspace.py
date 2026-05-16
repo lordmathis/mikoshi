@@ -23,6 +23,16 @@ class PathTraversalError(WorkspaceError):
     pass
 
 
+def _remove_empty_parents(path: str, stop_at: str):
+    parent = os.path.dirname(path)
+    while parent != stop_at and parent.startswith(stop_at):
+        try:
+            os.rmdir(parent)
+        except OSError:
+            break
+        parent = os.path.dirname(parent)
+
+
 class WorkspaceService:
     def __init__(self, data_dir: str, connectors_config: dict[str, ConnectorsConfig]):
         self._data_dir = data_dir
@@ -169,6 +179,28 @@ class WorkspaceService:
 
         with open(full_path, "w", encoding="utf-8") as f:
             f.write(content)
+
+    def delete_file(self, workspace_id: str, path: str):
+        root = self.get_workspace_path(workspace_id)
+        full_path = os.path.realpath(os.path.join(root, path))
+        self._validate_path(root, full_path)
+        if not os.path.isfile(full_path):
+            raise WorkspaceError(f"File not found: {path}")
+        os.remove(full_path)
+        _remove_empty_parents(full_path, root)
+
+    def rename_file(self, workspace_id: str, old_path: str, new_path: str) -> str:
+        root = self.get_workspace_path(workspace_id)
+        old_full = os.path.realpath(os.path.join(root, old_path))
+        new_full = os.path.realpath(os.path.join(root, new_path))
+        self._validate_path(root, old_full)
+        self._validate_path(root, new_full)
+        if not os.path.isfile(old_full):
+            raise WorkspaceError(f"File not found: {old_path}")
+        os.makedirs(os.path.dirname(new_full), exist_ok=True)
+        os.rename(old_full, new_full)
+        _remove_empty_parents(old_full, root)
+        return new_path
 
     def list_files_flat(self, workspace_id: str) -> List[str]:
         root = self.get_workspace_path(workspace_id)

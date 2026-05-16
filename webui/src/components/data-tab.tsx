@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Loader2 } from "lucide-react";
 import { WorkspaceTree } from "./workspace-tree";
 import { api, type FileNode } from "../lib/api";
@@ -9,6 +9,8 @@ interface DataTabProps {
   onFileClick: (path: string) => void;
   tree: FileNode | null;
   onTreeUpdate: (tree: FileNode) => void;
+  onFileDeleted: (path: string) => void;
+  onFileRenamed: (oldPath: string, newPath: string) => void;
 }
 
 export function DataTab({
@@ -17,8 +19,20 @@ export function DataTab({
   onFileClick,
   tree,
   onTreeUpdate,
+  onFileDeleted,
+  onFileRenamed,
 }: DataTabProps) {
   const [isLoading, setIsLoading] = useState(false);
+
+  const refreshTree = useCallback(async () => {
+    if (!activeWorkspaceId) return;
+    try {
+      const root = await api.getWorkspaceTree(activeWorkspaceId);
+      onTreeUpdate(root);
+    } catch (err) {
+      console.error("Failed to refresh workspace tree:", err);
+    }
+  }, [activeWorkspaceId, onTreeUpdate]);
 
   useEffect(() => {
     if (!activeWorkspaceId) return;
@@ -53,6 +67,9 @@ export function DataTab({
         activeFilePath={activeFilePath}
         onFileClick={onFileClick}
         workspaceId={activeWorkspaceId}
+        onRefreshTree={refreshTree}
+        onFileDeleted={onFileDeleted}
+        onFileRenamed={onFileRenamed}
       />
     </div>
   );

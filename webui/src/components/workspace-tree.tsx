@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { Folder, File, ChevronRight, ChevronDown, Loader2 } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Folder, File, ChevronRight, ChevronDown, Loader2, Pencil, Trash2, Plus } from "lucide-react";
 import { api, type FileNode } from "../lib/api";
 
 interface WorkspaceTreeProps {
@@ -7,6 +7,9 @@ interface WorkspaceTreeProps {
   activeFilePath: string | null;
   onFileClick: (path: string) => void;
   workspaceId?: string | null;
+  onRefreshTree: () => Promise<void>;
+  onFileDeleted: (path: string) => void;
+  onFileRenamed: (oldPath: string, newPath: string) => void;
 }
 
 function TreeNode({
@@ -16,6 +19,10 @@ function TreeNode({
   onFileClick,
   onLoadChildren,
   loadingPaths,
+  onRefreshTree,
+  onFileDeleted,
+  onFileRenamed,
+  workspaceId,
 }: {
   node: FileNode;
   level: number;
@@ -23,13 +30,28 @@ function TreeNode({
   onFileClick: (path: string) => void;
   onLoadChildren: (path: string) => void;
   loadingPaths: Set<string>;
+  onRefreshTree: () => Promise<void>;
+  onFileDeleted: (path: string) => void;
+  onFileRenamed: (oldPath: string, newPath: string) => void;
+  workspaceId?: string | null;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState(node.name);
+  const renameInputRef = useRef<HTMLInputElement>(null);
   const isDir = node.type === "dir";
   const isActive = activeFilePath === node.path;
   const isLoading = loadingPaths.has(node.path);
 
+  useEffect(() => {
+    if (isRenaming && renameInputRef.current) {
+      renameInputRef.current.focus();
+      renameInputRef.current.select();
+    }
+  }, [isRenaming]);
+
   const handleClick = () => {
+    if (isRenaming) return;
     if (isDir) {
       if (!expanded && !node.children) {
         onLoadChildren(node.path);
@@ -40,10 +62,51 @@ function TreeNode({
     }
   };
 
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!workspaceId) return;
+    try {
+      await api.deleteWorkspaceFile(workspaceId, node.path);
+      onFileDeleted(node.path);
+      await onRefreshTree();
+    } catch (err) {
+      console.error("Failed to delete file:", err);
+    }
+  };
+
+  const handleRenameStart = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setRenameValue(node.name);
+    setIsRenaming(true);
+  };
+
+  const handleRenameConfirm = async () => {
+    setIsRenaming(false);
+    const trimmed = renameValue.trim();
+    if (!trimmed || trimmed === node.name) return;
+    const newPath = node.path.slice(0, -node.name.length) + trimmed;
+    if (!workspaceId) return;
+    try {
+      const result = await api.renameWorkspaceFile(workspaceId, node.path, newPath);
+      onFileRenamed(node.path, result.new_path);
+      await onRefreshTree();
+    } catch (err) {
+      console.error("Failed to rename file:", err);
+    }
+  };
+
+  const handleRenameKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      handleRenameConfirm();
+    } else if (e.key === "Escape") {
+      setIsRenaming(false);
+    }
+  };
+
   return (
     <div>
       <div
-        className={`flex items-center gap-2 py-1 px-2 rounded-md cursor-pointer transition-colors ${
+        className={`group flex items-center gap-2 py-1 px-2 rounded-md cursor-pointer transition-colors ${
           isActive
             ? "bg-primary/10 text-primary"
             : "hover:bg-accent hover:text-accent-foreground"
@@ -69,7 +132,39 @@ function TreeNode({
         ) : (
           <File className="h-4 w-4 text-muted-foreground flex-shrink-0" />
         )}
-        <span className="text-sm truncate min-w-0 flex-1">{node.name}</span>
+        {isRenaming ? (
+          <input
+            ref={renameInputRef}
+            className="text-sm bg-transparent border-b border-primary outline-none flex-1 min-w-0"
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onKeyDown={handleRenameKeyDown}
+            onBlur={handleRenameConfirm}
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : (
+          <span className="text-sm truncate min-w-0 flex-1">{node.name}</span>
+        )}
+        {!isRenaming && (
+          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+            <button
+              className="p-0.5 rounded hover:bg-accent/80"
+              onClick={handleRenameStart}
+              title="Rename"
+            >
+              <Pencil className="h-3 w-3 text-foreground" />
+            </button>
+            {!isDir && (
+              <button
+                className="p-0.5 rounded hover:bg-accent/80"
+                onClick={handleDelete}
+                title="Delete"
+              >
+                <Trash2 className="h-3 w-3 text-foreground" />
+              </button>
+            )}
+          </div>
+        )}
       </div>
       {isDir && expanded && node.children && (
         <div>
@@ -82,6 +177,10 @@ function TreeNode({
               onFileClick={onFileClick}
               onLoadChildren={onLoadChildren}
               loadingPaths={loadingPaths}
+              onRefreshTree={onRefreshTree}
+              onFileDeleted={onFileDeleted}
+              onFileRenamed={onFileRenamed}
+              workspaceId={workspaceId}
             />
           ))}
         </div>
@@ -90,13 +189,22 @@ function TreeNode({
   );
 }
 
-export function WorkspaceTree({ tree, activeFilePath, onFileClick, workspaceId }: WorkspaceTreeProps) {
+export function WorkspaceTree({ tree, activeFilePath, onFileClick, workspaceId, onRefreshTree, onFileDeleted, onFileRenamed }: WorkspaceTreeProps) {
   const [loadingPaths, setLoadingPaths] = useState<Set<string>>(new Set());
   const [localTree, setLocalTree] = useState<FileNode | null>(tree);
+  const [isCreating, setIsCreating] = useState(false);
+  const [newFileName, setNewFileName] = useState("");
+  const newFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setLocalTree(tree);
   }, [tree]);
+
+  useEffect(() => {
+    if (isCreating && newFileInputRef.current) {
+      newFileInputRef.current.focus();
+    }
+  }, [isCreating]);
 
   const loadChildren = useCallback(
     async (path: string) => {
@@ -121,6 +229,29 @@ export function WorkspaceTree({ tree, activeFilePath, onFileClick, workspaceId }
     [workspaceId]
   );
 
+  const handleCreateFile = async () => {
+    const trimmed = newFileName.trim();
+    if (!trimmed || !workspaceId) return;
+    setIsCreating(false);
+    setNewFileName("");
+    try {
+      await api.createWorkspaceFile(workspaceId, trimmed);
+      await onRefreshTree();
+      onFileClick(trimmed);
+    } catch (err) {
+      console.error("Failed to create file:", err);
+    }
+  };
+
+  const handleNewFileKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      handleCreateFile();
+    } else if (e.key === "Escape") {
+      setIsCreating(false);
+      setNewFileName("");
+    }
+  };
+
   if (!localTree) {
     return (
       <div className="py-12 text-center cp-label opacity-20 italic">
@@ -131,6 +262,33 @@ export function WorkspaceTree({ tree, activeFilePath, onFileClick, workspaceId }
 
   return (
     <div className="space-y-0.5">
+      <div className="flex items-center justify-end px-1 pb-1">
+        <button
+          className="p-1 rounded hover:bg-accent transition-colors"
+          onClick={() => setIsCreating(true)}
+          title="New file"
+        >
+          <Plus className="h-3.5 w-3.5 text-foreground" />
+        </button>
+      </div>
+      {isCreating && (
+        <div className="flex items-center gap-2 py-1 px-2 rounded-md bg-accent/50">
+          <File className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+          <input
+            ref={newFileInputRef}
+            className="text-sm bg-transparent border-b border-primary outline-none flex-1 min-w-0"
+            placeholder="filename.txt"
+            value={newFileName}
+            onChange={(e) => setNewFileName(e.target.value)}
+            onKeyDown={handleNewFileKeyDown}
+            onBlur={() => {
+              if (!newFileName.trim()) {
+                setIsCreating(false);
+              }
+            }}
+          />
+        </div>
+      )}
       {(localTree.children || []).map((child) => (
         <TreeNode
           key={child.path}
@@ -140,6 +298,10 @@ export function WorkspaceTree({ tree, activeFilePath, onFileClick, workspaceId }
           onFileClick={onFileClick}
           onLoadChildren={loadChildren}
           loadingPaths={loadingPaths}
+          onRefreshTree={onRefreshTree}
+          onFileDeleted={onFileDeleted}
+          onFileRenamed={onFileRenamed}
+          workspaceId={workspaceId}
         />
       ))}
     </div>

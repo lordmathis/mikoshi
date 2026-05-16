@@ -22,6 +22,10 @@ class WriteFileRequest(BaseModel):
     content: str
 
 
+class RenameFileRequest(BaseModel):
+    new_path: str
+
+
 def _serialize_workspace(workspace) -> dict:
     return {
         "id": workspace.id,
@@ -122,6 +126,48 @@ async def write_workspace_file(request: Request, workspace_id: str, path: str, b
         raise HTTPException(status_code=400, detail=str(e))
 
     return {"success": True}
+
+
+@router.post("/{workspace_id}/files/{path:path}")
+async def create_workspace_file(request: Request, workspace_id: str, path: str, body: WriteFileRequest):
+    database = request.app.state.database
+    workspace_service = _get_workspace_service(request)
+    _require_workspace(database, workspace_id)
+
+    try:
+        workspace_service.write_file(workspace_id, path, body.content)
+    except WorkspaceError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return {"success": True}
+
+
+@router.delete("/{workspace_id}/files/{path:path}")
+async def delete_workspace_file(request: Request, workspace_id: str, path: str):
+    database = request.app.state.database
+    workspace_service = _get_workspace_service(request)
+    _require_workspace(database, workspace_id)
+
+    try:
+        workspace_service.delete_file(workspace_id, path)
+    except WorkspaceError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return {"success": True}
+
+
+@router.patch("/{workspace_id}/files/{path:path}")
+async def rename_workspace_file(request: Request, workspace_id: str, path: str, body: RenameFileRequest):
+    database = request.app.state.database
+    workspace_service = _get_workspace_service(request)
+    _require_workspace(database, workspace_id)
+
+    try:
+        new_path = workspace_service.rename_file(workspace_id, path, body.new_path)
+    except WorkspaceError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return {"success": True, "new_path": new_path}
 
 
 @router.get("/{workspace_id}/ls")

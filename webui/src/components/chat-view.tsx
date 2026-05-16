@@ -167,6 +167,8 @@ export function ChatView() {
         onWorkspaceTreeUpdate={handleSidebarTreeUpdate}
         activeFilePath={filePreview.filePath}
         onFileClick={filePreview.openFile}
+        onFileDeleted={filePreview.handleFileDeleted}
+        onFileRenamed={filePreview.handleFileRenamed}
         onNewWorkspace={handleNewWorkspace}
         onDeleteWorkspace={handleDeleteWorkspace}
         onClearFilter={() => {
