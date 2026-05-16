@@ -461,6 +461,13 @@ class ApiClient {
     return response.text();
   }
 
+  async writeWorkspaceFile(id: string, path: string, content: string): Promise<{ success: boolean }> {
+    return this.request(`/workspaces/${id}/files/${path}`, {
+      method: 'PUT',
+      body: JSON.stringify({ content }),
+    });
+  }
+
   async getWorkspaceFileList(id: string): Promise<string[]> {
     const result = await this.request<{ files: string[] }>(`/workspaces/${id}/ls`);
     return result.files;

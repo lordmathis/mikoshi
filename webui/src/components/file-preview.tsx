@@ -16,13 +16,14 @@ interface FilePreviewProps {
   workspaceId: string | null;
   fileIndex: Map<string, string>;
   onFileClick: (path: string) => void;
+  hideHeader?: boolean;
 }
 
 function isMarkdownFile(path: string): boolean {
   return /\.(md|mdx|markdown)$/i.test(path);
 }
 
-export function FilePreview({ filePath, fileContent, isLoading, onClose, workspaceId, fileIndex, onFileClick }: FilePreviewProps) {
+export function FilePreview({ filePath, fileContent, isLoading, onClose, workspaceId, fileIndex, onFileClick, hideHeader }: FilePreviewProps) {
   if (!filePath) return null;
 
   const fileName = filePath.split("/").pop() || filePath;
@@ -82,22 +83,24 @@ export function FilePreview({ filePath, fileContent, isLoading, onClose, workspa
   };
 
   return (
-    <div className="flex flex-col h-full overflow-hidden border-r" style={{ borderColor: "rgb(var(--cp-rgb-yellow) / 0.1)" }}>
-      <div
-        className="flex items-center justify-between px-4 py-2 shrink-0 border-b"
-        style={{
-          borderColor: "rgb(var(--cp-rgb-yellow) / 0.1)",
-          background: "rgb(var(--cp-rgb-surface3) / 0.95)",
-        }}
-      >
-        <div className="flex items-center gap-2 min-w-0">
-          <File className="h-4 w-4 text-primary/60 flex-shrink-0" />
-          <span className="cp-label text-foreground truncate">{fileName}</span>
+    <div className={hideHeader ? "flex flex-col flex-1 min-h-0" : "flex flex-col h-full overflow-hidden border-r"} style={hideHeader ? undefined : { borderColor: "rgb(var(--cp-rgb-yellow) / 0.1)" }}>
+      {!hideHeader && (
+        <div
+          className="flex items-center justify-between px-4 py-2 shrink-0 border-b"
+          style={{
+            borderColor: "rgb(var(--cp-rgb-yellow) / 0.1)",
+            background: "rgb(var(--cp-rgb-surface3) / 0.95)",
+          }}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <File className="h-4 w-4 text-primary/60 flex-shrink-0" />
+            <span className="cp-label text-foreground truncate">{fileName}</span>
+          </div>
+          <Button variant="ghost" size="icon" className="h-7 w-7 opacity-50 hover:opacity-100" onClick={onClose}>
+            <X className="h-4 w-4" />
+          </Button>
         </div>
-        <Button variant="ghost" size="icon" className="h-7 w-7 opacity-50 hover:opacity-100" onClick={onClose}>
-          <X className="h-4 w-4" />
-        </Button>
-      </div>
+      )}
       <ScrollArea className="flex-1 min-h-0">
         <div className="p-6">
           {isLoading ? (

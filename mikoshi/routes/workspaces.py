@@ -18,6 +18,10 @@ class CreateWorkspaceRequest(BaseModel):
     connector: Optional[str] = None
 
 
+class WriteFileRequest(BaseModel):
+    content: str
+
+
 def _serialize_workspace(workspace) -> dict:
     return {
         "id": workspace.id,
@@ -104,6 +108,20 @@ async def get_workspace_file(request: Request, workspace_id: str, path: str):
     ):
         return PlainTextResponse(content.decode("utf-8", errors="replace"))
     return Response(content=content, media_type=mime_type)
+
+
+@router.put("/{workspace_id}/files/{path:path}")
+async def write_workspace_file(request: Request, workspace_id: str, path: str, body: WriteFileRequest):
+    database = request.app.state.database
+    workspace_service = _get_workspace_service(request)
+    _require_workspace(database, workspace_id)
+
+    try:
+        workspace_service.write_file(workspace_id, path, body.content)
+    except WorkspaceError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return {"success": True}
 
 
 @router.get("/{workspace_id}/ls")

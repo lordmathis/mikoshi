@@ -5,7 +5,7 @@ import { AddConnectorDialog } from "./add-connector-dialog";
 import { ChatHeader } from "./chat-header";
 import { MessagesList } from "./messages-list";
 import { ChatInput } from "./chat-input";
-import { FilePreview } from "./file-preview";
+import { FilePanel } from "./file-panel";
 import { useConversations } from "../hooks/use-conversations";
 import { useMessages } from "../hooks/use-messages";
 import { useChatFiles } from "../hooks/use-chat-files";
@@ -188,7 +188,7 @@ export function ChatView() {
         <div className="flex flex-1 min-h-0">
           {showPreview && (
             <div className="h-full overflow-hidden" style={{ flex: '2 2 0%', minWidth: 0 }}>
-              <FilePreview
+              <FilePanel
                 filePath={filePreview.filePath}
                 fileContent={filePreview.fileContent}
                 isLoading={filePreview.isLoading}
@@ -196,6 +196,13 @@ export function ChatView() {
                 workspaceId={sidebar.activeWorkspaceId}
                 fileIndex={fileIndex}
                 onFileClick={filePreview.openFile}
+                mode={filePreview.mode}
+                setMode={filePreview.setMode}
+                editContent={filePreview.editContent}
+                setEditContent={filePreview.setEditContent}
+                isDirty={filePreview.isDirty}
+                isSaving={filePreview.isSaving}
+                onSave={filePreview.saveFile}
               />
             </div>
           )}
