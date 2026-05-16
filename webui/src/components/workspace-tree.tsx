@@ -38,6 +38,7 @@ function TreeNode({
   const [expanded, setExpanded] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(node.name);
+  const [isDragOver, setIsDragOver] = useState(false);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const isDir = node.type === "dir";
   const isActive = activeFilePath === node.path;
@@ -103,16 +104,70 @@ function TreeNode({
     }
   };
 
+  const handleDragStart = (e: React.DragEvent) => {
+    e.dataTransfer.setData("text/plain", node.path);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    if (!isDir) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    if (!isDir) return;
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    if (!isDir) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX;
+    const y = e.clientY;
+    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+      setIsDragOver(false);
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    if (!isDir || !workspaceId) return;
+    const srcPath = e.dataTransfer.getData("text/plain");
+    if (!srcPath || srcPath === node.path) return;
+    if (node.path !== "" && srcPath.startsWith(node.path + "/")) return;
+    const fileName = srcPath.split("/").pop()!;
+    const newPath = node.path ? `${node.path}/${fileName}` : fileName;
+    if (newPath === srcPath) return;
+    try {
+      const result = await api.renameWorkspaceFile(workspaceId, srcPath, newPath);
+      onFileRenamed(srcPath, result.new_path);
+      await onRefreshTree();
+    } catch (err) {
+      console.error("Failed to move file:", err);
+    }
+  };
+
   return (
     <div>
       <div
         className={`group flex items-center gap-2 py-1 px-2 rounded-md cursor-pointer transition-colors ${
-          isActive
-            ? "bg-primary/10 text-primary"
-            : "hover:bg-accent hover:text-accent-foreground"
+          isDragOver
+            ? "bg-primary/15 ring-1 ring-primary/40"
+            : isActive
+              ? "bg-primary/10 text-primary"
+              : "hover:bg-accent hover:text-accent-foreground"
         }`}
         style={{ paddingLeft: `${level * 16 + 8}px` }}
         onClick={handleClick}
+        draggable={!isDir}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
       >
         {isDir ? (
           <button className="flex items-center justify-center w-4 h-4">
@@ -194,6 +249,7 @@ export function WorkspaceTree({ tree, activeFilePath, onFileClick, workspaceId, 
   const [localTree, setLocalTree] = useState<FileNode | null>(tree);
   const [isCreating, setIsCreating] = useState(false);
   const [newFileName, setNewFileName] = useState("");
+  const [isRootDragOver, setIsRootDragOver] = useState(false);
   const newFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -261,7 +317,34 @@ export function WorkspaceTree({ tree, activeFilePath, onFileClick, workspaceId, 
   }
 
   return (
-    <div className="space-y-0.5">
+    <div
+      className={`space-y-0.5 rounded-md transition-colors ${isRootDragOver ? "bg-primary/10 ring-1 ring-primary/30" : ""}`}
+      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; }}
+      onDragEnter={() => setIsRootDragOver(true)}
+      onDragLeave={(e) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        const { clientX: x, clientY: y } = e;
+        if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+          setIsRootDragOver(false);
+        }
+      }}
+      onDrop={async (e) => {
+        e.preventDefault();
+        setIsRootDragOver(false);
+        if (!workspaceId) return;
+        const srcPath = e.dataTransfer.getData("text/plain");
+        if (!srcPath) return;
+        const fileName = srcPath.split("/").pop()!;
+        if (fileName === srcPath) return;
+        try {
+          const result = await api.renameWorkspaceFile(workspaceId, srcPath, fileName);
+          onFileRenamed(srcPath, result.new_path);
+          await onRefreshTree();
+        } catch (err) {
+          console.error("Failed to move file:", err);
+        }
+      }}
+    >
       <div className="flex items-center justify-end px-1 pb-1">
         <button
           className="p-1 rounded hover:bg-accent transition-colors"
