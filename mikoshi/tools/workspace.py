@@ -7,6 +7,7 @@ import os
 import re
 import subprocess
 
+from mikoshi.git import GitService
 from mikoshi.tools.context import ToolCallContext
 from mikoshi.tools.edit_utils import EditError, apply_edits
 from mikoshi.tools.toolset_handler import ToolSetHandler, tool
@@ -600,6 +601,32 @@ class WorkspaceToolSetHandler(ToolSetHandler):
 
         return output
 
+    def _get_git_service(self, context: ToolCallContext) -> GitService:
+        root = _require_workspace(context)
+        return GitService(root, context.workspace.workspace_id)
+
+    def _get_auth_git_args(self, context: ToolCallContext) -> list[str]:
+        if not context.workspace:
+            return []
+        ws = context.workspace
+        token = None
+        if ws.connector and self._tool_manager:
+            token = self._tool_manager.get_connector_token(ws.connector)
+        if not token:
+            return []
+
+        root = _resolve_root(context)
+        url_result = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            capture_output=True,
+            text=True,
+            cwd=root,
+        )
+        if not url_result.stdout.strip().startswith("https://"):
+            return []
+
+        return ["-c", f"http.extraHeader=Authorization: token {token}"]
+
     @tool(
         description="Show the git status of the workspace.",
         parameters={
@@ -638,64 +665,14 @@ class WorkspaceToolSetHandler(ToolSetHandler):
     def git_commit(self, message: str, context: ToolCallContext) -> str:
         if not context.workspace:
             return "Error: No workspace linked to this chat."
+        svc = self._get_git_service(context)
         ws = context.workspace
-        root = _resolve_root(context)
+        result = svc.commit(message, ws.git_user_name, ws.git_user_email)
+        if not result.success:
+            return f"Error committing: {result.output}"
 
-        result = subprocess.run(
-            ["git", "add", "-A"],
-            capture_output=True,
-            text=True,
-            cwd=root,
-        )
-        if result.returncode != 0:
-            return f"Error staging files: {result.stderr.strip()}"
-
-        commit_env = os.environ.copy()
-        commit_env["GIT_AUTHOR_NAME"] = ws.git_user_name
-        commit_env["GIT_AUTHOR_EMAIL"] = ws.git_user_email
-        commit_env["GIT_COMMITTER_NAME"] = ws.git_user_name
-        commit_env["GIT_COMMITTER_EMAIL"] = ws.git_user_email
-
-        result = subprocess.run(
-            ["git", "commit", "-m", message],
-            capture_output=True,
-            text=True,
-            cwd=root,
-            env=commit_env,
-        )
-        if result.returncode != 0:
-            return f"Error committing: {result.stderr.strip()}"
-
-        hash_result = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            capture_output=True,
-            text=True,
-            cwd=root,
-        )
-        commit_hash = hash_result.stdout.strip()
-        return f"Committed as {commit_hash}"
-
-    def _get_auth_git_args(self, context: ToolCallContext) -> list[str]:
-        if not context.workspace:
-            return []
-        ws = context.workspace
-        token = None
-        if ws.connector and self._tool_manager:
-            token = self._tool_manager.get_connector_token(ws.connector)
-        if not token:
-            return []
-
-        root = _resolve_root(context)
-        url_result = subprocess.run(
-            ["git", "remote", "get-url", "origin"],
-            capture_output=True,
-            text=True,
-            cwd=root,
-        )
-        if not url_result.stdout.strip().startswith("https://"):
-            return []
-
-        return ["-c", f"http.extraHeader=Authorization: token {token}"]
+        hash_ok, commit_hash = svc._run_git(["rev-parse", "HEAD"])
+        return f"Committed as {commit_hash}" if hash_ok else result.output
 
     @tool(
         description="Pull latest changes from the remote repository.",
@@ -705,12 +682,12 @@ class WorkspaceToolSetHandler(ToolSetHandler):
         },
     )
     def git_pull(self, context: ToolCallContext) -> str:
-        root = _require_workspace(context)
+        svc = self._get_git_service(context)
         auth_args = self._get_auth_git_args(context)
-        output = _run_git(root, auth_args + ["pull"], timeout=120)
-        if output.startswith("Error"):
-            return output
-        return _workspace_result(output)
+        result = svc.pull(auth_args)
+        if not result.success:
+            return result.output
+        return _workspace_result(result.output)
 
     @tool(
         description="Push commits to the remote repository.",
@@ -720,6 +697,7 @@ class WorkspaceToolSetHandler(ToolSetHandler):
         },
     )
     def git_push(self, context: ToolCallContext) -> str:
-        root = _require_workspace(context)
+        svc = self._get_git_service(context)
         auth_args = self._get_auth_git_args(context)
-        return _run_git(root, auth_args + ["push"], timeout=120)
+        result = svc.push(auth_args)
+        return result.output

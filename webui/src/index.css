@@ -160,6 +160,26 @@ body {
   50% { filter: drop-shadow(0 0 6px rgba(0, 240, 255, 0.35)); }
 }
 
+@keyframes cp-flash-success {
+  0% { background-color: transparent; }
+  50% { background-color: rgb(var(--cp-rgb-yellow) / 0.3); }
+  100% { background-color: transparent; }
+}
+
+@keyframes cp-shake-error {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-2px); }
+  75% { transform: translateX(2px); }
+}
+
+.cp-flash-success {
+  animation: cp-flash-success 300ms ease-out;
+}
+
+.cp-shake-error {
+  animation: cp-shake-error 300ms ease-out;
+}
+
 ::-webkit-scrollbar {
   width: 6px;
 }

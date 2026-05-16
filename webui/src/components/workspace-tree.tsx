@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Folder, File, ChevronRight, ChevronDown, Loader2, Pencil, Trash2, Plus } from "lucide-react";
+import { Folder, File, ChevronRight, ChevronDown, Loader2, Pencil, Trash2, Plus, ArrowDownFromLine, ArrowUpFromLine, Check } from "lucide-react";
 import { api, type FileNode } from "../lib/api";
+import { useGit } from "../hooks/use-git";
 
 interface WorkspaceTreeProps {
   tree: FileNode | null;
@@ -203,19 +204,19 @@ function TreeNode({
         {!isRenaming && (
           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
             <button
-              className="p-0.5 rounded hover:bg-accent/80"
+              className="p-0.5 rounded hover:bg-accent/80 [&:hover>svg]:text-accent-foreground"
               onClick={handleRenameStart}
               title="Rename"
             >
-              <Pencil className="h-3 w-3 text-foreground" />
+              <Pencil className="h-3 w-3 text-primary-foreground transition-transform hover:scale-110" />
             </button>
             {!isDir && (
               <button
-                className="p-0.5 rounded hover:bg-accent/80"
+                className="p-0.5 rounded hover:bg-accent/80 [&:hover>svg]:text-accent-foreground"
                 onClick={handleDelete}
                 title="Delete"
               >
-                <Trash2 className="h-3 w-3 text-foreground" />
+                <Trash2 className="h-3 w-3 text-primary-foreground transition-transform hover:scale-110" />
               </button>
             )}
           </div>
@@ -250,7 +251,13 @@ export function WorkspaceTree({ tree, activeFilePath, onFileClick, workspaceId, 
   const [isCreating, setIsCreating] = useState(false);
   const [newFileName, setNewFileName] = useState("");
   const [isRootDragOver, setIsRootDragOver] = useState(false);
+  const [isCommitting, setIsCommitting] = useState(false);
+  const [commitMessage, setCommitMessage] = useState("");
+  const [flashBtn, setFlashBtn] = useState<string | null>(null);
+  const [shakeBtn, setShakeBtn] = useState<string | null>(null);
   const newFileInputRef = useRef<HTMLInputElement>(null);
+  const commitInputRef = useRef<HTMLInputElement>(null);
+  const git = useGit(workspaceId ?? null);
 
   useEffect(() => {
     setLocalTree(tree);
@@ -261,6 +268,24 @@ export function WorkspaceTree({ tree, activeFilePath, onFileClick, workspaceId, 
       newFileInputRef.current.focus();
     }
   }, [isCreating]);
+
+  useEffect(() => {
+    if (isCommitting && commitInputRef.current) {
+      commitInputRef.current.focus();
+    }
+  }, [isCommitting]);
+
+  useEffect(() => {
+    if (!flashBtn) return;
+    const t = setTimeout(() => setFlashBtn(null), 300);
+    return () => clearTimeout(t);
+  }, [flashBtn]);
+
+  useEffect(() => {
+    if (!shakeBtn) return;
+    const t = setTimeout(() => setShakeBtn(null), 300);
+    return () => clearTimeout(t);
+  }, [shakeBtn]);
 
   const loadChildren = useCallback(
     async (path: string) => {
@@ -308,6 +333,48 @@ export function WorkspaceTree({ tree, activeFilePath, onFileClick, workspaceId, 
     }
   };
 
+  const handleGitPull = async () => {
+    const result = await git.pull();
+    if (result.success) {
+      setFlashBtn("pull");
+      await onRefreshTree();
+    } else {
+      setShakeBtn("pull");
+    }
+  };
+
+  const handleGitPush = async () => {
+    const result = await git.push();
+    if (result.success) {
+      setFlashBtn("push");
+    } else {
+      setShakeBtn("push");
+    }
+  };
+
+  const handleCommitKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      const msg = commitMessage.trim();
+      if (!msg) return;
+      setIsCommitting(false);
+      setCommitMessage("");
+      git.commit(msg).then((result) => {
+        if (result.success) {
+          setFlashBtn("commit");
+          onRefreshTree();
+        } else {
+          setShakeBtn("commit");
+        }
+      });
+    } else if (e.key === "Escape") {
+      setIsCommitting(false);
+      setCommitMessage("");
+    }
+  };
+
+  const btnClass = (id: string) =>
+    `p-1 rounded hover:bg-accent transition-colors [&:hover>svg]:text-accent-foreground ${flashBtn === id ? "cp-flash-success" : ""} ${shakeBtn === id ? "cp-shake-error" : ""}`;
+
   if (!localTree) {
     return (
       <div className="py-12 text-center cp-label opacity-20 italic">
@@ -345,15 +412,65 @@ export function WorkspaceTree({ tree, activeFilePath, onFileClick, workspaceId, 
         }
       }}
     >
-      <div className="flex items-center justify-end px-1 pb-1">
+      <div className="flex items-center justify-end px-1 pb-1 gap-0.5">
         <button
-          className="p-1 rounded hover:bg-accent transition-colors"
+          className={btnClass("pull")}
+          onClick={handleGitPull}
+          disabled={git.isLoading}
+          title={git.status ? `Pull (branch: ${git.status.branch})` : "Pull"}
+        >
+          {git.isLoading && flashBtn !== "pull" && shakeBtn !== "pull" ? (
+            <Loader2 className="h-3.5 w-3.5 text-foreground animate-spin" />
+          ) : (
+            <ArrowDownFromLine className="h-3.5 w-3.5 text-foreground" />
+          )}
+        </button>
+        <button
+          className={btnClass("push")}
+          onClick={handleGitPush}
+          disabled={git.isLoading}
+          title={git.status ? `Push (branch: ${git.status.branch})` : "Push"}
+        >
+          {git.isLoading && flashBtn !== "push" && shakeBtn !== "push" ? (
+            <Loader2 className="h-3.5 w-3.5 text-foreground animate-spin" />
+          ) : (
+            <ArrowUpFromLine className="h-3.5 w-3.5 text-foreground" />
+          )}
+        </button>
+        <button
+          className={btnClass("commit")}
+          onClick={() => setIsCommitting(true)}
+          disabled={git.isLoading}
+          title="Commit"
+        >
+          <Check className="h-3.5 w-3.5 text-foreground" />
+        </button>
+        <button
+          className="p-1 rounded hover:bg-accent transition-colors [&:hover>svg]:text-accent-foreground"
           onClick={() => setIsCreating(true)}
           title="New file"
         >
           <Plus className="h-3.5 w-3.5 text-foreground" />
         </button>
       </div>
+      {isCommitting && (
+        <div className="flex items-center gap-2 py-1 px-2 rounded-md bg-accent/50">
+          <Check className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+          <input
+            ref={commitInputRef}
+            className="text-sm bg-transparent border-b border-primary outline-none flex-1 min-w-0"
+            placeholder="commit message"
+            value={commitMessage}
+            onChange={(e) => setCommitMessage(e.target.value)}
+            onKeyDown={handleCommitKeyDown}
+            onBlur={() => {
+              if (!commitMessage.trim()) {
+                setIsCommitting(false);
+              }
+            }}
+          />
+        </div>
+      )}
       {isCreating && (
         <div className="flex items-center gap-2 py-1 px-2 rounded-md bg-accent/50">
           <File className="h-4 w-4 text-muted-foreground flex-shrink-0" />

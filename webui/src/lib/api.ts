@@ -176,6 +176,18 @@ export interface Skill {
   exists: boolean;
 }
 
+export interface GitStatus {
+  branch: string;
+  staged: number;
+  unstaged: number;
+  untracked: number;
+}
+
+export interface GitResult {
+  success: boolean;
+  output: string;
+}
+
 class ApiClient {
   private baseURL: string;
 
@@ -491,6 +503,29 @@ class ApiClient {
   async getWorkspaceFileList(id: string): Promise<string[]> {
     const result = await this.request<{ files: string[] }>(`/workspaces/${id}/ls`);
     return result.files;
+  }
+
+  async gitStatus(workspaceId: string): Promise<GitStatus> {
+    return this.request(`/workspaces/${workspaceId}/git/status`);
+  }
+
+  async gitCommit(workspaceId: string, message: string): Promise<GitResult> {
+    return this.request(`/workspaces/${workspaceId}/git/commit`, {
+      method: 'POST',
+      body: JSON.stringify({ message }),
+    });
+  }
+
+  async gitPull(workspaceId: string): Promise<GitResult> {
+    return this.request(`/workspaces/${workspaceId}/git/pull`, {
+      method: 'POST',
+    });
+  }
+
+  async gitPush(workspaceId: string): Promise<GitResult> {
+    return this.request(`/workspaces/${workspaceId}/git/push`, {
+      method: 'POST',
+    });
   }
 }
 

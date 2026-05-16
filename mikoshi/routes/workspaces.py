@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import PlainTextResponse, Response
 from pydantic import BaseModel
 
+from mikoshi.git import GitService
 from mikoshi.routes.schemas import format_timestamp, serialize_chat
 from mikoshi.workspace import WorkspaceError
 
@@ -24,6 +25,10 @@ class WriteFileRequest(BaseModel):
 
 class RenameFileRequest(BaseModel):
     new_path: str
+
+
+class GitCommitRequest(BaseModel):
+    message: str
 
 
 def _serialize_workspace(workspace) -> dict:
@@ -178,6 +183,69 @@ async def list_workspace_files(request: Request, workspace_id: str):
 
     files = workspace_service.list_files_flat(workspace_id)
     return {"files": files}
+
+
+def _build_git_service(request: Request, workspace_id: str) -> tuple[GitService, list[str]]:
+    database = request.app.state.database
+    workspace_service = _get_workspace_service(request)
+    workspace = _require_workspace(database, workspace_id)
+
+    root = workspace_service.get_workspace_path(workspace_id)
+    svc = GitService(root, workspace_id)
+
+    auth_args: list[str] = []
+    if workspace.connector:
+        token = workspace_service._resolve_connector_token(workspace.connector)
+        if token:
+            import subprocess
+            url_result = subprocess.run(
+                ["git", "remote", "get-url", "origin"],
+                capture_output=True,
+                text=True,
+                cwd=root,
+            )
+            if url_result.stdout.strip().startswith("https://"):
+                auth_args = ["-c", f"http.extraHeader=Authorization: token {token}"]
+
+    return svc, auth_args
+
+
+@router.get("/{workspace_id}/git/status")
+async def git_status(request: Request, workspace_id: str):
+    svc, _ = _build_git_service(request, workspace_id)
+    status = svc.status()
+    return {
+        "branch": status.branch,
+        "staged": status.staged,
+        "unstaged": status.unstaged,
+        "untracked": status.untracked,
+    }
+
+
+@router.post("/{workspace_id}/git/commit")
+async def git_commit(request: Request, workspace_id: str, body: GitCommitRequest):
+    svc, _ = _build_git_service(request, workspace_id)
+    app_config = request.app.state.app_config
+    result = svc.commit(
+        body.message,
+        app_config.workspace.git_user_name,
+        app_config.workspace.git_user_email,
+    )
+    return {"success": result.success, "output": result.output}
+
+
+@router.post("/{workspace_id}/git/pull")
+async def git_pull(request: Request, workspace_id: str):
+    svc, auth_args = _build_git_service(request, workspace_id)
+    result = svc.pull(auth_args)
+    return {"success": result.success, "output": result.output}
+
+
+@router.post("/{workspace_id}/git/push")
+async def git_push(request: Request, workspace_id: str):
+    svc, auth_args = _build_git_service(request, workspace_id)
+    result = svc.push(auth_args)
+    return {"success": result.success, "output": result.output}
 
 
 @router.delete("/{workspace_id}")
