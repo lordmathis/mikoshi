@@ -3,7 +3,7 @@ import logging
 from abc import ABC
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from mikoshi.tools.context import ToolCallContext
 
@@ -16,14 +16,13 @@ logger = logging.getLogger(__name__)
 class ToolDefinition(BaseModel):
     """Metadata for a tool function"""
 
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     name: str
     description: str
     parameters: Dict[str, Any]  # JSON Schema
     func: Callable
     require_approval: bool = False
-
-    class Config:
-        arbitrary_types_allowed = True
 
 
 class ToolSetHandler(ABC):
