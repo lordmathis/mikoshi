@@ -4,53 +4,31 @@ from typing import Dict, List
 
 import httpx
 
-from mikoshi.config import ConnectorType
 from mikoshi.connectors.client_base import ConnectorClient, FileNode, TokenEstimate
 
 logger = logging.getLogger(__name__)
 
-_GITHUB_DEFAULTS = {
-    ConnectorType.GITHUB: {
-        "base_url": "https://api.github.com",
-        "auth_prefix": "Bearer",
-        "accept": "application/vnd.github+json",
-        "page_size": 100,
-        "page_param": "per_page",
-        "extra_list_params": {"sort": "updated", "affiliation": "owner,collaborator,organization_member"},
-    },
-    ConnectorType.FORGEJO: {
-        "base_url": "https://codeberg.org/api/v1",
-        "auth_prefix": "token",
-        "accept": "application/json",
-        "page_size": 50,
-        "page_param": "limit",
-        "extra_list_params": {},
-    },
-}
-
 
 class GitHubClient(ConnectorClient):
-    """Client for interacting with GitHub and Forgejo/Gitea REST APIs."""
+    """Client for interacting with the GitHub REST API."""
+
+    PAGE_SIZE = 100
 
     @property
     def type(self) -> str:
-        return self._connector_type.value
+        return "github"
 
-    def __init__(
-        self,
-        token: str,
-        connector_type: ConnectorType = ConnectorType.GITHUB,
-        base_url: str | None = None,
-    ):
-        cfg = _GITHUB_DEFAULTS[connector_type]
-        self._connector_type = connector_type
+    def __init__(self, token: str, base_url: str | None = None):
         self.token = token
-        self.base_url = (base_url or cfg["base_url"]).rstrip("/")
-        self._cfg = cfg
+        self.base_url = (base_url or "https://api.github.com").rstrip("/")
+        self._extra_list_params = {
+            "sort": "updated",
+            "affiliation": "owner,collaborator,organization_member",
+        }
         self.client = httpx.AsyncClient(
             headers={
-                "Authorization": f"{cfg['auth_prefix']} {token}",
-                "Accept": cfg["accept"],
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github+json",
             },
             timeout=30.0,
         )
@@ -68,12 +46,13 @@ class GitHubClient(ConnectorClient):
         try:
             repos = []
             page = 1
-            page_size = self._cfg["page_size"]
-            page_param = self._cfg["page_param"]
 
             while True:
-                params = {page_param: page_size, "page": page}
-                params.update(self._cfg["extra_list_params"])
+                params = {
+                    "per_page": self.PAGE_SIZE,
+                    "page": page,
+                    **self._extra_list_params,
+                }
                 response = await self.client.get(
                     f"{self.base_url}/user/repos", params=params
                 )
@@ -85,7 +64,7 @@ class GitHubClient(ConnectorClient):
 
                 repos.extend(page_repos)
 
-                if len(page_repos) < page_size:
+                if len(page_repos) < self.PAGE_SIZE:
                     break
 
                 page += 1
@@ -170,25 +149,20 @@ class GitHubClient(ConnectorClient):
             logger.error(f"Failed to fetch files from {repo}: {e}")
             raise
 
+    async def _resolve_commit_hash(self, repo: str, ref: str) -> str:
+        commits_url = f"{self.base_url}/repos/{repo}/commits/{ref}"
+        response = await self.client.get(commits_url)
+        response.raise_for_status()
+        commit_data = response.json()
+        if isinstance(commit_data, list):
+            return commit_data[0]["sha"]
+        return commit_data["sha"]
+
     async def estimate_tokens(
         self, repo: str, paths: List[str], ref: str = "HEAD"
     ) -> TokenEstimate:
         try:
-            if self._connector_type == ConnectorType.GITHUB:
-                commits_url = f"{self.base_url}/repos/{repo}/commits/{ref}"
-                commits_response = await self.client.get(commits_url)
-            else:
-                commits_url = f"{self.base_url}/repos/{repo}/commits"
-                params = {"sha": ref} if ref != "HEAD" else {}
-                commits_response = await self.client.get(commits_url, params=params)
-
-            commits_response.raise_for_status()
-            commit_data = commits_response.json()
-
-            if isinstance(commit_data, list):
-                commit_hash = commit_data[0]["sha"]
-            else:
-                commit_hash = commit_data["sha"]
+            commit_hash = await self._resolve_commit_hash(repo, ref)
 
             file_tokens = {}
             total_tokens = 0
