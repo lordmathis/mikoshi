@@ -3,6 +3,8 @@ import tempfile
 
 import pytest
 
+from mikoshi.db import Database
+
 
 @pytest.fixture
 def tmp_dir():
@@ -19,3 +21,10 @@ def tmp_yaml(tmp_dir):
         return path
 
     return _write
+
+
+@pytest.fixture
+def db():
+    database = Database(":memory:")
+    yield database
+    database.close()
