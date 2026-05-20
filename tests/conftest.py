@@ -3,6 +3,7 @@ import tempfile
 
 import pytest
 
+from mikoshi.config import AppConfig
 from mikoshi.db import Database
 
 
@@ -28,3 +29,8 @@ def db():
     database = Database(":memory:")
     yield database
     database.close()
+
+
+@pytest.fixture
+def app_config():
+    return AppConfig()
