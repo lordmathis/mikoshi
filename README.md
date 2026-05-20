@@ -7,12 +7,12 @@ A flexible chat client with Web UI that integrates multiple AI providers, tools,
 > This is a personal project provided as-is for educational and personal use. No feature requests or support requests will be accepted. Feel free to fork and modify for your own needs.
 
 **Features**:
-- OpenAI-compatible API support
-- MCP integration
-- React/TypeScript web interface
-- Extensible plugin architecture (agents, tools, skills)
-- SQLAlchemy conversation persistence
-- FastAPI backend with async execution
+- OpenAI-compatible and Anthropic API support
+- Plugin architecture (agents, tools, skills) and MCP integration
+- Git-based workspaces with file management
+- Audio transcription and text-to-speech
+- Tool approval system
+
 
 ## Quick Start
 
@@ -43,8 +43,7 @@ A flexible chat client with Web UI that integrates multiple AI providers, tools,
 
 2. **Start the server:**
    ```bash
-   source .venv/bin/activate  # Activate virtual environment
-   python -m mikoshi.main
+   uv run python -m mikoshi.main
    ```
 
    Server will start on `http://localhost:8000` with the Web UI served at the same address
@@ -56,23 +55,12 @@ A flexible chat client with Web UI that integrates multiple AI providers, tools,
     docker build -t mikoshi .
     ```
 
-   For multi-platform builds (amd64 and arm64):
-    ```bash
-    docker buildx build --platform linux/amd64,linux/arm64 -t mikoshi --load .
-    ```
-
-   For arm64 only:
-    ```bash
-    docker buildx build --platform linux/arm64 -t mikoshi --load .
-    ```
-
 2. **Run the container:**
 
    ```bash
    docker run -p 8000:8000 \
      -v $(pwd)/config.yaml:/app/config.yaml \
      -v $(pwd)/mikoshi.db:/app/mikoshi.db \
-     -e OPENROUTER_API_KEY=your_key_here \
      mikoshi
    ```
 
@@ -134,8 +122,6 @@ providers:
 
 ### MCP (Model Context Protocol) Configuration
 
-MCP servers provide tools and capabilities to agents:
-
 ```yaml
 mcps:
   time:
@@ -177,7 +163,7 @@ plugins:
 
 ### Connector Configuration
 
-Connectors provide repository browsing capabilities (GitHub and Forgejo):
+Connectors provide repository browsing capabilities (GitHub and Forgejo/Gitea):
 
 ```yaml
 connectors:
@@ -196,23 +182,42 @@ connectors:
 - `token`: Authentication token
 - `base_url`: API base URL (required for Forgejo)
 
-### Transcription Configuration
+### Audio Configuration
 
-Configure audio transcription service (optional):
+Configure audio transcription and text-to-speech services (optional):
 
 ```yaml
-transcription:
-  model: "whisper-1"
-  base_url: "https://api.openai.com/v1"
-  api_key: "${OPENAI_API_KEY}"
+audio:
+  transcription:
+    model: "whisper-1"
+    base_url: "https://api.openai.com/v1"
+    api_key: "${OPENAI_API_KEY}"
+  tts:
+    model: "tts-1"
+    voice: "alloy"
+    base_url: "https://api.openai.com/v1"
+    api_key: "${OPENAI_API_KEY}"
 ```
+
+**Transcription options:**
+- `model`: Transcription model to use (default: `"whisper-1"`)
+- `base_url`: API base URL for the transcription service
+- `api_key`: API key (supports environment variables)
+
+**TTS options:**
+- `model`: TTS model to use (default: `"tts-1"`)
+- `voice`: Voice to use (default: `"alloy"`)
+- `response_format`: Audio format (e.g., `"mp3"`, `"wav"`)
+- `speed`: Speech speed (0.25 to 4.0)
+- `base_url`: API base URL for the TTS service
+- `api_key`: API key (supports environment variables)
 
 ### Logging Configuration
 
 ```yaml
 logging:
   target: "mikoshi.log"  # File path, or "stdout" for console output
-  level: "INFO"           # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  level: "INFO"
   format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
   date_format: "%Y-%m-%d %H:%M:%S"
 ```
@@ -229,17 +234,15 @@ title_generation:                    # Optional: use a separate model for chat t
   model: "openai/gpt-4"
 ```
 
-## Available Tools
+### Workspace Configuration
 
-Mikoshi provides tools from multiple sources that agents can use:
+Configure default git identity for workspace commits:
 
-### Custom Tool Plugins
-
-Tool plugins located in the configured `tools_dir` are automatically loaded at startup. See the Tool Plugins section below for how to create your own.
-
-### MCP Tools
-
-Configure any MCP-compatible server in your `config.yaml` under the `mcps:` section. Tools are automatically discovered and made available.
+```yaml
+workspace:
+  git_user_name: "Mikoshi Agent"
+  git_user_email: "agent@mikoshi"
+```
 
 ## Plugins
 
@@ -247,7 +250,7 @@ Mikoshi has a flexible plugin architecture supporting three types of plugins:
 
 ### 1. Agent Plugins
 
-Agent plugins allow you to create custom chat agents with specific configurations. Two base classes are available:
+Agent plugins allow you to create custom chat agents with specific configurations. Three base classes are available:
 
 #### ReActAgentPlugin
 
@@ -305,15 +308,25 @@ class MyAgent(ReActAgentPlugin):
         self._custom_state = {}
 ```
 
-**Key Features:**
-- Automatic discovery: Agents are automatically loaded from the `agents_dir`
-- Provider integration: Access to all configured providers
-- Tool access: Specify which tool servers to use via `tool_servers`
-- `post_init()` hook: Custom setup after dependency injection
+#### WorkspaceAgentPlugin
+
+Agent specialized for workspace interactions that automatically injects the workspace file tree into the LLM context on each iteration:
+
+```python
+from mikoshi.agents.workspace import WorkspaceAgentPlugin
+
+
+class RepositoryAssistant(WorkspaceAgentPlugin):
+    name = "repo-assistant"
+    provider_id = "openrouter"
+    model_id = "openai/gpt-4"
+    system_prompt = "You are a helpful coding assistant."
+    tool_servers = ["workspace"]
+```
 
 ### 2. Tool Plugins
 
-Tool plugins extend Mikoshi with custom capabilities. They inherit from `ToolSetHandler` and use decorators to define individual tools.
+Tool plugins extend Mikoshi with custom capabilities. They inherit from `ToolSetHandler` and use the `@tool` decorator to define individual tools. Each tool server gets its own persistent storage directory via `self.get_persistent_storage()`, and tools are exposed to agents as `{server_name}__{tool_name}`. Tools can optionally access provider, model, and workspace info by accepting a `context: ToolCallContext` parameter, call other tools via `self.call_other_tool()`, or require explicit user approval before execution by passing `require_approval=True` to the decorator. Override `initialize()` and `cleanup()` for lifecycle setup.
 
 **Creating a Tool Plugin:**
 
@@ -347,55 +360,6 @@ class MyTools(ToolSetHandler):
         }
 ```
 
-**Key Features:**
-- Automatic discovery: Tools are loaded from `tools_dir` at startup
-- JSON Schema parameters: Use standard JSON Schema for input validation
-- Async support: Tools can be async or sync
-- Cross-tool communication: Use `self.call_other_tool("server__tool", args)` to invoke other tools
-- Persistent storage: Each tool server gets its own data directory via `self.get_persistent_storage()`
-- Tool naming: Tools are exposed as `{server_name}__{tool_name}`
-- Lifecycle hooks: Override `initialize()` and `cleanup()` for setup/teardown
-
-**Advanced Example:**
-
-```python
-from mikoshi.tools.toolset_handler import ToolSetHandler, tool
-
-
-class AdvancedTools(ToolSetHandler):
-    server_name = "advanced"
-
-    async def initialize(self) -> None:
-        self._storage_dir = self.get_persistent_storage()
-
-    async def cleanup(self) -> None:
-        pass
-
-    @tool(
-        description="Fetch and process data from an API",
-        parameters={
-            "type": "object",
-            "properties": {
-                "url": {"type": "string", "description": "API endpoint URL"},
-                "process": {"type": "boolean", "description": "Whether to process the data"}
-            },
-            "required": ["url"]
-        }
-    )
-    async def fetch_and_process(self, url: str, process: bool = False) -> dict:
-        result = await self.call_other_tool("web_tools__fetch_page", {"url": url})
-
-        if process and result.get("success"):
-            content = result.get("content", "")
-            return {
-                "success": True,
-                "data": content.upper(),
-                "message": "Data fetched and processed"
-            }
-
-        return result
-```
-
 ### 3. Skill Plugins
 
 Skill plugins provide reusable knowledge and prompt templates that can be injected into conversations via `@mention` syntax.
@@ -423,9 +387,3 @@ You are an expert code reviewer. When reviewing code:
 
 Be thorough but concise in your reviews.
 ```
-
-**Key Features:**
-- Automatic discovery: Skills are loaded from `skills_dir`
-- Markdown format: Skills are written in Markdown
-- Optional YAML frontmatter: Specify `required_tool_servers` to auto-activate tools when the skill is `@mentioned`
-- Injectable: Skills are activated in conversations via `@mention` (e.g., "Help me @code_review this PR")
