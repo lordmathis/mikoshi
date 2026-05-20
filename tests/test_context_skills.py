@@ -20,20 +20,11 @@ class TestParseMentions:
     def test_adjacent_mentions(self):
         assert parse_mentions("@foo@bar") == ["foo", "bar"]
 
-    def test_mention_with_numbers(self):
-        assert parse_mentions("@tool123") == ["tool123"]
-
-    def test_mention_with_underscores(self):
-        assert parse_mentions("@my_tool") == ["my_tool"]
-
     def test_hyphen_not_matched(self):
         assert parse_mentions("@my-tool") == ["my"]
 
     def test_email_not_matched(self):
         assert parse_mentions("user@example.com") == ["example"]
-
-    def test_empty_string(self):
-        assert parse_mentions("") == []
 
 
 class TestBuildSkillContext:

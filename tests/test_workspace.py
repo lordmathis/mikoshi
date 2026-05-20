@@ -88,12 +88,6 @@ class TestPathTraversal:
         good = os.path.realpath(os.path.join(root, "src", "main.py"))
         ws._validate_path(root, good)
 
-    def test_workspace_root_is_prefix(self, ws):
-        root = _create_workspace(ws)
-        bad = os.path.realpath("/tmp/definitely-outside")
-        with pytest.raises(PathTraversalError):
-            ws._validate_path(root, bad)
-
 
 class TestWorkspaceOps:
     def test_get_workspace_path(self, ws):

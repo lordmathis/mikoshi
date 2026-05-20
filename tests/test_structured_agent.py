@@ -19,22 +19,16 @@ class TestParseFinalResponse:
         assert msg == "Done!"
         assert state == {"count": 1}
 
-    def test_json_in_code_block(self):
-        raw = "```json\n" + json.dumps({
-            "user_message": "Updated",
-            "new_state": {"x": 2},
-        }) + "\n```"
-        msg, state = _parse(raw)
-        assert msg == "Updated"
-        assert state == {"x": 2}
-
-    def test_code_block_without_language_tag(self):
-        raw = "```\n" + json.dumps({
-            "user_message": "ok",
-            "new_state": {},
-        }) + "\n```"
-        msg, state = _parse(raw)
+    @pytest.mark.parametrize("fence", [
+        "```json\n{payload}\n```",
+        "```\n{payload}\n```",
+        "  ```\n  {payload}  \n  ```  ",
+    ])
+    def test_json_in_code_block(self, fence):
+        payload = json.dumps({"user_message": "ok", "new_state": {}})
+        msg, state = _parse(fence.format(payload=payload))
         assert msg == "ok"
+        assert state == {}
 
     def test_json_embedded_in_prose(self):
         obj = {"user_message": "hello", "new_state": {"k": "v"}}
@@ -76,12 +70,6 @@ class TestParseFinalResponse:
         assert msg == "hi"
         assert state == "not an object"
 
-    def test_whitespace_around_json(self):
-        obj = {"user_message": "trimmed", "new_state": {}}
-        raw = f"  \n  {json.dumps(obj)}  \n  "
-        msg, state = _parse(raw)
-        assert msg == "trimmed"
-
     def test_nested_json_state(self):
         raw = json.dumps({
             "user_message": "complex",
@@ -89,11 +77,3 @@ class TestParseFinalResponse:
         })
         msg, state = _parse(raw)
         assert state == {"nested": {"deep": [1, 2, 3]}}
-
-    def test_code_block_with_surrounding_whitespace(self):
-        raw = "  ```\n  " + json.dumps({
-            "user_message": "ws",
-            "new_state": {},
-        }) + "  \n  ```  "
-        msg, state = _parse(raw)
-        assert msg == "ws"

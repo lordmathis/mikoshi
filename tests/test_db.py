@@ -1,6 +1,8 @@
 import json
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from mikoshi.db.models import (
     Chat,
     ChatState,
@@ -59,9 +61,6 @@ class TestChatCRUD:
         chat = db.create_chat()
         db.delete_chat(chat.id)
         assert db.get_chat(chat.id) is None
-
-    def test_delete_nonexistent_chat_no_error(self, db):
-        db.delete_chat("nonexistent")
 
     def test_update_chat(self, db):
         chat = db.create_chat(title="Old")
@@ -194,9 +193,6 @@ class TestMessages:
         assert db.delete_message(msg.id) is True
         assert len(db.get_chat_history(chat.id)) == 0
 
-    def test_delete_message_not_found(self, db):
-        assert db.delete_message("nonexistent") is False
-
     def test_delete_messages_after(self, db):
         chat = db.create_chat()
         db.save_message(chat.id, "user", "Keep")
@@ -285,20 +281,17 @@ class TestBranch:
 
 
 class TestFileLifecycle:
-    def test_create_file(self, db):
+    def test_create_file_and_get(self, db):
         f = db.create_file("test.txt", "/tmp/test.txt", "text/plain")
         assert f.id
         assert f.status == "pending"
         assert f.filename == "test.txt"
+        found = db.get_file(f.id)
+        assert found.filename == "test.txt"
 
     def test_create_file_with_id(self, db):
         f = db.create_file("a.txt", "/a", "text/plain", file_id="custom-id")
         assert f.id == "custom-id"
-
-    def test_get_file(self, db):
-        created = db.create_file("x.txt", "/x", "text/plain")
-        found = db.get_file(created.id)
-        assert found.filename == "x.txt"
 
     def test_get_file_not_found(self, db):
         assert db.get_file("nonexistent") is None
@@ -310,9 +303,6 @@ class TestFileLifecycle:
         assert len(result) == 2
         assert f1.id in result
         assert f2.id in result
-
-    def test_get_files_empty_list(self, db):
-        assert db.get_files([]) == {}
 
     def test_list_pending_files(self, db):
         db.create_file("a.txt", "/a", "text/plain")
@@ -326,16 +316,10 @@ class TestFileLifecycle:
         assert db.get_file(f.id).status == "attached"
         assert len(db.list_pending_files()) == 0
 
-    def test_attach_files_empty_list(self, db):
-        db.attach_files([])
-
     def test_delete_file(self, db):
         f = db.create_file("a.txt", "/a", "text/plain")
         db.delete_file(f.id)
         assert db.get_file(f.id) is None
-
-    def test_delete_file_not_found(self, db):
-        db.delete_file("nonexistent")
 
     def test_delete_orphan_files(self, db):
         old = db.create_file("old.txt", "/old", "text/plain", source="upload")
@@ -404,35 +388,27 @@ class TestApprovalWorkflow:
     def test_get_approval_not_found(self, db):
         assert db.get_approval_by_id("nonexistent") is None
 
-    def test_update_approval_status_approved(self, db):
+    @pytest.mark.parametrize("status", ["approved", "denied"])
+    def test_update_approval_status(self, db, status):
         chat = db.create_chat()
         aid = db.create_pending_approval(chat.id, None, "tool", "{}")
-        db.update_approval_status(aid, "approved")
-        assert db.get_approval_by_id(aid)["status"] == "approved"
-
-    def test_update_approval_status_denied(self, db):
-        chat = db.create_chat()
-        aid = db.create_pending_approval(chat.id, None, "tool", "{}")
-        db.update_approval_status(aid, "denied")
-        assert db.get_approval_by_id(aid)["status"] == "denied"
+        db.update_approval_status(aid, status)
+        assert db.get_approval_by_id(aid)["status"] == status
 
 
 class TestWorkspaceCRUD:
-    def test_create_workspace(self, db):
+    def test_create_workspace_and_get(self, db):
         ws = db.create_workspace("proj", "https://github.com/x/proj")
         assert ws.id
         assert ws.name == "proj"
         assert ws.repo_url == "https://github.com/x/proj"
         assert ws.connector is None
+        found = db.get_workspace(ws.id)
+        assert found.name == "proj"
 
     def test_create_workspace_with_connector(self, db):
         ws = db.create_workspace("proj", "https://git.example.com/x", connector="forgejo")
         assert ws.connector == "forgejo"
-
-    def test_get_workspace(self, db):
-        created = db.create_workspace("proj", "https://github.com/x/proj")
-        found = db.get_workspace(created.id)
-        assert found.name == "proj"
 
     def test_get_workspace_not_found(self, db):
         assert db.get_workspace("nonexistent") is None

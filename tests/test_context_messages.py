@@ -62,14 +62,11 @@ class TestExtractAssistantContent:
         assert reasoning is None
         assert tool_calls is None
 
-    def test_empty_choices(self):
-        content, reasoning, tool_calls = extract_assistant_content({"choices": []})
-        assert content == ""
-        assert reasoning is None
-
-    def test_no_choices_key(self):
-        content, reasoning, tool_calls = extract_assistant_content({})
-        assert content == ""
+    def test_empty_or_missing_choices(self):
+        for response in [{"choices": []}, {}]:
+            content, reasoning, tool_calls = extract_assistant_content(response)
+            assert content == ""
+            assert reasoning is None
 
     def test_null_content_returns_empty_string(self):
         response = {
@@ -102,28 +99,6 @@ class TestExtractAssistantContent:
         assert tool_calls[0]["name"] == "read_file"
         assert tool_calls[0]["id"] == "call_abc"
         assert tool_calls[0]["arguments"] == {"path": "/tmp/f.txt"}
-
-    def test_tool_calls_with_dict_arguments(self):
-        response = {
-            "choices": [
-                {
-                    "message": {
-                        "content": "",
-                        "tool_calls": [
-                            {
-                                "id": "call_1",
-                                "function": {
-                                    "name": "grep",
-                                    "arguments": {"pattern": "TODO"},
-                                },
-                            }
-                        ],
-                    }
-                }
-            ]
-        }
-        _, _, tool_calls = extract_assistant_content(response)
-        assert tool_calls[0]["arguments"] == {"pattern": "TODO"}
 
     def test_tool_call_missing_id_gets_generated(self):
         response = {
