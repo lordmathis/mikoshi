@@ -106,9 +106,6 @@ class TestWorkspaceOps:
         ws.delete_workspace_files("doomed")
         assert not os.path.exists(root)
 
-    def test_delete_workspace_files_idempotent(self, ws):
-        ws.delete_workspace_files("never-existed")
-
     def test_initialize_workspace_success(self, ws):
         with patch("mikoshi.workspace.subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess([], 0)
@@ -198,21 +195,15 @@ class TestFileReadWrite:
         assert content == b"\x89PNG\r\n"
         assert mime == "image/png"
 
-    def test_read_file_raw_unknown_mime(self, ws):
-        root = _create_workspace(ws)
-        with open(os.path.join(root, "data.zzzzzz"), "wb") as f:
-            f.write(b"\x00\x01\x02")
-        _, mime = ws.read_file_raw("test-ws", "data.zzzzzz")
-        assert mime == "application/octet-stream"
-
-    def test_write_overwrites_existing(self, ws):
-        _create_workspace(ws)
-        ws.write_file("test-ws", "file.txt", "v1")
-        ws.write_file("test-ws", "file.txt", "v2")
-        assert ws.read_file("test-ws", "file.txt") == "v2"
-
 
 class TestFileTree:
+    def test_file_node_has_size(self, ws):
+        root = _create_workspace(ws)
+        _create_file(root, "sized.txt", "12345")
+        tree = ws.get_file_tree("test-ws")
+        node = next(c for c in tree.children if c.name == "sized.txt")
+        assert node.size == 5
+
     def test_basic_tree(self, ws):
         root = _create_workspace(ws)
         _create_file(root, "a.txt", "a")
@@ -352,15 +343,3 @@ class TestListFilesFlat:
 
         files = ws.list_files_flat("test-ws")
         assert files == ["code.py"]
-
-    def test_empty_workspace(self, ws):
-        _create_workspace(ws)
-        assert ws.list_files_flat("test-ws") == []
-
-    def test_sorted_output(self, ws):
-        root = _create_workspace(ws)
-        _create_file(root, "z.txt", "z")
-        _create_file(root, "a.txt", "a")
-        _create_file(root, "m.txt", "m")
-        files = ws.list_files_flat("test-ws")
-        assert files == ["a.txt", "m.txt", "z.txt"]

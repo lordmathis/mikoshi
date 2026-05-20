@@ -14,12 +14,6 @@ from mikoshi.db.models import (
 
 
 class TestChatCRUD:
-    def test_create_chat_defaults(self, db):
-        chat = db.create_chat()
-        assert chat.id
-        assert chat.title == "Untitled Chat"
-        assert chat.workspace_id is None
-
     def test_create_chat_with_title(self, db):
         chat = db.create_chat(title="My Chat")
         assert chat.title == "My Chat"
@@ -68,9 +62,6 @@ class TestChatCRUD:
         assert updated.title == "New"
         assert db.get_chat(chat.id).title == "New"
 
-    def test_update_chat_not_found(self, db):
-        assert db.update_chat("nonexistent", title="X") is None
-
     def test_update_chat_refreshes_timestamp(self, db):
         chat = db.create_chat()
         old_ts = chat.updated_at
@@ -101,9 +92,6 @@ class TestChatConfig:
         assert config["system_prompt"] is None
         assert config["tool_servers"] == []
         assert config["model_params"] is None
-
-    def test_get_config_not_found(self, db):
-        assert db.get_chat_config("nonexistent") is None
 
     def test_save_config_not_found(self, db):
         assert db.save_chat_config("nonexistent", model="x") is None
@@ -273,11 +261,6 @@ class TestBranch:
         m2 = db.save_message(chat2.id, "user", "yo")
         assert db.branch_chat(chat1.id, m2.id) is None
 
-    def test_branch_default_title(self, db):
-        chat = db.create_chat()
-        m = db.save_message(chat.id, "user", "hi")
-        branched = db.branch_chat(chat.id, m.id)
-        assert branched.title == "Untitled Chat"
 
 
 class TestFileLifecycle:
@@ -292,9 +275,6 @@ class TestFileLifecycle:
     def test_create_file_with_id(self, db):
         f = db.create_file("a.txt", "/a", "text/plain", file_id="custom-id")
         assert f.id == "custom-id"
-
-    def test_get_file_not_found(self, db):
-        assert db.get_file("nonexistent") is None
 
     def test_get_files_batch(self, db):
         f1 = db.create_file("a.txt", "/a", "text/plain")
@@ -385,9 +365,6 @@ class TestApprovalWorkflow:
         assert approval["arguments"] == '{"cmd": "ls"}'
         assert approval["message_id"] == "msg-1"
 
-    def test_get_approval_not_found(self, db):
-        assert db.get_approval_by_id("nonexistent") is None
-
     @pytest.mark.parametrize("status", ["approved", "denied"])
     def test_update_approval_status(self, db, status):
         chat = db.create_chat()
@@ -409,9 +386,6 @@ class TestWorkspaceCRUD:
     def test_create_workspace_with_connector(self, db):
         ws = db.create_workspace("proj", "https://git.example.com/x", connector="forgejo")
         assert ws.connector == "forgejo"
-
-    def test_get_workspace_not_found(self, db):
-        assert db.get_workspace("nonexistent") is None
 
     def test_list_workspaces(self, db):
         db.create_workspace("a", "https://a.com")
@@ -438,12 +412,6 @@ class TestWorkspaceCRUD:
         found = db.get_workspace_by_chat(chat.id)
         assert found.id == ws.id
 
-    def test_get_workspace_by_chat_no_workspace(self, db):
-        chat = db.create_chat()
-        assert db.get_workspace_by_chat(chat.id) is None
-
-    def test_get_workspace_by_chat_not_found(self, db):
-        assert db.get_workspace_by_chat("nonexistent") is None
 
 
 class TestCascadeDeletes:

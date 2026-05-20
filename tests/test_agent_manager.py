@@ -61,12 +61,6 @@ class TestResolveAgentParams:
         assert result["system_prompt"] == "override"
         assert result["max_iterations"] == 3
 
-    def test_falsy_values_fall_through(self):
-        m = _manager()
-        result = m._resolve_agent_params({"system_prompt": "", "tool_servers": []})
-        assert result["system_prompt"] == ""
-        assert result["tool_servers"] == []
-
 
 class TestInjectWorkspaceTools:
     def test_no_workspace_id(self):

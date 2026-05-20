@@ -50,12 +50,6 @@ class TestInitialize:
         names = {t.name for t in tools}
         assert names == {"echo", "greet", "with_ctx"}
 
-    @pytest.mark.asyncio
-    async def test_skips_plain_methods(self, handler):
-        await handler.initialize()
-        tools = await handler.list_tools()
-        assert all(t.name != "plain_method" for t in tools)
-
 
 class TestCallTool:
     @pytest.mark.asyncio

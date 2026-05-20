@@ -10,25 +10,16 @@ from mikoshi.agents.context.messages import (
 
 
 class TestParseContent:
-    def test_plain_string(self):
-        assert parse_content("hello") == "hello"
-
-    def test_valid_json_object(self):
-        result = parse_content('{"type": "text", "text": "hi"}')
-        assert result == {"type": "text", "text": "hi"}
-
-    def test_valid_json_array(self):
-        result = parse_content('[{"type": "text", "text": "hi"}]')
-        assert result == [{"type": "text", "text": "hi"}]
-
-    def test_invalid_json_returns_string(self):
-        assert parse_content("{broken json") == "{broken json"
-
-    def test_empty_string(self):
-        assert parse_content("") == ""
-
-    def test_none_returns_none(self):
-        assert parse_content(None) is None
+    @pytest.mark.parametrize("input_val,expected", [
+        ("hello", "hello"),
+        ('{"type": "text", "text": "hi"}', {"type": "text", "text": "hi"}),
+        ('[{"type": "text", "text": "hi"}]', [{"type": "text", "text": "hi"}]),
+        ("{broken json", "{broken json"),
+        ("", ""),
+        (None, None),
+    ])
+    def test_parse_content(self, input_val, expected):
+        assert parse_content(input_val) == expected
 
 
 class TestExtractTextContent:
@@ -62,18 +53,15 @@ class TestExtractAssistantContent:
         assert reasoning is None
         assert tool_calls is None
 
-    def test_empty_or_missing_choices(self):
-        for response in [{"choices": []}, {}]:
-            content, reasoning, tool_calls = extract_assistant_content(response)
-            assert content == ""
-            assert reasoning is None
-
-    def test_null_content_returns_empty_string(self):
-        response = {
-            "choices": [{"message": {"content": None}}]
-        }
-        content, _, _ = extract_assistant_content(response)
+    @pytest.mark.parametrize("response", [
+        {"choices": []},
+        {},
+        {"choices": [{"message": {"content": None}}]},
+    ])
+    def test_empty_or_null_content(self, response):
+        content, reasoning, tool_calls = extract_assistant_content(response)
         assert content == ""
+        assert reasoning is None
 
     def test_tool_calls_parsed(self):
         response = {

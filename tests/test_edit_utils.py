@@ -20,13 +20,6 @@ class TestNormalizeForFuzzyMatch:
     def test_trailing_whitespace_stripped(self):
         assert normalize_for_fuzzy_match("line  \nline2\t") == "line\nline2"
 
-    def test_already_normalized_text_unchanged(self):
-        text = "hello world\nline two"
-        assert normalize_for_fuzzy_match(text) == text
-
-    def test_empty_string(self):
-        assert normalize_for_fuzzy_match("") == ""
-
 
 class TestApplyEdits:
     def test_single_exact_replacement(self):

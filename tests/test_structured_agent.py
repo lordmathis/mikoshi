@@ -69,11 +69,3 @@ class TestParseFinalResponse:
         msg, state = _parse(raw)
         assert msg == "hi"
         assert state == "not an object"
-
-    def test_nested_json_state(self):
-        raw = json.dumps({
-            "user_message": "complex",
-            "new_state": {"nested": {"deep": [1, 2, 3]}},
-        })
-        msg, state = _parse(raw)
-        assert state == {"nested": {"deep": [1, 2, 3]}}

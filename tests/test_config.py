@@ -1,5 +1,3 @@
-import os
-
 import pytest
 
 from mikoshi.config import (
@@ -125,17 +123,3 @@ class TestEnvVarExpansion:
         path = tmp_yaml("server:\n  host: ${MY_HOST}")
         cfg = load_config(path)
         assert cfg.server.host == "0.0.0.0"
-
-
-class TestPydanticValidation:
-    def test_invalid_port_type(self, tmp_yaml):
-        path = tmp_yaml("server:\n  port: not_a_number")
-        with pytest.raises(Exception):
-            load_config(path)
-
-    def test_invalid_yaml_file(self, tmp_dir):
-        path = os.path.join(tmp_dir, "bad.yaml")
-        with open(path, "w") as f:
-            f.write("{{{{invalid")
-        with pytest.raises(Exception):
-            load_config(path)

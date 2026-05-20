@@ -5,126 +5,74 @@ from mikoshi.agents.context.skills import (
     build_skill_context,
     parse_mentions,
 )
+from tests.conftest import FakeRegistry, FakeSkill
 
 
 class TestParseMentions:
-    def test_single_mention(self):
-        assert parse_mentions("hello @world") == ["world"]
-
-    def test_multiple_mentions(self):
-        assert parse_mentions("@foo and @bar") == ["foo", "bar"]
-
-    def test_no_mentions(self):
-        assert parse_mentions("hello world") == []
-
-    def test_adjacent_mentions(self):
-        assert parse_mentions("@foo@bar") == ["foo", "bar"]
-
-    def test_hyphen_not_matched(self):
-        assert parse_mentions("@my-tool") == ["my"]
-
-    def test_email_not_matched(self):
-        assert parse_mentions("user@example.com") == ["example"]
+    @pytest.mark.parametrize("text,expected", [
+        ("hello @world", ["world"]),
+        ("@foo and @bar", ["foo", "bar"]),
+        ("hello world", []),
+        ("@foo@bar", ["foo", "bar"]),
+        ("@my-tool", ["my"]),
+        ("user@example.com", ["example"]),
+    ])
+    def test_parse_mentions(self, text, expected):
+        assert parse_mentions(text) == expected
 
 
 class TestBuildSkillContext:
-    def test_empty_names_returns_empty(self):
-        ctx, servers = build_skill_context([], None)
-        assert ctx == ""
-        assert servers == []
-
-    def test_none_registry_returns_empty(self):
-        ctx, servers = build_skill_context(["foo"], None)
-        assert ctx == ""
-        assert servers == []
+    def test_empty_or_missing_returns_empty(self):
+        for ctx, servers in [
+            build_skill_context([], None),
+            build_skill_context(["foo"], None),
+        ]:
+            assert ctx == ""
+            assert servers == []
 
     def test_skill_not_found_returns_empty(self):
-        class FakeRegistry:
-            def get_skill(self, name):
-                return None
-
         ctx, servers = build_skill_context(["missing"], FakeRegistry())
         assert ctx == ""
         assert servers == []
 
     def test_found_skill_returns_content(self):
-        class FakeSkill:
-            def read_content(self):
-                return "skill instructions here"
-            def get_required_tool_servers(self):
-                return []
-
-        class FakeRegistry:
-            def get_skill(self, name):
-                if name == "mytool":
-                    return FakeSkill()
-                return None
-
-        ctx, servers = build_skill_context(["mytool"], FakeRegistry())
+        registry = FakeRegistry(
+            skills={"mytool": FakeSkill(content="skill instructions here")}
+        )
+        ctx, servers = build_skill_context(["mytool"], registry)
         assert "mytool" in ctx
         assert "skill instructions here" in ctx
         assert servers == []
 
     def test_skill_with_required_tools(self):
-        class FakeSkill:
-            def read_content(self):
-                return "content"
-            def get_required_tool_servers(self):
-                return ["mcp-server-1", "mcp-server-2"]
-
-        class FakeRegistry:
-            def get_skill(self, name):
-                return FakeSkill()
-
-        _, servers = build_skill_context(["x"], FakeRegistry())
+        registry = FakeRegistry(
+            default_skill=FakeSkill(
+                content="content", tool_servers=["mcp-server-1", "mcp-server-2"]
+            )
+        )
+        _, servers = build_skill_context(["x"], registry)
         assert servers == ["mcp-server-1", "mcp-server-2"]
 
     def test_multiple_skills_collected(self):
-        class FakeSkill:
-            def __init__(self, content):
-                self._content = content
-            def read_content(self):
-                return self._content
-            def get_required_tool_servers(self):
-                return []
-
-        class FakeRegistry:
-            def get_skill(self, name):
-                return FakeSkill(f"content for {name}")
-
-        ctx, _ = build_skill_context(["a", "b"], FakeRegistry())
+        registry = FakeRegistry(
+            default_skill=None,
+        )
+        registry.get_skill = lambda name: FakeSkill(content=f"content for {name}")
+        ctx, _ = build_skill_context(["a", "b"], registry)
         assert "content for a" in ctx
         assert "content for b" in ctx
 
     def test_mixed_found_and_not_found(self):
-        class FakeSkill:
-            def read_content(self):
-                return "ok"
-            def get_required_tool_servers(self):
-                return []
-
-        class FakeRegistry:
-            def get_skill(self, name):
-                if name == "exists":
-                    return FakeSkill()
-                return None
-
-        ctx, _ = build_skill_context(["exists", "missing"], FakeRegistry())
+        registry = FakeRegistry(skills={"exists": FakeSkill()})
+        ctx, _ = build_skill_context(["exists", "missing"], registry)
         assert "exists" in ctx
         assert "missing" not in ctx
 
     def test_skill_read_error_returns_empty(self):
-        class FakeSkill:
-            def read_content(self):
-                raise RuntimeError("disk error")
-            def get_required_tool_servers(self):
-                return []
-
-        class FakeRegistry:
-            def get_skill(self, name):
-                return FakeSkill()
-
-        ctx, servers = build_skill_context(["bad"], FakeRegistry())
+        registry = FakeRegistry(
+            default_skill=FakeSkill(read_error=RuntimeError("disk error"))
+        )
+        ctx, servers = build_skill_context(["bad"], registry)
         assert ctx == ""
         assert servers == []
 
