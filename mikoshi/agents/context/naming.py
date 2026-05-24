@@ -11,23 +11,23 @@ logger = logging.getLogger(__name__)
 
 _pending_titles: set[str] = set()
 
-SYSTEM_PROMPT = """You are a high-level intent-extraction engine. Your task is to generate a concise, 3-5 word title for a conversation.
+SYSTEM_PROMPT = """Generate a short, natural-sounding title for this conversation. 3-6 words. Title case.
 
-CRITICAL GUIDELINE: Focus on the User's Goal, not the system's technical response. Even if a tool fails, an error occurs, or the AI cannot fulfill a request, the title must reflect what the user was attempting to do.
+The title should reflect what the user is trying to do, not any errors or technical details in the response.
 
-Tone: Functional, technical, and terse. Cyberpunk edge. 
-Style: Drop articles (a, an, the). Use "Objective: [Topic]" or "[Topic] Analysis/Query" structures.
+Think of it like naming a blog post or a YouTube video — clear, casual, and descriptive.
 
 Examples:
-- User wants a recipe but gets a 403 error -> "Recipe Extraction: [Dish Name]"
-- User asks about a broken server -> "Server Connectivity Troubleshooting"
-- User asks for a workout -> "Physical Conditioning Protocol"
+- User asks about granola vs protein bars -> "Granola to Protein Bars Guide"
+- User wants to organize Firefox bookmarks with AI -> "Sort Firefox Bookmarks With LLMs"
+- User tracks their 5K running progress -> "5K Runner's Progress Analysis"
+- User asks about metal music inspired by literature -> "Metal Music Inspired By Books"
 
-DO NOT: Reference errors, status codes, or "Log" unless the user specifically asked for a log.
-DO NOT: Use quotes.
-Output ONLY the title."""
+Do not reference errors or status codes. Do not use quotes.
+Output only the title."""
 
-USER_PROMPT_TEMPLATE = """Review the following exchange and identify the user's primary objective. Generate a 3-5 word title:
+USER_PROMPT_TEMPLATE = """Generate a short title for this conversation:
+
 {conversation}"""
 
 
