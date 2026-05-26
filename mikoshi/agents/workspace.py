@@ -63,6 +63,22 @@ class WorkspaceAgent(ReActAgent):
                     messages.insert(1, context_msg)
                 else:
                     messages.insert(0, context_msg)
+
+                agents_md_path = next(
+                    (f for f in files if f.lower() == "agents.md"), None
+                )
+                if agents_md_path:
+                    agents_md = self._workspace_service.read_file(
+                        self.workspace_id, agents_md_path
+                    )
+                    agents_msg = {
+                        "role": "system",
+                        "content": f"AGENTS.md instructions:\n{agents_md}",
+                    }
+                    if messages and messages[0].get("role") == "system":
+                        messages.insert(1, agents_msg)
+                    else:
+                        messages.insert(0, agents_msg)
             except Exception as e:
                 logger.warning(f"Failed to fetch workspace tree for context: {e}")
 
