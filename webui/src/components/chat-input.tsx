@@ -1,5 +1,5 @@
-import { Send, Bot, Zap, Plus, Upload, Link as LinkIcon, Mic, Square, AtSign, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Send, Bot, Zap, Plus, Upload, Link as LinkIcon, Mic, Square, FileText, Slash, X } from "lucide-react";
+import { useEffect, useState, useCallback } from "react";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 import {
@@ -12,6 +12,8 @@ import { ChatSettingsDialog, type ChatSettings } from "./chat-settings-dialog";
 import { FileAttachments } from "./file-attachments";
 import { getToolLabel, formatModelLabel } from "../lib/formatters";
 import { useVoiceRecording } from "../hooks/use-voice-recording";
+import { useMentionTrigger } from "../hooks/use-mention-trigger";
+import { MentionDropdown } from "./mention-dropdown";
 import { api, type Skill, type ConnectorEntry } from "../lib/api";
 
 interface ChatInputProps {
@@ -37,6 +39,8 @@ interface ChatInputProps {
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  workspaceFiles: string[];
+  hasWorkspace: boolean;
 }
 
 export function ChatInput({
@@ -62,6 +66,8 @@ export function ChatInput({
   textareaRef,
   fileInputRef,
   onFileChange,
+  workspaceFiles,
+  hasWorkspace,
 }: ChatInputProps) {
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -83,10 +89,6 @@ export function ChatInput({
   } = useVoiceRecording();
 
   const [skills, setSkills] = useState<Skill[]>([]);
-  const [showMentions, setShowMentions] = useState(false);
-  const [mentionSearch, setMentionSearch] = useState("");
-  const [mentionStart, setMentionStart] = useState(-1);
-  const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
 
   useEffect(() => {
     const loadSkills = async () => {
@@ -100,10 +102,6 @@ export function ChatInput({
     loadSkills();
   }, []);
 
-  const filteredSkills = skills.filter(skill => 
-    skill.name.toLowerCase().includes(mentionSearch.toLowerCase())
-  );
-
   useEffect(() => {
     if (recordingError) {
       console.error('Voice recording error:', recordingError);
@@ -111,66 +109,88 @@ export function ChatInput({
     }
   }, [recordingError, clearError]);
 
-  const handleInputChangeWithMentions = (value: string) => {
-    onInputChange(value);
-    
-    const cursorPos = textareaRef.current?.selectionStart || 0;
-    const textBeforeCursor = value.substring(0, cursorPos);
-    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
-    
-    if (lastAtIndex !== -1) {
-      const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1);
-      if (!textAfterAt.includes(' ') && !textAfterAt.includes('\n')) {
-        setShowMentions(true);
-        setMentionSearch(textAfterAt);
-        setMentionStart(lastAtIndex);
-        setSelectedMentionIndex(0);
-        return;
-      }
-    }
-    
-    setShowMentions(false);
-  };
+  const fileMention = useMentionTrigger<string>({
+    trigger: "@",
+    items: hasWorkspace ? workspaceFiles : [],
+    searchFn: (filePath, query) =>
+      filePath.toLowerCase().includes(query.toLowerCase()),
+  });
 
-  const insertMention = (skillName: string) => {
-    if (mentionStart === -1) return;
-    const before = inputValue.substring(0, mentionStart);
-    const after = inputValue.substring(mentionStart + 1 + mentionSearch.length);
-    onInputChange(`${before}@${skillName} ${after}`);
-    setShowMentions(false);
-    setTimeout(() => {
-      const pos = mentionStart + skillName.length + 2;
-      textareaRef.current?.focus();
-      textareaRef.current?.setSelectionRange(pos, pos);
-    }, 0);
-  };
+  const skillMention = useMentionTrigger<Skill>({
+    trigger: "/",
+    items: skills,
+    searchFn: (skill, query) =>
+      skill.name.toLowerCase().includes(query.toLowerCase()),
+  });
 
-  const handleKeyDownWithMentions = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (showMentions && filteredSkills.length > 0) {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setSelectedMentionIndex(prev => Math.min(prev + 1, filteredSkills.length - 1));
-        return;
+  const applyInsert = useCallback(
+    (result: { text: string; cursorPos: number }) => {
+      if (!result.text) return;
+      onInputChange(result.text);
+      setTimeout(() => {
+        textareaRef.current?.focus();
+        textareaRef.current?.setSelectionRange(result.cursorPos, result.cursorPos);
+      }, 0);
+    },
+    [onInputChange, textareaRef]
+  );
+
+  const handleInputChangeWithMentions = useCallback(
+    (value: string) => {
+      onInputChange(value);
+
+      const cursorPos = textareaRef.current?.selectionStart || 0;
+
+      fileMention.handleInputChange(value, cursorPos);
+      skillMention.handleInputChange(value, cursorPos);
+    },
+    [onInputChange, textareaRef, fileMention, skillMention]
+  );
+
+  const handleFileSelect = useCallback(
+    (index: number) => {
+      const item = fileMention.filteredItems[index];
+      const result = fileMention.insert(item, (path) => `${path} `);
+      applyInsert(result);
+    },
+    [fileMention, applyInsert]
+  );
+
+  const handleSkillSelect = useCallback(
+    (index: number) => {
+      const item = skillMention.filteredItems[index];
+      const result = skillMention.insert(item, (skill) => `/${skill.name} `);
+      applyInsert(result);
+    },
+    [skillMention, applyInsert]
+  );
+
+  const handleKeyDownWithMentions = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (fileMention.show && fileMention.filteredItems.length > 0) {
+        const handled = fileMention.handleKeyDown(e);
+        if (handled) {
+          if (e.key === "Enter" || e.key === "Tab") {
+            handleFileSelect(fileMention.selectedIndex);
+          }
+          return;
+        }
       }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setSelectedMentionIndex(prev => Math.max(prev - 1, 0));
-        return;
+
+      if (skillMention.show && skillMention.filteredItems.length > 0) {
+        const handled = skillMention.handleKeyDown(e);
+        if (handled) {
+          if (e.key === "Enter" || e.key === "Tab") {
+            handleSkillSelect(skillMention.selectedIndex);
+          }
+          return;
+        }
       }
-      if (e.key === 'Enter' || e.key === 'Tab') {
-        e.preventDefault();
-        insertMention(filteredSkills[selectedMentionIndex].name);
-        return;
-      }
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        setShowMentions(false);
-        return;
-      }
-    }
-    
-    onKeyDown(e);
-  };
+
+      onKeyDown(e);
+    },
+    [fileMention, skillMention, handleFileSelect, handleSkillSelect, onKeyDown]
+  );
 
   const handleVoiceRecording = async () => {
     if (isRecording) {
@@ -193,6 +213,9 @@ export function ChatInput({
       }
     }
   };
+
+  const showFileDropdown = fileMention.show && fileMention.filteredItems.length > 0;
+  const showSkillDropdown = skillMention.show && skillMention.filteredItems.length > 0 && !showFileDropdown;
 
   return (
     <div
@@ -240,7 +263,7 @@ export function ChatInput({
               borderColor: "rgb(var(--cp-rgb-yellow) / 0.15)",
               background: "rgb(var(--cp-rgb-yellow) / 0.04)",
             }}
-          >
+            >
               <Zap className="h-3.5 w-3.5 text-primary/60" />
               <span className="cp-label text-muted-foreground">
                 {chatSettings.enabledTools.map((t) => getToolLabel(t)).join(", ")}
@@ -272,32 +295,44 @@ export function ChatInput({
             disabled={isSending || !currentConversationId}
           />
 
-          {showMentions && filteredSkills.length > 0 && (
-            <div
-              className="absolute bottom-full left-0 mb-2 w-64 border shadow-lg z-50 bg-cp-surface3 cp-cut-x-10"
-              style={{
-                borderColor: "rgb(var(--cp-rgb-yellow) / 0.25)",
-              }}
-            >
-              <div className="max-h-60 overflow-y-auto p-1">
-                {filteredSkills.map((skill, index) => (
-                  <button
-                    key={skill.name}
-                    type="button"
-                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors text-left ${
-                      index === selectedMentionIndex
-                        ? 'bg-primary/10 text-primary'
-                        : 'hover:bg-primary/5 text-foreground'
-                    }`}
-                    onClick={() => insertMention(skill.name)}
-                    onMouseEnter={() => setSelectedMentionIndex(index)}
+          {showFileDropdown && (
+            <MentionDropdown
+              items={fileMention.filteredItems}
+              selectedIndex={fileMention.selectedIndex}
+              onSelect={handleFileSelect}
+              onHover={(i) => fileMention.setSelectedIndex?.(i)}
+              renderItem={(filePath, isSelected) => (
+                <>
+                  <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span
+                    className={`truncate font-medium ${isSelected ? "text-primary" : ""}`}
+                    style={{ letterSpacing: "0.04em" }}
                   >
-                    <AtSign className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <span className="truncate font-medium" style={{ letterSpacing: '0.04em' }}>{skill.name}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
+                    {filePath}
+                  </span>
+                </>
+              )}
+            />
+          )}
+
+          {showSkillDropdown && (
+            <MentionDropdown
+              items={skillMention.filteredItems}
+              selectedIndex={skillMention.selectedIndex}
+              onSelect={handleSkillSelect}
+              onHover={(i) => skillMention.setSelectedIndex?.(i)}
+              renderItem={(skill, isSelected) => (
+                <>
+                  <Slash className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span
+                    className={`truncate font-medium ${isSelected ? "text-primary" : ""}`}
+                    style={{ letterSpacing: "0.04em" }}
+                  >
+                    {skill.name}
+                  </span>
+                </>
+              )}
+            />
           )}
 
           <input

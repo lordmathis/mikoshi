@@ -10,12 +10,12 @@ from tests.conftest import FakeRegistry, FakeSkill
 
 class TestParseMentions:
     @pytest.mark.parametrize("text,expected", [
-        ("hello @world", ["world"]),
-        ("@foo and @bar", ["foo", "bar"]),
+        ("hello /world", ["world"]),
+        ("/foo and /bar", ["foo", "bar"]),
         ("hello world", []),
-        ("@foo@bar", ["foo", "bar"]),
-        ("@my-tool", ["my"]),
-        ("user@example.com", ["example"]),
+        ("/foo/bar", ["foo", "bar"]),
+        ("/my-tool", ["my-tool"]),
+        ("user/example.com", ["example"]),
     ])
     def test_parse_mentions(self, text, expected):
         assert parse_mentions(text) == expected

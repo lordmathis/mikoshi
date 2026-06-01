@@ -256,6 +256,8 @@ export function ChatView() {
               onFileChange={(e) => {
                 if (e.target.files) files.uploadFiles(Array.from(e.target.files));
               }}
+              workspaceFiles={Array.from(fileIndex.values())}
+              hasWorkspace={!!sidebar.activeWorkspaceId}
             />
           </div>
         </div>

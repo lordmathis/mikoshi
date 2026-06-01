@@ -10,8 +10,8 @@ logger = logging.getLogger(__name__)
 
 
 def parse_mentions(message: str) -> List[str]:
-    """Extract @mentions from a message."""
-    pattern = r"@([a-zA-Z0-9_]+)"
+    """Extract /skill mentions from a message."""
+    pattern = r"/([a-zA-Z0-9_-]+)"
     return re.findall(pattern, message)
 
 
@@ -35,19 +35,19 @@ def build_skill_context(
             try:
                 content = skill.read_content()
                 skill_context_parts.append(
-                    f"\n\n--- Skill @{skill_name} ---\n{content}"
+                    f"\n\n--- Skill /{skill_name} ---\n{content}"
                 )
-                logger.info(f"Loaded skill @{skill_name} for context")
+                logger.info(f"Loaded skill /{skill_name} for context")
                 tool_servers = skill.get_required_tool_servers()
                 if tool_servers:
                     required_tool_servers.extend(tool_servers)
                     logger.info(
-                        f"Skill @{skill_name} requires tool servers: {tool_servers}"
+                        f"Skill /{skill_name} requires tool servers: {tool_servers}"
                     )
             except Exception as e:
-                logger.error(f"Error loading skill @{skill_name}: {e}")
+                logger.error(f"Error loading skill /{skill_name}: {e}")
         else:
-            logger.debug(f"Skill @{skill_name} not found, treating as plain text")
+            logger.debug(f"Skill /{skill_name} not found, treating as plain text")
 
     context_str = "\n".join(skill_context_parts) if skill_context_parts else ""
     return context_str, required_tool_servers
