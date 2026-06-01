@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 interface MentionDropdownProps<T> {
   items: T[];
@@ -24,21 +24,58 @@ export function MentionDropdown<T>({
     >
       <div className="max-h-60 overflow-y-auto p-1">
         {items.map((item, index) => (
-          <button
+          <MentionItem
             key={index}
-            type="button"
-            className={`w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors text-left ${
-              index === selectedIndex
-                ? "bg-primary/10 text-primary"
-                : "hover:bg-primary/5 text-foreground"
-            }`}
-            onClick={() => onSelect(index)}
-            onMouseEnter={() => onHover(index)}
-          >
-            {renderItem(item, index === selectedIndex)}
-          </button>
+            index={index}
+            selectedIndex={selectedIndex}
+            onSelect={onSelect}
+            onHover={onHover}
+            renderItem={renderItem}
+            item={item}
+          />
         ))}
       </div>
     </div>
+  );
+}
+
+function MentionItem<T>({
+  index,
+  selectedIndex,
+  onSelect,
+  onHover,
+  renderItem,
+  item,
+}: {
+  index: number;
+  selectedIndex: number;
+  onSelect: (index: number) => void;
+  onHover: (index: number) => void;
+  renderItem: (item: T, isSelected: boolean) => ReactNode;
+  item: T;
+}) {
+  const ref = useRef<HTMLButtonElement>(null);
+  const isSelected = index === selectedIndex;
+
+  useEffect(() => {
+    if (isSelected) {
+      ref.current?.scrollIntoView({ block: "nearest" });
+    }
+  }, [isSelected]);
+
+  return (
+    <button
+      ref={ref}
+      type="button"
+      className={`w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors text-left ${
+        isSelected
+          ? "bg-primary/10 text-primary"
+          : "hover:bg-primary/5 text-foreground"
+      }`}
+      onClick={() => onSelect(index)}
+      onMouseEnter={() => onHover(index)}
+    >
+      {renderItem(item, isSelected)}
+    </button>
   );
 }

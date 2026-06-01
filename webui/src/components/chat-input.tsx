@@ -150,7 +150,7 @@ export function ChatInput({
   const handleFileSelect = useCallback(
     (index: number) => {
       const item = fileMention.filteredItems[index];
-      const result = fileMention.insert(item, (path) => `${path} `);
+      const result = fileMention.insert(item, (path) => `'${path}' `);
       applyInsert(result);
     },
     [fileMention, applyInsert]
