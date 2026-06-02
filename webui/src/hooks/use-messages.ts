@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { api, type Message, type FileResource } from "../lib/api";
 import { type ChatSettings } from "../components/chat-settings-dialog";
 
@@ -21,6 +21,7 @@ export function useMessages(
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const pollingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [chatSettings, setChatSettings] = useState<ChatSettings>({
     baseModel: "",
     systemPrompt: "",
@@ -62,6 +63,31 @@ export function useMessages(
     }
   }, [chatId]);
 
+  const stopPolling = useCallback(() => {
+    if (pollingRef.current !== null) {
+      clearTimeout(pollingRef.current);
+      pollingRef.current = null;
+    }
+  }, []);
+
+  const pollStreamStatus = useCallback(async () => {
+    if (!chatId) return;
+    try {
+      const { active } = await api.getStreamStatus(chatId);
+      if (active) {
+        setIsSending(true);
+        await reloadMessages();
+        pollingRef.current = setTimeout(pollStreamStatus, 2000);
+      } else {
+        await reloadMessages();
+        setIsSending(false);
+        pollingRef.current = null;
+      }
+    } catch {
+      pollingRef.current = setTimeout(pollStreamStatus, 3000);
+    }
+  }, [chatId, reloadMessages]);
+
   useEffect(() => {
     if (!chatId) {
       setMessages([]);
@@ -72,15 +98,31 @@ export function useMessages(
       setIsLoading(true);
       await reloadMessages();
       setIsLoading(false);
+      const { active } = await api.getStreamStatus(chatId);
+      if (active) {
+        setIsSending(true);
+        pollingRef.current = setTimeout(pollStreamStatus, 2000);
+      }
     };
     fetchInitial();
-  }, [chatId, reloadMessages, loadDefaultSettings]);
+    return () => stopPolling();
+  }, [chatId, reloadMessages, loadDefaultSettings, pollStreamStatus, stopPolling]);
+
+  useEffect(() => {
+    if (!chatId) return;
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible" && pollingRef.current === null) {
+        pollStreamStatus();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [chatId, pollStreamStatus]);
 
   const handleEvent = useCallback(
     (event: { type: string; data: unknown }) => {
       if (event.type === "message") {
         const msg = event.data as Message;
-        if (msg.role === "heartbeat") return;
         console.debug('[Messages] received:', msg.role, msg.id, msg.content?.slice(0, 80));
         setMessages((prev) => [...prev, msg]);
 

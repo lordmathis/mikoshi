@@ -75,18 +75,14 @@ class _InnerResearchAgent(ReActAgent):
 
 
 class _FilteredQueue:
-    def __init__(self, queue: asyncio.Queue, step: int):
+    def __init__(self, queue: asyncio.Queue):
         self._queue = queue
-        self._step = step
 
     async def put(self, item):
         if item is STREAM_DONE or (
             isinstance(item, StreamEvent) and item.type == "done"
         ):
             return
-        if isinstance(item, StreamEvent) and item.type == "message":
-            data = {**item.data, "step": self._step}
-            item = StreamEvent(type="message", data=data)
         await self._queue.put(item)
 
 
@@ -143,17 +139,13 @@ class ResearchAgent(BaseAgent):
 
     async def _loop(self, message: str, queue: asyncio.Queue) -> Dict[str, Any]:
         try:
-            step = 0
-
             plan = self._read_plan()
             if not plan:
                 await self._spawn(
                     PLANNING_SYSTEM_PROMPT,
                     f"Create a research plan for: {message}",
                     queue,
-                    step,
                 )
-                step += 1
                 plan = self._read_plan()
                 if not plan:
                     logger.error(
@@ -180,14 +172,12 @@ class ResearchAgent(BaseAgent):
                     findings_file=findings_file,
                 )
 
-                await self._spawn(prompt, task_desc, queue, step)
-                step += 1
+                await self._spawn(prompt, task_desc, queue)
 
             await self._spawn(
                 SYNTHESIS_SYSTEM_PROMPT,
                 "Read all findings files listed in RESEARCH_PLAN.md and write REPORT.md.",
                 queue,
-                step,
             )
 
             await self._emit(queue, STREAM_DONE)
@@ -217,7 +207,6 @@ class ResearchAgent(BaseAgent):
         system_prompt: str,
         user_message: str,
         queue: asyncio.Queue,
-        step: int,
     ) -> None:
         agent = _InnerResearchAgent(
             chat_id=self.chat_id,
@@ -237,31 +226,8 @@ class ResearchAgent(BaseAgent):
             temperature=self.temperature,
             max_tokens=self.max_tokens,
         )
-        filtered = _FilteredQueue(queue, step)
-        agent_task = asyncio.create_task(agent._loop(user_message, queue=filtered))
-        keepalive = asyncio.create_task(self._keepalive(queue, step))
-        try:
-            await agent_task
-        finally:
-            keepalive.cancel()
-            try:
-                await keepalive
-            except asyncio.CancelledError:
-                pass
-
-    async def _keepalive(self, queue: asyncio.Queue, step: int) -> None:
-        """Send heartbeat events to keep SSE connection alive during long operations."""
-        try:
-            while True:
-                await asyncio.sleep(15)
-                await queue.put(
-                    StreamEvent(
-                        type="message",
-                        data={"role": "heartbeat", "step": step},
-                    )
-                )
-        except asyncio.CancelledError:
-            pass
+        filtered = _FilteredQueue(queue)
+        await agent._loop(user_message, queue=filtered)
 
 
 class ResearchAgentPlugin(ResearchAgent, AgentPluginBase):

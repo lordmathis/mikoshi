@@ -42,7 +42,6 @@ export interface Message {
   role: 'user' | 'assistant' | 'system' | 'tool';
   content: string;
   reasoning_content?: string | null;
-  step?: number;
   tool_calls?: Array<{
     name: string;
     arguments: Record<string, any>;
@@ -229,6 +228,10 @@ class ApiClient {
 
   async getChat(chatId: string): Promise<ChatWithMessages> {
     return this.request(`/chats/${chatId}`);
+  }
+
+  async getStreamStatus(chatId: string): Promise<{ active: boolean }> {
+    return this.request(`/chats/${chatId}/stream-status`);
   }
 
   async createChat(data: CreateChatRequest): Promise<Chat> {

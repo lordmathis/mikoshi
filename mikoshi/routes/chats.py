@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 from dataclasses import asdict
-from typing import AsyncGenerator, List, Optional
+from typing import AsyncGenerator, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -14,6 +14,8 @@ from mikoshi.routes.schemas import serialize_chat
 
 logger = logging.getLogger(__name__)
 
+_active_streams: Dict[str, asyncio.Task] = {}
+
 
 async def _run_with_done_guard(coro, queue: asyncio.Queue, chat_id: str):
     try:
@@ -22,10 +24,13 @@ async def _run_with_done_guard(coro, queue: asyncio.Queue, chat_id: str):
         logger.warning("chat_id=%s stream task cancelled", chat_id)
         raise
     except Exception as e:
-        logger.error("chat_id=%s stream task failed outside _loop: %s", chat_id, e, exc_info=True)
+        logger.error(
+            "chat_id=%s stream task failed outside _loop: %s", chat_id, e, exc_info=True
+        )
         await queue.put(StreamEvent(type="error", data={"message": str(e)}))
     finally:
         await queue.put(STREAM_DONE)
+        _active_streams.pop(chat_id, None)
         logger.debug("chat_id=%s done guard fired", chat_id)
 
 
@@ -34,7 +39,11 @@ async def event_stream(
 ) -> AsyncGenerator[str, None]:
     try:
         while True:
-            event: StreamEvent = await queue.get()
+            try:
+                event: StreamEvent = await asyncio.wait_for(queue.get(), timeout=15)
+            except asyncio.TimeoutError:
+                yield ": ping\n\n"
+                continue
             logger.debug("chat_id=%s SSE event: type=%s", chat_id, event.type)
             yield f"data: {json.dumps(asdict(event))}\n\n"
             if event.type == "done":
@@ -47,13 +56,21 @@ async def event_stream(
 
 
 def _run_agent_stream(chat_id: str, agent_manager: AgentManager, coro_factory):
+    if chat_id in _active_streams:
+        raise HTTPException(
+            status_code=409, detail="Agent is already processing a message"
+        )
+
     try:
         agent = agent_manager.get(chat_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
     queue: asyncio.Queue = asyncio.Queue()
-    task = asyncio.create_task(_run_with_done_guard(coro_factory(agent, queue), queue, chat_id))
+    task = asyncio.create_task(
+        _run_with_done_guard(coro_factory(agent, queue), queue, chat_id)
+    )
+    _active_streams[chat_id] = task
     return StreamingResponse(
         event_stream(task, queue, chat_id),
         media_type="text/event-stream",
@@ -183,7 +200,9 @@ async def update_chat(request: Request, chat_id: str, body: UpdateChatRequest):
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to update agent: {str(e)}")
+            raise HTTPException(
+                status_code=500, detail=f"Failed to update agent: {str(e)}"
+            )
 
     updated_chat = database.update_chat(chat_id, **update_kwargs)
     if not updated_chat:
@@ -214,25 +233,39 @@ async def branch_chat(request: Request, chat_id: str, body: BranchChatRequest):
         config = {
             "model": branched_chat.model,
             "system_prompt": branched_chat.system_prompt,
-            "tool_servers": json.loads(branched_chat.tool_servers) if branched_chat.tool_servers else None,
-            "model_params": json.loads(branched_chat.model_params) if branched_chat.model_params else None,
+            "tool_servers": json.loads(branched_chat.tool_servers)
+            if branched_chat.tool_servers
+            else None,
+            "model_params": json.loads(branched_chat.model_params)
+            if branched_chat.model_params
+            else None,
         }
         agent_manager.create(chat_id=branched_chat.id, config=config)
     except Exception as e:
         database.delete_chat(branched_chat.id)
-        raise HTTPException(status_code=500, detail=f"Failed to create agent for branch: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to create agent for branch: {str(e)}"
+        )
 
     messages = database.get_chat_history(branched_chat.id)
     files_by_id = _collect_message_files(database, messages)
     return serialize_chat(branched_chat, messages=messages, files_by_id=files_by_id)
 
 
+@router.get("/chats/{chat_id}/stream-status")
+async def get_stream_status(request: Request, chat_id: str):
+    return {"active": chat_id in _active_streams}
+
+
 @router.post("/chats/{chat_id}/messages")
 async def send_message(request: Request, chat_id: str, body: SendMessageRequest):
     agent_manager: AgentManager = request.app.state.agent_manager
     return _run_agent_stream(
-        chat_id, agent_manager,
-        lambda agent, q: agent.chat(message=body.message, queue=q, file_ids=body.file_ids),
+        chat_id,
+        agent_manager,
+        lambda agent, q: agent.chat(
+            message=body.message, queue=q, file_ids=body.file_ids
+        ),
     )
 
 
@@ -240,15 +273,19 @@ async def send_message(request: Request, chat_id: str, body: SendMessageRequest)
 async def retry_message(request: Request, chat_id: str):
     agent_manager: AgentManager = request.app.state.agent_manager
     return _run_agent_stream(
-        chat_id, agent_manager,
+        chat_id,
+        agent_manager,
         lambda agent, q: agent.retry(queue=q),
     )
 
 
 @router.post("/chats/{chat_id}/edit")
-async def edit_last_user_message(request: Request, chat_id: str, body: EditLastMessageRequest):
+async def edit_last_user_message(
+    request: Request, chat_id: str, body: EditLastMessageRequest
+):
     agent_manager: AgentManager = request.app.state.agent_manager
     return _run_agent_stream(
-        chat_id, agent_manager,
+        chat_id,
+        agent_manager,
         lambda agent, q: agent.edit(new_message=body.message, queue=q),
     )
