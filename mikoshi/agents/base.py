@@ -4,6 +4,8 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple
 
+from openai import APIConnectionError
+
 from openai.types.chat import ChatCompletionMessageParam
 
 from mikoshi.agents.context import format_history, generate_title, parse_mentions
@@ -53,8 +55,7 @@ class BaseAgent(ABC):
     @abstractmethod
     async def _get_iteration_context(
         self, message: str
-    ) -> List[ChatCompletionMessageParam]:
-        ...
+    ) -> List[ChatCompletionMessageParam]: ...
 
     @abstractmethod
     async def _process_final_response(
@@ -62,8 +63,7 @@ class BaseAgent(ABC):
         response: Dict[str, Any],
         message_data: Dict[str, Any],
         queue: asyncio.Queue,
-    ) -> Dict[str, Any]:
-        ...
+    ) -> Dict[str, Any]: ...
 
     def _build_workspace_context(self) -> Optional[WorkspaceContext]:
         if not self.workspace_id:
@@ -108,7 +108,9 @@ class BaseAgent(ABC):
                 result = await self.tool_manager.call_tool(tool_name, tool_args, ctx)
             except ToolDeniedError as e:
                 result = f"Tool '{e.tool_name}' was denied by the user."
-                logger.info("chat_id=%s tool %s denied by user", self.chat_id, tool_name)
+                logger.info(
+                    "chat_id=%s tool %s denied by user", self.chat_id, tool_name
+                )
 
             result_str = str(result)
             logger.info(
@@ -119,11 +121,19 @@ class BaseAgent(ABC):
             )
             logger.debug("Tool %s result: %s", tool_name, result_str[:1000])
 
-            msg = await self._save_message("tool", str(result), tool_call_id=tool_call["id"])
-            await self._emit(queue, StreamEvent(type="message", data=self._format_message(msg)))
+            msg = await self._save_message(
+                "tool", str(result), tool_call_id=tool_call["id"]
+            )
+            await self._emit(
+                queue, StreamEvent(type="message", data=self._format_message(msg))
+            )
 
             messages.append(
-                {"role": "tool", "tool_call_id": tool_call["id"], "content": str(result)}
+                {
+                    "role": "tool",
+                    "tool_call_id": tool_call["id"],
+                    "content": str(result),
+                }
             )
 
     async def _handle_max_iterations(self, queue: asyncio.Queue) -> Dict[str, Any]:
@@ -135,16 +145,17 @@ class BaseAgent(ABC):
         msg = await self._save_message(
             "assistant", {"error": "Max iterations reached without final response"}
         )
-        await self._emit(queue, StreamEvent(type="message", data=self._format_message(msg)))
+        await self._emit(
+            queue, StreamEvent(type="message", data=self._format_message(msg))
+        )
         await self._emit(queue, STREAM_DONE)
         return {"error": "Max iterations reached without final response"}
 
-    async def _loop(
-        self, message: str, queue: asyncio.Queue
-    ) -> Dict[str, Any]:
+    async def _loop(self, message: str, queue: asyncio.Queue) -> Dict[str, Any]:
         logger.info(
             "chat_id=%s _loop START message_len=%d",
-            self.chat_id, len(message),
+            self.chat_id,
+            len(message),
         )
         messages = await self._get_iteration_context(message)
         tools = await self._get_tools(self.tool_servers)
@@ -153,7 +164,11 @@ class BaseAgent(ABC):
             for iteration in range(self.max_iterations):
                 logger.info(
                     "chat_id=%s iteration %d/%d — Sending %d messages to LLM (model=%s)",
-                    self.chat_id, iteration + 1, self.max_iterations, len(messages), self.model_id,
+                    self.chat_id,
+                    iteration + 1,
+                    self.max_iterations,
+                    len(messages),
+                    self.model_id,
                 )
                 for i, m in enumerate(messages):
                     role = m.get("role", "?")
@@ -166,9 +181,17 @@ class BaseAgent(ABC):
                     tool_names = [t["function"]["name"] for t in tools]
                     logger.debug("Available tools: %s", tool_names)
 
-                logger.info("chat_id=%s iteration %d — calling LLM provider...", self.chat_id, iteration + 1)
+                logger.info(
+                    "chat_id=%s iteration %d — calling LLM provider...",
+                    self.chat_id,
+                    iteration + 1,
+                )
                 response = await self._llm(messages, tools if tools else None)
-                logger.info("chat_id=%s iteration %d — LLM response received", self.chat_id, iteration + 1)
+                logger.info(
+                    "chat_id=%s iteration %d — LLM response received",
+                    self.chat_id,
+                    iteration + 1,
+                )
                 logger.debug(
                     "LLM raw response: %s",
                     json.dumps(response, default=str, ensure_ascii=False)[:2000],
@@ -179,39 +202,60 @@ class BaseAgent(ABC):
                 has_tool_calls = bool(message_data.get("tool_calls"))
                 logger.info(
                     "chat_id=%s iteration %d — finish_reason=%s, has_tool_calls=%s, content_len=%s",
-                    self.chat_id, iteration + 1, finish_reason, has_tool_calls,
+                    self.chat_id,
+                    iteration + 1,
+                    finish_reason,
+                    has_tool_calls,
                     len(message_data.get("content", "") or ""),
                 )
 
-                if not message_data.get("tool_calls") or len(message_data.get("tool_calls", [])) == 0:
-                    logger.info("chat_id=%s no tool calls — processing final response", self.chat_id)
-                    return await self._process_final_response(response, message_data, queue)
+                if (
+                    not message_data.get("tool_calls")
+                    or len(message_data.get("tool_calls", [])) == 0
+                ):
+                    logger.info(
+                        "chat_id=%s no tool calls — processing final response",
+                        self.chat_id,
+                    )
+                    return await self._process_final_response(
+                        response, message_data, queue
+                    )
 
                 tool_calls_raw = message_data["tool_calls"]
                 logger.info(
                     "chat_id=%s iteration %d — %d tool call(s) to execute: %s",
-                    self.chat_id, iteration + 1, len(tool_calls_raw),
+                    self.chat_id,
+                    iteration + 1,
+                    len(tool_calls_raw),
                     [tc["function"]["name"] for tc in tool_calls_raw],
                 )
 
                 msg = await self._save_message("assistant", response)
-                await self._emit(queue, StreamEvent(type="message", data=self._format_message(msg)))
+                await self._emit(
+                    queue, StreamEvent(type="message", data=self._format_message(msg))
+                )
 
-                messages.append({
-                    "role": "assistant",
-                    "content": message_data.get("content"),
-                    "tool_calls": tool_calls_raw,
-                })
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "content": message_data.get("content"),
+                        "tool_calls": tool_calls_raw,
+                    }
+                )
 
                 await self._execute_tool_calls(tool_calls_raw, messages, queue)
 
             return await self._handle_max_iterations(queue)
         except Exception as e:
-            logger.error("chat_id=%s agent loop error: %s", self.chat_id, e, exc_info=True)
+            logger.error(
+                "chat_id=%s agent loop error: %s", self.chat_id, e, exc_info=True
+            )
             await self._emit(queue, StreamEvent(type="error", data={"message": str(e)}))
             await self._emit(queue, STREAM_DONE)
 
-    async def chat(self, message: str, queue: asyncio.Queue, file_ids: Optional[List[str]] = None) -> None:
+    async def chat(
+        self, message: str, queue: asyncio.Queue, file_ids: Optional[List[str]] = None
+    ) -> None:
         logger.info("chat_id=%s chat() START", self.chat_id)
         try:
             await self._save_message("user", message, file_ids=file_ids)
@@ -219,7 +263,9 @@ class BaseAgent(ABC):
             await self._generate_title()
             logger.info("chat_id=%s chat() COMPLETE", self.chat_id)
         except Exception as e:
-            logger.error("chat_id=%s chat() unexpected error: %s", self.chat_id, e, exc_info=True)
+            logger.error(
+                "chat_id=%s chat() unexpected error: %s", self.chat_id, e, exc_info=True
+            )
             raise
 
     def _find_last_exchange(self) -> Tuple[Optional[Message], Optional[Message]]:
@@ -248,7 +294,9 @@ class BaseAgent(ABC):
         message = self._prepare_retry()
         if not message:
             logger.warning("chat_id=%s retry() no user message to retry", self.chat_id)
-            await queue.put(StreamEvent(type="error", data={"message": "No user message to retry"}))
+            await queue.put(
+                StreamEvent(type="error", data={"message": "No user message to retry"})
+            )
             await queue.put(STREAM_DONE)
             return
         logger.info("chat_id=%s retry() entering _loop...", self.chat_id)
@@ -268,7 +316,9 @@ class BaseAgent(ABC):
         last_user = self._prepare_edit()
         if not last_user:
             logger.warning("chat_id=%s edit() no user message to edit", self.chat_id)
-            await queue.put(StreamEvent(type="error", data={"message": "No user message to edit"}))
+            await queue.put(
+                StreamEvent(type="error", data={"message": "No user message to edit"})
+            )
             await queue.put(STREAM_DONE)
             return
 
@@ -316,7 +366,10 @@ class BaseAgent(ABC):
             return self._save_assistant_message(content_or_response)
         if role == "tool":
             return self.db.save_message(
-                self.chat_id, "tool", str(content_or_response), tool_call_id=tool_call_id
+                self.chat_id,
+                "tool",
+                str(content_or_response),
+                tool_call_id=tool_call_id,
             )
         return self._save_user_message(content_or_response, file_ids)
 
@@ -326,11 +379,16 @@ class BaseAgent(ABC):
                 return self.db.save_message(
                     self.chat_id, "assistant", f"Error: {content_or_response['error']}"
                 )
-            content, reasoning, tool_calls = extract_assistant_content(content_or_response)
+            content, reasoning, tool_calls = extract_assistant_content(
+                content_or_response
+            )
             tool_calls_json = json.dumps(tool_calls) if tool_calls else None
             return self.db.save_message(
-                self.chat_id, "assistant", content,
-                reasoning_content=reasoning, tool_calls=tool_calls_json,
+                self.chat_id,
+                "assistant",
+                content,
+                reasoning_content=reasoning,
+                tool_calls=tool_calls_json,
             )
         return self.db.save_message(self.chat_id, "assistant", content_or_response)
 
@@ -351,11 +409,17 @@ class BaseAgent(ABC):
         )
 
         if required_tool_servers:
-            new_servers = [s for s in required_tool_servers if s not in self.tool_servers]
+            new_servers = [
+                s for s in required_tool_servers if s not in self.tool_servers
+            ]
             if new_servers:
                 self.tool_servers = self.tool_servers + new_servers
-                self.db.update_chat(self.chat_id, tool_servers=json.dumps(self.tool_servers))
-                logger.info(f"Activated skill tool servers for chat {self.chat_id}: {new_servers}")
+                self.db.update_chat(
+                    self.chat_id, tool_servers=json.dumps(self.tool_servers)
+                )
+                logger.info(
+                    f"Activated skill tool servers for chat {self.chat_id}: {new_servers}"
+                )
 
         messages = format_history(self.db, self.chat_id)
         messages = apply_skill_context(messages, skill_context)
@@ -372,14 +436,16 @@ class BaseAgent(ABC):
             tools = await self.tool_manager.list_tools(tool_server)
             for tool in tools:
                 parameters = tool.parameters if hasattr(tool, "parameters") else {}
-                api_tools.append({
-                    "type": "function",
-                    "function": {
-                        "name": f"{tool_server}__{tool.name}",
-                        "description": tool.description,
-                        "parameters": parameters,
-                    },
-                })
+                api_tools.append(
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": f"{tool_server}__{tool.name}",
+                            "description": tool.description,
+                            "parameters": parameters,
+                        },
+                    }
+                )
         return api_tools
 
     async def _llm(
@@ -387,13 +453,28 @@ class BaseAgent(ABC):
         messages: List[ChatCompletionMessageParam],
         tools: Optional[List[dict]] = None,
     ) -> Dict[str, Any]:
-        return await self._llm_client.chat_completion(
-            model=self.model_id,
-            messages=messages,
-            tools=tools if tools else None,
-            temperature=self.temperature,
-            max_tokens=self.max_tokens,
-        )
+        retries = 3
+        for attempt in range(retries):
+            try:
+                return await self._llm_client.chat_completion(
+                    model=self.model_id,
+                    messages=messages,
+                    tools=tools if tools else None,
+                    temperature=self.temperature,
+                    max_tokens=self.max_tokens,
+                )
+            except APIConnectionError:
+                if attempt == retries - 1:
+                    raise
+                delay = 2.0 * (attempt + 1)
+                logger.warning(
+                    "chat_id=%s LLM connection error, retry %d/%d in %.1fs",
+                    self.chat_id,
+                    attempt + 1,
+                    retries,
+                    delay,
+                )
+                await asyncio.sleep(delay)
 
     async def _generate_title(self) -> None:
         client = self._title_llm_client or self._llm_client

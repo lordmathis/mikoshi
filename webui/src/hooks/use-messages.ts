@@ -80,6 +80,7 @@ export function useMessages(
     (event: { type: string; data: unknown }) => {
       if (event.type === "message") {
         const msg = event.data as Message;
+        if (msg.role === "heartbeat") return;
         console.debug('[Messages] received:', msg.role, msg.id, msg.content?.slice(0, 80));
         setMessages((prev) => [...prev, msg]);
 

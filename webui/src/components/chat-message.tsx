@@ -171,7 +171,7 @@ export function ChatMessage({ message, onBranch, onRetry, onEdit, isLastUserMess
               textTransform: 'uppercase',
             }}
           >
-            {isUser ? "// UPLINK" : "// DAEMON"}
+            {isUser ? "// UPLINK" : `// DAEMON${message.step !== undefined ? ` STEP ${message.step}` : ''}`}
           </p>
         </div>
         

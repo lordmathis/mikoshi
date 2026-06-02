@@ -3,6 +3,7 @@ from typing import Dict, Optional, Type
 
 from mikoshi.agents.base import BaseAgent
 from mikoshi.agents.react import ReActAgent, ReActAgentPlugin
+from mikoshi.agents.research import ResearchAgentPlugin
 from mikoshi.agents.workspace import WorkspaceAgent, WorkspaceAgentPlugin
 from mikoshi.agents.structured import StructuredAgentPlugin
 from mikoshi.config import TitleGenerationConfig, WorkspaceConfig
@@ -16,7 +17,12 @@ from mikoshi.workspace import WorkspaceService
 
 logger = logging.getLogger(__name__)
 
-_PLUGIN_BASES = (ReActAgentPlugin, StructuredAgentPlugin, WorkspaceAgentPlugin)
+_PLUGIN_BASES = (
+    ReActAgentPlugin,
+    StructuredAgentPlugin,
+    WorkspaceAgentPlugin,
+    ResearchAgentPlugin,
+)
 
 
 class AgentRegistry:
@@ -32,7 +38,13 @@ class AgentRegistry:
         self.tool_manager = tool_manager
         self.agents_dir = agents_dir
         self._agent_classes: Dict[
-            str, Type[ReActAgentPlugin | StructuredAgentPlugin | WorkspaceAgentPlugin]
+            str,
+            Type[
+                ReActAgentPlugin
+                | StructuredAgentPlugin
+                | WorkspaceAgentPlugin
+                | ResearchAgentPlugin
+            ],
         ] = discover_plugins(
             agents_dir,
             _PLUGIN_BASES,
@@ -42,7 +54,14 @@ class AgentRegistry:
 
     def get_agent_class(
         self, name: str
-    ) -> Optional[Type[ReActAgentPlugin | StructuredAgentPlugin | WorkspaceAgentPlugin]]:
+    ) -> Optional[
+        Type[
+            ReActAgentPlugin
+            | StructuredAgentPlugin
+            | WorkspaceAgentPlugin
+            | ResearchAgentPlugin
+        ]
+    ]:
         return self._agent_classes.get(name)
 
     def list_agent_names(self) -> list[str]:
@@ -146,8 +165,14 @@ class AgentManager:
             params["tool_servers"] = servers
 
     def _construct_agent(
-        self, agent_cls: Type[BaseAgent], chat_id: str, provider, model_id: str,
-        workspace_id: Optional[str], connector_name: Optional[str], params: Dict,
+        self,
+        agent_cls: Type[BaseAgent],
+        chat_id: str,
+        provider,
+        model_id: str,
+        workspace_id: Optional[str],
+        connector_name: Optional[str],
+        params: Dict,
     ) -> BaseAgent:
         kwargs = {
             "chat_id": chat_id,
@@ -176,7 +201,9 @@ class AgentManager:
 
         model = config.get("model")
         if not model:
-            model = self.agent_registry.get_default_agent_name(workspace=bool(workspace_id))
+            model = self.agent_registry.get_default_agent_name(
+                workspace=bool(workspace_id)
+            )
 
         if not model:
             raise ValueError("Model is required and no default agent found")
@@ -197,7 +224,13 @@ class AgentManager:
             self._inject_workspace_tools(params, workspace_id)
             agent_cls = WorkspaceAgent if workspace_id else ReActAgent
             return self._construct_agent(
-                agent_cls, chat_id, provider, model_id, workspace_id, connector_name, params
+                agent_cls,
+                chat_id,
+                provider,
+                model_id,
+                workspace_id,
+                connector_name,
+                params,
             )
 
         agent_class = self.agent_registry.get_agent_class(model)
@@ -218,7 +251,13 @@ class AgentManager:
         params = self._resolve_agent_params(config, defaults)
         self._inject_workspace_tools(params, workspace_id)
         return self._construct_agent(
-            agent_class, chat_id, provider, agent_class.model_id, workspace_id, connector_name, params
+            agent_class,
+            chat_id,
+            provider,
+            agent_class.model_id,
+            workspace_id,
+            connector_name,
+            params,
         )
 
     def create(self, chat_id: str, config: dict) -> BaseAgent:
