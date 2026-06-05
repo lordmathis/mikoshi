@@ -18,7 +18,17 @@ PLANNING_SYSTEM_PROMPT = """\
 You are a research planning agent. Given a research question, create a focused \
 research plan.
 
-Write a file called RESEARCH_PLAN.md with EXACTLY this format:
+FIRST: Use the workspace read tool to check if RESEARCH_PLAN.md already exists. \
+If it does, read it. If it already contains a plan for this question (checked or \
+unchecked tasks), do NOT overwrite it — just respond with "Plan already exists, \
+resuming." and stop. Only create a new plan if the file does not exist or is \
+empty.
+
+When creating a new plan, you MUST use the workspace write tool to create \
+RESEARCH_PLAN.md. Do NOT output the plan as text — write it to the file using \
+the write tool.
+
+The file must have EXACTLY this format:
 
 # Research: [the question]
 
@@ -34,6 +44,9 @@ Guidelines:
 - Be specific: "What is WebAssembly GC?" is better than "Research WebAssembly"
 - Use EXACTLY "- [ ] " (dash, space, bracket, space, bracket, space) for each task
 - Do NOT add any other content outside this format
+
+IMPORTANT: You must call the workspace write tool to save the plan. Do not just \
+respond with the plan text — use the tool.
 """
 
 RESEARCH_SYSTEM_PROMPT_TEMPLATE = """\
@@ -141,15 +154,23 @@ class ResearchAgent(BaseAgent):
         try:
             plan = self._read_plan()
             if not plan:
-                await self._spawn(
-                    PLANNING_SYSTEM_PROMPT,
-                    f"Create a research plan for: {message}",
-                    queue,
-                )
-                plan = self._read_plan()
+                for attempt in range(3):
+                    await self._spawn(
+                        PLANNING_SYSTEM_PROMPT,
+                        f"Create a research plan for: {message}",
+                        queue,
+                    )
+                    plan = self._read_plan()
+                    if plan:
+                        break
+                    logger.warning(
+                        "chat_id=%s plan not created after attempt %d, retrying",
+                        self.chat_id,
+                        attempt + 1,
+                    )
                 if not plan:
                     logger.error(
-                        "chat_id=%s failed to create research plan",
+                        "chat_id=%s failed to create research plan after 3 attempts",
                         self.chat_id,
                     )
                     await self._emit(queue, STREAM_DONE)
@@ -172,7 +193,16 @@ class ResearchAgent(BaseAgent):
                     findings_file=findings_file,
                 )
 
-                await self._spawn(prompt, task_desc, queue)
+                for attempt in range(2):
+                    await self._spawn(prompt, task_desc, queue)
+                    if self._workspace_file_exists(findings_file):
+                        break
+                    logger.warning(
+                        "chat_id=%s findings file %s not created after attempt %d",
+                        self.chat_id,
+                        findings_file,
+                        attempt + 1,
+                    )
 
             await self._spawn(
                 SYNTHESIS_SYSTEM_PROMPT,
@@ -201,6 +231,15 @@ class ResearchAgent(BaseAgent):
             return self._workspace_service.read_file(self.workspace_id, PLAN_FILENAME)
         except Exception:
             return None
+
+    def _workspace_file_exists(self, path: str) -> bool:
+        if not self.workspace_id or not self._workspace_service:
+            return False
+        try:
+            files = self._workspace_service.list_files_flat(self.workspace_id)
+            return path in files
+        except Exception:
+            return False
 
     async def _spawn(
         self,

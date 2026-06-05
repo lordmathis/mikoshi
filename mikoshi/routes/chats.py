@@ -14,10 +14,31 @@ from mikoshi.routes.schemas import serialize_chat
 
 logger = logging.getLogger(__name__)
 
-_active_streams: Dict[str, asyncio.Task] = {}
+
+class StreamHub:
+    def __init__(self):
+        self._subscribers: list[asyncio.Queue] = []
+
+    def subscribe(self) -> asyncio.Queue:
+        q = asyncio.Queue()
+        self._subscribers.append(q)
+        return q
+
+    def unsubscribe(self, q: asyncio.Queue):
+        try:
+            self._subscribers.remove(q)
+        except ValueError:
+            pass
+
+    async def put(self, event):
+        for q in self._subscribers:
+            await q.put(event)
 
 
-async def _run_with_done_guard(coro, queue: asyncio.Queue, chat_id: str):
+_active_streams: Dict[str, StreamHub] = {}
+
+
+async def _run_with_done_guard(coro, hub: StreamHub, chat_id: str):
     try:
         await coro
     except asyncio.CancelledError:
@@ -27,16 +48,17 @@ async def _run_with_done_guard(coro, queue: asyncio.Queue, chat_id: str):
         logger.error(
             "chat_id=%s stream task failed outside _loop: %s", chat_id, e, exc_info=True
         )
-        await queue.put(StreamEvent(type="error", data={"message": str(e)}))
+        await hub.put(StreamEvent(type="error", data={"message": str(e)}))
     finally:
-        await queue.put(STREAM_DONE)
+        await hub.put(STREAM_DONE)
         _active_streams.pop(chat_id, None)
         logger.debug("chat_id=%s done guard fired", chat_id)
 
 
-async def event_stream(
-    task: asyncio.Task, queue: asyncio.Queue, chat_id: str
+async def _subscribe_event_stream(
+    hub: StreamHub, chat_id: str
 ) -> AsyncGenerator[str, None]:
+    queue = hub.subscribe()
     try:
         while True:
             try:
@@ -50,9 +72,10 @@ async def event_stream(
                 logger.debug("chat_id=%s SSE stream complete", chat_id)
                 break
     except GeneratorExit:
-        logger.warning("chat_id=%s SSE client disconnected, cancelling task", chat_id)
-        task.cancel()
+        logger.debug("chat_id=%s SSE client disconnected", chat_id)
         raise
+    finally:
+        hub.unsubscribe(queue)
 
 
 def _run_agent_stream(chat_id: str, agent_manager: AgentManager, coro_factory):
@@ -66,13 +89,11 @@ def _run_agent_stream(chat_id: str, agent_manager: AgentManager, coro_factory):
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
-    queue: asyncio.Queue = asyncio.Queue()
-    task = asyncio.create_task(
-        _run_with_done_guard(coro_factory(agent, queue), queue, chat_id)
-    )
-    _active_streams[chat_id] = task
+    hub = StreamHub()
+    _active_streams[chat_id] = hub
+    asyncio.create_task(_run_with_done_guard(coro_factory(agent, hub), hub, chat_id))
     return StreamingResponse(
-        event_stream(task, queue, chat_id),
+        _subscribe_event_stream(hub, chat_id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -255,6 +276,18 @@ async def branch_chat(request: Request, chat_id: str, body: BranchChatRequest):
 @router.get("/chats/{chat_id}/stream-status")
 async def get_stream_status(request: Request, chat_id: str):
     return {"active": chat_id in _active_streams}
+
+
+@router.get("/chats/{chat_id}/stream")
+async def subscribe_stream(request: Request, chat_id: str):
+    hub = _active_streams.get(chat_id)
+    if not hub:
+        raise HTTPException(status_code=404, detail="No active stream")
+    return StreamingResponse(
+        _subscribe_event_stream(hub, chat_id),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.post("/chats/{chat_id}/messages")

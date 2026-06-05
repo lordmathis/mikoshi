@@ -234,6 +234,13 @@ class ApiClient {
     return this.request(`/chats/${chatId}/stream-status`);
   }
 
+  async *subscribeStream(chatId: string, signal?: AbortSignal): AsyncGenerator<StreamEvent> {
+    const url = `${this.baseURL}/chats/${chatId}/stream`;
+    const response = await fetch(url, { signal });
+    await this.assertOk(response);
+    yield* this.parseSSE(response);
+  }
+
   async createChat(data: CreateChatRequest): Promise<Chat> {
     return this.request('/chats', {
       method: 'POST',

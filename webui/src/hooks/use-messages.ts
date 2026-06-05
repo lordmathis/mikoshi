@@ -21,7 +21,7 @@ export function useMessages(
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
-  const pollingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const streamAbortRef = useRef<AbortController | null>(null);
   const [chatSettings, setChatSettings] = useState<ChatSettings>({
     baseModel: "",
     systemPrompt: "",
@@ -63,67 +63,15 @@ export function useMessages(
     }
   }, [chatId]);
 
-  const stopPolling = useCallback(() => {
-    if (pollingRef.current !== null) {
-      clearTimeout(pollingRef.current);
-      pollingRef.current = null;
-    }
+  const abortActiveStream = useCallback(() => {
+    streamAbortRef.current?.abort();
+    streamAbortRef.current = null;
   }, []);
-
-  const pollStreamStatus = useCallback(async () => {
-    if (!chatId) return;
-    try {
-      const { active } = await api.getStreamStatus(chatId);
-      if (active) {
-        setIsSending(true);
-        await reloadMessages();
-        pollingRef.current = setTimeout(pollStreamStatus, 2000);
-      } else {
-        await reloadMessages();
-        setIsSending(false);
-        pollingRef.current = null;
-      }
-    } catch {
-      pollingRef.current = setTimeout(pollStreamStatus, 3000);
-    }
-  }, [chatId, reloadMessages]);
-
-  useEffect(() => {
-    if (!chatId) {
-      setMessages([]);
-      loadDefaultSettings();
-      return;
-    }
-    const fetchInitial = async () => {
-      setIsLoading(true);
-      await reloadMessages();
-      setIsLoading(false);
-      const { active } = await api.getStreamStatus(chatId);
-      if (active) {
-        setIsSending(true);
-        pollingRef.current = setTimeout(pollStreamStatus, 2000);
-      }
-    };
-    fetchInitial();
-    return () => stopPolling();
-  }, [chatId, reloadMessages, loadDefaultSettings, pollStreamStatus, stopPolling]);
-
-  useEffect(() => {
-    if (!chatId) return;
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible" && pollingRef.current === null) {
-        pollStreamStatus();
-      }
-    };
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => document.removeEventListener("visibilitychange", handleVisibility);
-  }, [chatId, pollStreamStatus]);
 
   const handleEvent = useCallback(
     (event: { type: string; data: unknown }) => {
       if (event.type === "message") {
         const msg = event.data as Message;
-        console.debug('[Messages] received:', msg.role, msg.id, msg.content?.slice(0, 80));
         setMessages((prev) => [...prev, msg]);
 
         if (msg.role === "tool") {
@@ -141,8 +89,43 @@ export function useMessages(
     [onWorkspaceChange]
   );
 
+  useEffect(() => {
+    if (!chatId) {
+      setMessages([]);
+      loadDefaultSettings();
+      return;
+    }
+    const abortController = new AbortController();
+    streamAbortRef.current = abortController;
+    const fetchInitial = async () => {
+      setIsLoading(true);
+      await reloadMessages();
+      setIsLoading(false);
+      const { active } = await api.getStreamStatus(chatId);
+      if (!active) return;
+      setIsSending(true);
+      try {
+        for await (const event of api.subscribeStream(chatId, abortController.signal)) {
+          handleEvent(event);
+        }
+      } catch (e) {
+        if (e instanceof DOMException && e.name === "AbortError") return;
+        console.error("[Messages] stream reconnect error:", e);
+      } finally {
+        setIsSending(false);
+        if (streamAbortRef.current === abortController) {
+          streamAbortRef.current = null;
+        }
+      }
+    };
+    fetchInitial();
+    return () => abortController.abort();
+  }, [chatId, reloadMessages, loadDefaultSettings, handleEvent]);
+
   const send = async (text: string, files: FileResource[]) => {
     if (!chatId) return;
+
+    abortActiveStream();
 
     const tempId = `temp-${Date.now()}`;
     const optimisticMessage: Message = {
@@ -183,6 +166,7 @@ export function useMessages(
 
   const retry = async () => {
     if (!chatId) return;
+    abortActiveStream();
     try {
       setIsSending(true);
       await reloadMessages();
@@ -196,6 +180,7 @@ export function useMessages(
 
   const edit = async (text: string) => {
     if (!chatId) return;
+    abortActiveStream();
     try {
       setIsSending(true);
       await reloadMessages();
