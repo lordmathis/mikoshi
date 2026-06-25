@@ -15,22 +15,16 @@ from mikoshi.tools.workspace import WORKSPACE_SERVER_NAME
 logger = logging.getLogger(__name__)
 
 PLAN_FILENAME = "RESEARCH_PLAN.md"
+REPORT_FILENAME = "REPORT.md"
 
-PLANNING_SYSTEM_PROMPT = """\
-You are a research planning agent. Given a research question, create a focused \
-research plan.
+PLANNER_SYSTEM_PROMPT = """\
+You manage RESEARCH_PLAN.md for a research task. You are given the current \
+state inline (existing plan and report, if any) and the user's latest message. \
+Always save RESEARCH_PLAN.md with the workspace write tool — never output the \
+plan as text.
 
-FIRST: Use the workspace read tool to check if RESEARCH_PLAN.md already exists. \
-If it does, read it. If it already contains a plan for this question (checked or \
-unchecked tasks), do NOT overwrite it — just respond with "Plan already exists, \
-resuming." and stop. Only create a new plan if the file does not exist or is \
-empty.
-
-When creating a new plan, you MUST use the workspace write tool to create \
-RESEARCH_PLAN.md. Do NOT output the plan as text — write it to the file using \
-the write tool.
-
-The file must have EXACTLY this format:
+If NO plan exists yet, create a focused plan for the user's question in EXACTLY \
+this format:
 
 # Research: [the question]
 
@@ -39,16 +33,17 @@ The file must have EXACTLY this format:
 - [ ] Second focused sub-question
 - [ ] Third focused sub-question
 
-Guidelines:
-- Create 3-7 focused, researchable sub-questions
-- Each task should be answerable through web search
-- Order from foundational to advanced
-- Be specific: "What is WebAssembly GC?" is better than "Research WebAssembly"
-- Use EXACTLY "- [ ] " (dash, space, bracket, space, bracket, space) for each task
-- Do NOT add any other content outside this format
+New-plan guidelines:
+- 3-7 focused, researchable sub-questions, ordered foundational to advanced.
+- Be specific: "What is WebAssembly GC?" beats "Research WebAssembly".
+- Use EXACTLY "- [ ] " (dash, space, bracket, space, bracket, space) per task.
 
-IMPORTANT: You must call the workspace write tool to save the plan. Do not just \
-respond with the plan text — use the tool.
+If a plan AND a finished REPORT.md already exist, the user wants to dig deeper. \
+APPEND new "- [ ] " tasks relevant to the ORIGINAL question and the user's \
+request:
+- APPEND only — do not remove or modify existing tasks.
+- Only add tasks directly relevant to the original question and the request; \
+ignore topics the user did not raise.
 """
 
 RESEARCH_SYSTEM_PROMPT_TEMPLATE = """\
@@ -62,9 +57,13 @@ with the URL and a focus describing what you need — it returns a concise summa
 letting you cover many sources without overflowing context. Write your findings \
 to {findings_file}. Include sources, key facts, and relevant details.
 
-Do not edit existing task lines in RESEARCH_PLAN.md — completion is tracked \
-automatically from your findings file. If you discover important new \
-sub-questions, append them as new "- [ ]" lines at the END of the task list.
+Stay strictly on your assigned task and the original question. Do not drift into \
+adjacent topics the user did not ask about (for example, if the user did not \
+mention pain, do not pursue pain-related questions). Do not edit RESEARCH_PLAN.md.
+
+If you discover an open question that would materially advance answering the \
+ORIGINAL question, add a "## Potential follow-up questions" section at the END \
+of your findings file — one short question per line. Leave it out otherwise.
 
 Be thorough but focused on your specific task.
 """
@@ -75,8 +74,15 @@ below. Write a comprehensive REPORT.md that answers the original research \
 question, then save it with the workspace write tool.
 
 Structure the report with clear sections, cite sources, and synthesize the \
-material into a coherent answer. Do not read any files — everything you need \
-is provided below.
+material into a coherent answer. Stay strictly on the original question — do \
+not introduce topics the user did not ask about.
+
+At the end of REPORT.md add a "## Suggested follow-up questions" section: \
+gather the open questions found across the material, keep only the few that \
+would most materially advance answering the original question, and list them \
+as a numbered list. The user may ask you to research specific ones next.
+
+Do not read any files — everything you need is provided below.
 """
 
 SYNTHESIS_SUMMARIZE_PROMPT_TEMPLATE = """\
@@ -84,6 +90,7 @@ You are a research summarization agent. You are given one batch of research \
 findings inline below. Write a focused summary to {batch_file} that preserves \
 all key facts, numbers, and source URLs. This summary will later be merged \
 with other batch summaries into a final report, so be complete but concise. \
+Copy any "## Potential follow-up questions" section from the findings verbatim. \
 Save it with the workspace write tool. Do not read any files.
 """
 
@@ -285,11 +292,7 @@ class ResearchAgent(BaseAgent):
             plan = self._read_plan()
             if not plan:
                 for attempt in range(3):
-                    await self._spawn(
-                        PLANNING_SYSTEM_PROMPT,
-                        f"Create a research plan for: {message}",
-                        queue,
-                    )
+                    await self._run_planner(message, plan=None, report=None, queue=queue)
                     plan = self._read_plan()
                     if plan:
                         break
@@ -305,6 +308,11 @@ class ResearchAgent(BaseAgent):
                     )
                     await self._emit(queue, STREAM_DONE)
                     return {}
+            elif self._workspace_file_exists(REPORT_FILENAME):
+                await self._run_planner(
+                    message, plan=plan, report=self._read_report(), queue=queue
+                )
+                plan = self._read_plan() or plan
 
             original_question = _parse_title(plan) or message
 
@@ -350,6 +358,46 @@ class ResearchAgent(BaseAgent):
             return self._workspace_service.read_file(self.workspace_id, PLAN_FILENAME)
         except Exception:
             return None
+
+    def _read_report(self) -> str:
+        if not self.workspace_id or not self._workspace_service:
+            return ""
+        try:
+            return self._workspace_service.read_file(self.workspace_id, REPORT_FILENAME)
+        except Exception:
+            return ""
+
+    async def _run_planner(
+        self,
+        message: str,
+        plan: Optional[str],
+        report: Optional[str],
+        queue: asyncio.Queue,
+    ) -> None:
+        """Spawn the unified planner. State is fed inline — no plan/report means
+        create; both present means append follow-up tasks. The planner only ever
+        writes RESEARCH_PLAN.md; control flow (when to plan / research /
+        synthesize) stays in _loop."""
+        plan_block = plan if plan else "(none yet)"
+        report_block = report if report else "(none yet)"
+        user_message = (
+            f"User's message: {message}\n\n"
+            f"Existing RESEARCH_PLAN.md:\n{plan_block}\n\n"
+            f"Existing REPORT.md:\n{report_block}\n\n"
+            f"Use the workspace write tool to save RESEARCH_PLAN.md now."
+        )
+        if plan:
+            logger.info(
+                "chat_id=%s follow-up: extending plan (%d-char report inline)",
+                self.chat_id,
+                len(report_block),
+            )
+        await self._spawn(
+            PLANNER_SYSTEM_PROMPT,
+            user_message,
+            queue,
+            tool_servers=[WORKSPACE_SERVER_NAME],
+        )
 
     def _reconcile_plan(self) -> None:
         """Check off tasks whose findings file already exists.
