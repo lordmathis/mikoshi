@@ -13,6 +13,7 @@ class AgentPluginBase:
     max_iterations: int = 5
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None
+    context_window: Optional[int] = None
 
     def post_init(self) -> None:
         pass

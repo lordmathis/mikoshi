@@ -130,6 +130,7 @@ class AgentManager:
             "tool_servers": config.get("tool_servers") or d.get("tool_servers", []),
             "temperature": model_params.get("temperature", d.get("temperature")),
             "max_tokens": model_params.get("max_tokens", d.get("max_tokens")),
+            "context_window": model_params.get("context_window", d.get("context_window")),
             "max_iterations": model_params.get(
                 "max_iterations", d.get("max_iterations", 5)
             ),
@@ -246,6 +247,7 @@ class AgentManager:
             "tool_servers": agent_class.tool_servers,
             "temperature": agent_class.temperature,
             "max_tokens": agent_class.max_tokens,
+            "context_window": agent_class.context_window,
             "max_iterations": agent_class.max_iterations,
         }
         params = self._resolve_agent_params(config, defaults)

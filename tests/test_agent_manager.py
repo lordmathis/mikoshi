@@ -28,6 +28,7 @@ class TestResolveAgentParams:
             "tool_servers": [],
             "temperature": None,
             "max_tokens": None,
+            "context_window": None,
             "max_iterations": 5,
         }
 

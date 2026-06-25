@@ -39,6 +39,7 @@ class BaseAgent(ABC):
         self.skill_registry = kwargs.get("skill_registry")
         self.temperature = kwargs.get("temperature")
         self.max_tokens = kwargs.get("max_tokens")
+        self.context_window = kwargs.get("context_window")
         self.max_iterations = kwargs.get("max_iterations", 5)
         self.workspace_id = kwargs.get("workspace_id")
         self.data_dir = kwargs["data_dir"]
@@ -84,10 +85,27 @@ class BaseAgent(ABC):
             tool_name = tool_call["function"]["name"]
             tool_args_str = tool_call["function"]["arguments"]
 
-            if isinstance(tool_args_str, str):
-                tool_args = json.loads(tool_args_str)
-            else:
-                tool_args = tool_args_str
+            parse_failed = False
+            try:
+                tool_args = (
+                    json.loads(tool_args_str)
+                    if isinstance(tool_args_str, str)
+                    else tool_args_str
+                )
+            except json.JSONDecodeError:
+                parse_failed = True
+                tool_args = {}
+                logger.warning(
+                    "chat_id=%s tool %s arguments malformed or truncated",
+                    self.chat_id,
+                    tool_name,
+                )
+                result = (
+                    f"Error: arguments for '{tool_name}' were malformed or "
+                    "truncated (output likely hit the length limit). Re-issue "
+                    "the call; if writing a large file, split it into smaller "
+                    "chunks."
+                )
 
             logger.info(
                 "chat_id=%s tool call %d/%d: %s args=%s",
@@ -98,19 +116,22 @@ class BaseAgent(ABC):
                 json.dumps(tool_args, default=str, ensure_ascii=False)[:1000],
             )
 
-            try:
-                ctx = ToolCallContext(
-                    provider=self.provider,
-                    model_id=self.model_id,
-                    chat_id=self.chat_id,
-                    workspace=self._build_workspace_context(),
-                )
-                result = await self.tool_manager.call_tool(tool_name, tool_args, ctx)
-            except ToolDeniedError as e:
-                result = f"Tool '{e.tool_name}' was denied by the user."
-                logger.info(
-                    "chat_id=%s tool %s denied by user", self.chat_id, tool_name
-                )
+            if not parse_failed:
+                try:
+                    ctx = ToolCallContext(
+                        provider=self.provider,
+                        model_id=self.model_id,
+                        chat_id=self.chat_id,
+                        workspace=self._build_workspace_context(),
+                    )
+                    result = await self.tool_manager.call_tool(
+                        tool_name, tool_args, ctx
+                    )
+                except ToolDeniedError as e:
+                    result = f"Tool '{e.tool_name}' was denied by the user."
+                    logger.info(
+                        "chat_id=%s tool %s denied by user", self.chat_id, tool_name
+                    )
 
             result_str = str(result)
             logger.info(
@@ -433,7 +454,15 @@ class BaseAgent(ABC):
     async def _get_tools(self, servers: List[str]) -> List[dict]:
         api_tools = []
         for tool_server in servers:
-            tools = await self.tool_manager.list_tools(tool_server)
+            try:
+                tools = await self.tool_manager.list_tools(tool_server)
+            except ValueError:
+                logger.warning(
+                    "chat_id=%s tool server '%s' not registered, skipping",
+                    self.chat_id,
+                    tool_server,
+                )
+                continue
             for tool in tools:
                 parameters = tool.parameters if hasattr(tool, "parameters") else {}
                 api_tools.append(

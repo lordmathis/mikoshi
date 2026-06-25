@@ -19,6 +19,21 @@ def parse_content(msg_content: str):
         return msg_content
 
 
+def parse_tool_arguments(raw: Any):
+    """Parse tool-call arguments JSON, returning the raw value on failure.
+
+    A model can emit truncated JSON when its output hits the length limit
+    mid-argument; we keep the raw string so persistence never crashes and the
+    caller can report a recoverable error.
+    """
+    if isinstance(raw, str):
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            return raw
+    return raw
+
+
 def extract_text_content(raw_content: str) -> str:
     """Decode message content to plain text regardless of storage format."""
     content = parse_content(raw_content)
@@ -54,9 +69,7 @@ def extract_assistant_content(
             {
                 "id": tc.get("id", f"call_{i}"),
                 "name": tc["function"]["name"],
-                "arguments": json.loads(tc["function"]["arguments"])
-                if isinstance(tc["function"]["arguments"], str)
-                else tc["function"]["arguments"],
+                "arguments": parse_tool_arguments(tc["function"]["arguments"]),
             }
             for i, tc in enumerate(raw_tool_calls)
         ]
