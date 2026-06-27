@@ -18,13 +18,14 @@ PLAN_FILENAME = "RESEARCH_PLAN.md"
 REPORT_FILENAME = "REPORT.md"
 
 PLANNER_SYSTEM_PROMPT = """\
-You manage RESEARCH_PLAN.md for a research task. You are given the current \
-state inline (existing plan and report, if any) and the user's latest message. \
-Always save RESEARCH_PLAN.md with the workspace write tool — never output the \
-plan as text.
+Your ONLY job is to write RESEARCH_PLAN.md. You do not do research, you do not \
+write findings, and you do not write REPORT.md — separate agents handle those.
 
-If NO plan exists yet, create a focused plan for the user's question in EXACTLY \
-this format:
+You are given the current state inline and the user's message. Do exactly ONE of \
+the following, save the result with the workspace write tool, then STOP:
+
+1. If NO plan exists yet, create a focused plan for the user's question in \
+EXACTLY this format:
 
 # Research: [the question]
 
@@ -34,16 +35,52 @@ this format:
 - [ ] Third focused sub-question
 
 New-plan guidelines:
-- 3-7 focused, researchable sub-questions, ordered foundational to advanced.
-- Be specific: "What is WebAssembly GC?" beats "Research WebAssembly".
+- 5-7 sub-questions. Cover the question thoroughly, but every task should be \
+one the user would actually want answered — don't pad with background or \
+tangents just to reach the count.
+- Each task must directly serve answering the user's actual question. The end \
+result should be a clear, well-supported answer a normal person can understand \
+— based on evidence, not a literature review padded with background, jargon, or \
+tangents. If a premise in the question is genuinely contested (e.g. whether a \
+claimed effect is even real), that is worth at most one task — otherwise don't \
+pad.
+- Be specific and answerable through web search: "What is the evidence that X \
+causes Y?" beats "Research X."
+- Order tasks so they collectively build the answer the user is looking for.
 - Use EXACTLY "- [ ] " (dash, space, bracket, space, bracket, space) per task.
 
-If a plan AND a finished REPORT.md already exist, the user wants to dig deeper. \
-APPEND new "- [ ] " tasks relevant to the ORIGINAL question and the user's \
-request:
-- APPEND only — do not remove or modify existing tasks.
-- Only add tasks directly relevant to the original question and the request; \
-ignore topics the user did not raise.
+2. If a plan AND a finished REPORT.md already exist, the user wants to dig \
+deeper. APPEND new "- [ ] " tasks relevant to the ORIGINAL question and the \
+user's request. Do not remove or modify existing tasks; only add tasks directly \
+relevant to the request, and ignore topics the user did not raise.
+
+After saving, respond with ONE short confirmation sentence (e.g. "Plan \
+created.") and STOP. Do not check off tasks, do not call any further tools, and \
+do not create any other file.
+"""
+
+REPLANNER_SYSTEM_PROMPT = """\
+Your ONLY job is to correct flawed assumptions in the REMAINING tasks based on \
+what was just learned — nothing else. You are given the original question, the \
+current plan, and the findings from the task just completed (inline). You do not \
+do research, and you do not write findings or REPORT.md.
+
+If an UNCHECKED ("- [ ]") task rests on an assumption the findings contradicted \
+or superseded, don't just patch the wording — reword it to pursue what the \
+findings show actually matters for answering the original question. If the \
+task's premise is now moot, redirect it to something genuinely useful rather \
+than researching a dead premise. Keep reworded tasks clear and readable, not \
+academic tangents.
+
+Hard rules:
+- The NUMBER of tasks must not change. Do NOT add, remove, merge, or reorder \
+tasks, and do NOT touch "- [x]" lines — their positions are load-bearing.
+- Reword existing "- [ ]" lines in place only, and keep them "- [ ] " \
+(unchecked) — never mark tasks complete; completion is tracked automatically.
+- If no task rests on a contradicted assumption, respond "No changes needed." \
+and STOP — do not rewrite the file.
+Otherwise save RESEARCH_PLAN.md with the workspace write tool, respond with one \
+short sentence, and STOP. Do not call further tools or create any other file.
 """
 
 RESEARCH_SYSTEM_PROMPT_TEMPLATE = """\
@@ -70,28 +107,30 @@ Be thorough but focused on your specific task.
 
 SYNTHESIS_SYSTEM_PROMPT = """\
 You are a research synthesis agent. You are given research material inline \
-below. Write a comprehensive REPORT.md that answers the original research \
-question, then save it with the workspace write tool.
+below. Write the report that directly answers the user's original research \
+question, and output the full report as your response.
 
-Structure the report with clear sections, cite sources, and synthesize the \
-material into a coherent answer. Stay strictly on the original question — do \
-not introduce topics the user did not ask about.
+Write for a normal person: clear, readable, and to the point. Ground every \
+claim in the research and cite sources, but do NOT write a literature review \
+or pad with academic jargon, background, or tangents the user did not ask \
+about. Use plain language, and explain technical terms briefly only when they \
+are unavoidable. Lead with the answer the user is looking for, then support it. \
+If the findings show the question rests on a premise that doesn't hold, say so \
+plainly and answer what's actually true instead of answering the question as \
+originally framed.
 
-At the end of REPORT.md add a "## Suggested follow-up questions" section: \
-gather the open questions found across the material, keep only the few that \
-would most materially advance answering the original question, and list them \
-as a numbered list. The user may ask you to research specific ones next.
-
-Do not read any files — everything you need is provided below.
+End with a "## Suggested follow-up questions" section: list the few open \
+questions that would most advance answering the original question, as a \
+numbered list. The user may ask you to research specific ones next.
 """
 
-SYNTHESIS_SUMMARIZE_PROMPT_TEMPLATE = """\
+SYNTHESIS_SUMMARIZE_PROMPT = """\
 You are a research summarization agent. You are given one batch of research \
-findings inline below. Write a focused summary to {batch_file} that preserves \
-all key facts, numbers, and source URLs. This summary will later be merged \
-with other batch summaries into a final report, so be complete but concise. \
-Copy any "## Potential follow-up questions" section from the findings verbatim. \
-Save it with the workspace write tool. Do not read any files.
+findings inline below. Write a focused summary that preserves all key facts, \
+numbers, and source URLs, and output it as your response. This summary will \
+later be merged with other batch summaries into a final report, so be complete \
+but concise. Copy any "## Potential follow-up questions" section from the \
+findings verbatim.
 """
 
 NUDGE_PROMPT_TEMPLATE = """\
@@ -111,6 +150,7 @@ class _InnerResearchAgent(ReActAgent):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._messages: List[ChatCompletionMessageParam] = []
+        self.last_response: str = ""
 
     async def _get_iteration_context(
         self, message: str
@@ -130,6 +170,7 @@ class _InnerResearchAgent(ReActAgent):
         message_data: Dict[str, Any],
         queue: asyncio.Queue,
     ) -> Dict[str, Any]:
+        self.last_response = message_data.get("content") or ""
         self._messages.append(
             {"role": "assistant", "content": message_data.get("content")}
         )
@@ -174,7 +215,7 @@ def _slugify(text: str) -> str:
     return re.sub(r"[\s_]+", "-", slug).strip("-")[:50]
 
 
-DEFAULT_CONTEXT_WINDOW = 32000
+DEFAULT_CONTEXT_WINDOW = 64000
 SYNTHESIS_OUTPUT_RESERVE = 2048
 SYNTHESIS_RESERVE_FRACTION = 0.30
 
@@ -334,6 +375,15 @@ class ResearchAgent(BaseAgent):
 
                 await self._research_task(prompt, task_desc, findings_file, queue)
 
+                self._reconcile_plan()
+                plan = self._read_plan() or ""
+                if _parse_pending_tasks(plan):
+                    findings = self._read_workspace_file(findings_file)
+                    if findings:
+                        await self._run_replanner(
+                            original_question, plan, findings, queue
+                        )
+
             self._reconcile_plan()
             await self._synthesize(original_question, queue)
 
@@ -360,12 +410,46 @@ class ResearchAgent(BaseAgent):
             return None
 
     def _read_report(self) -> str:
+        return self._read_workspace_file(REPORT_FILENAME)
+
+    def _read_workspace_file(self, path: str) -> str:
         if not self.workspace_id or not self._workspace_service:
             return ""
         try:
-            return self._workspace_service.read_file(self.workspace_id, REPORT_FILENAME)
+            return self._workspace_service.read_file(self.workspace_id, path)
         except Exception:
             return ""
+
+    async def _run_replanner(
+        self,
+        original_question: str,
+        plan: str,
+        findings: str,
+        queue: asyncio.Queue,
+    ) -> None:
+        """After a research task completes, fold its findings back into the
+        REMAINING plan tasks so later tasks build on (rather than repeat or
+        contradict) what was just learned. Findings are injected inline; the
+        replanner only rewords/appends unchecked tasks and writes the plan
+        once."""
+        user_message = (
+            f"Original question: {original_question}\n\n"
+            f"Current RESEARCH_PLAN.md:\n{plan}\n\n"
+            f"Findings from the task just completed:\n---\n{findings}\n---\n\n"
+            f"Revise the remaining unchecked tasks in RESEARCH_PLAN.md now using "
+            f"the workspace write tool."
+        )
+        logger.info(
+            "chat_id=%s replanning: %d-char findings inline",
+            self.chat_id,
+            len(findings),
+        )
+        await self._spawn(
+            REPLANNER_SYSTEM_PROMPT,
+            user_message,
+            queue,
+            tool_servers=[WORKSPACE_SERVER_NAME],
+        )
 
     async def _run_planner(
         self,
@@ -523,7 +607,6 @@ class ResearchAgent(BaseAgent):
         total_tokens = sum(t for _, _, t in items)
         context_window = self.context_window or DEFAULT_CONTEXT_WINDOW
         budget = _synthesis_budget(context_window)
-        workspace = [WORKSPACE_SERVER_NAME]
 
         if total_tokens <= budget:
             logger.info(
@@ -533,12 +616,11 @@ class ResearchAgent(BaseAgent):
                 total_tokens,
                 budget,
             )
-            block = _format_material_block(items)
-            await self._spawn(
+            await self._run_synthesis_agent(
                 SYNTHESIS_SYSTEM_PROMPT,
-                _synthesis_user_prompt(original_question, block),
+                _synthesis_user_prompt(original_question, _format_material_block(items)),
+                REPORT_FILENAME,
                 queue,
-                tool_servers=workspace,
             )
             return
 
@@ -552,13 +634,13 @@ class ResearchAgent(BaseAgent):
         batches = _batch_findings(items, budget)
         for i, batch in enumerate(batches, 1):
             batch_file = f"synthesis/batch_{i:02d}.md"
-            await self._spawn(
-                SYNTHESIS_SUMMARIZE_PROMPT_TEMPLATE.format(batch_file=batch_file),
+            await self._run_synthesis_agent(
+                SYNTHESIS_SUMMARIZE_PROMPT,
                 _summarize_user_prompt(
                     original_question, _format_material_block(batch)
                 ),
+                batch_file,
                 queue,
-                tool_servers=workspace,
             )
 
         try:
@@ -599,11 +681,45 @@ class ResearchAgent(BaseAgent):
             )
 
         block = _format_material_block(summary_items)
-        await self._spawn(
+        await self._run_synthesis_agent(
             SYNTHESIS_SYSTEM_PROMPT,
             _synthesis_user_prompt(original_question, block, from_summaries=True),
+            REPORT_FILENAME,
             queue,
-            tool_servers=workspace,
+        )
+
+    async def _run_synthesis_agent(
+        self,
+        system_prompt: str,
+        user_message: str,
+        output_path: str,
+        queue: asyncio.Queue,
+    ) -> None:
+        """Run a no-tool synthesis/summary agent and persist its text response.
+
+        Synthesis output is fundamentally text, and the model produces it most
+        reliably as a response (not via a write-tool call). So the agent gets no
+        tools, emits the report/summary as its response, and this outer code
+        writes the file. The response also streams live to the user."""
+        agent = await self._spawn(
+            system_prompt, user_message, queue, tool_servers=[]
+        )
+        content = agent.last_response
+        if not content:
+            logger.warning(
+                "chat_id=%s synthesis agent produced no response; %s not written",
+                self.chat_id,
+                output_path,
+            )
+            return
+        self._workspace_service.write_file(
+            self.workspace_id, output_path, content
+        )
+        logger.info(
+            "chat_id=%s wrote %s (%d chars)",
+            self.chat_id,
+            output_path,
+            len(content),
         )
 
     async def _spawn(
