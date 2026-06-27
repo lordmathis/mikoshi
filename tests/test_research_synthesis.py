@@ -1,4 +1,4 @@
-from mikoshi.agents.research import (
+from mikoshi.agents.research.helpers import (
     DEFAULT_CONTEXT_WINDOW,
     _batch_findings,
     _format_material_block,

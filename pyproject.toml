@@ -41,4 +41,5 @@ allow-direct-references = true
 dev = [
     "pytest>=9.0.3",
     "pytest-asyncio>=1.3.0",
+    "ruff>=0.15.20",
 ]
