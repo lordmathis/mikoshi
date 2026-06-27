@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { api, type ChatConfig } from "../lib/api";
 import { type Conversation } from "../components/sidebar";
 import { formatTimestamp } from "../lib/formatters";
@@ -30,7 +30,10 @@ export function useConversations() {
     refresh();
   }, [refresh]);
 
-  const createConversation = async (
+  const conversationsRef = useRef(conversations);
+  conversationsRef.current = conversations;
+
+  const createConversation = useCallback(async (
     overrideConfig?: Partial<ChatConfig>,
     workspaceId?: string | null
   ) => {
@@ -52,20 +55,20 @@ export function useConversations() {
     });
     await refresh();
     return chat.id;
-  };
+  }, [refresh]);
 
-  const deleteConversation = async (id: string) => {
+  const deleteConversation = useCallback(async (id: string) => {
     await api.deleteChat(id);
     await refresh();
-  };
+  }, [refresh]);
 
-  const branchConversation = async (id: string, messageId: string) => {
-    const currentChat = conversations.find((c) => c.id === id);
+  const branchConversation = useCallback(async (id: string, messageId: string) => {
+    const currentChat = conversationsRef.current.find((c) => c.id === id);
     const branchTitle = currentChat ? `${currentChat.title} (branch)` : undefined;
     const branchedChat = await api.branchChat(id, messageId, branchTitle);
     await refresh();
     return branchedChat.id;
-  };
+  }, [refresh]);
 
   return {
     conversations,

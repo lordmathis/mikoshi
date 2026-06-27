@@ -2,7 +2,7 @@ import { Bot, User, Brain, File, GitBranch, RotateCw, Edit2, Copy, Check, Link, 
 import { cn } from "../lib/utils";
 import ReactMarkdown from "react-markdown";
 import "highlight.js/styles/github-dark.css";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, memo } from "react";
 import { Button } from "./ui/button";
 import {
   Tooltip,
@@ -21,7 +21,7 @@ interface ChatMessageProps {
   isLastUserMessage?: boolean;
 }
 
-export function ChatMessage({ message, onBranch, onRetry, onEdit, isLastUserMessage }: ChatMessageProps) {
+export const ChatMessage = memo(function ChatMessage({ message, onBranch, onRetry, onEdit, isLastUserMessage }: ChatMessageProps) {
   const isUser = message.role === "user";
   const [showReasoning, setShowReasoning] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -395,4 +395,4 @@ export function ChatMessage({ message, onBranch, onRetry, onEdit, isLastUserMess
       )}
     </div>
   );
-}
+});

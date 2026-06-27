@@ -21,6 +21,7 @@ export function useMessages(
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [loadedChatId, setLoadedChatId] = useState<string | undefined>(undefined);
   const streamAbortRef = useRef<AbortController | null>(null);
   const [chatSettings, setChatSettings] = useState<ChatSettings>({
     baseModel: "",
@@ -50,6 +51,7 @@ export function useMessages(
     try {
       const chatData = await api.getChat(chatId);
       setMessages(chatData.messages);
+      setLoadedChatId(chatId);
       setChatSettings({
         baseModel: chatData.model || "",
         systemPrompt: chatData.system_prompt || "",
@@ -92,6 +94,7 @@ export function useMessages(
   useEffect(() => {
     if (!chatId) {
       setMessages([]);
+      setLoadedChatId(undefined);
       loadDefaultSettings();
       return;
     }
@@ -122,7 +125,7 @@ export function useMessages(
     return () => abortController.abort();
   }, [chatId, reloadMessages, loadDefaultSettings, handleEvent]);
 
-  const send = async (text: string, files: FileResource[]) => {
+  const send = useCallback(async (text: string, files: FileResource[]) => {
     if (!chatId) return;
 
     abortActiveStream();
@@ -162,9 +165,9 @@ export function useMessages(
       console.debug('[Messages] send() finally — setting isSending=false');
       setIsSending(false);
     }
-  };
+  }, [chatId, messages.length, abortActiveStream, handleEvent]);
 
-  const retry = async () => {
+  const retry = useCallback(async () => {
     if (!chatId) return;
     abortActiveStream();
     try {
@@ -176,9 +179,9 @@ export function useMessages(
     } finally {
       setIsSending(false);
     }
-  };
+  }, [chatId, abortActiveStream, reloadMessages, handleEvent]);
 
-  const edit = async (text: string) => {
+  const edit = useCallback(async (text: string) => {
     if (!chatId) return;
     abortActiveStream();
     try {
@@ -190,11 +193,13 @@ export function useMessages(
     } finally {
       setIsSending(false);
     }
-  };
+  }, [chatId, abortActiveStream, reloadMessages, handleEvent]);
+
+  const isStale = loadedChatId !== chatId;
 
   return {
-    messages,
-    isLoading,
+    messages: isStale ? [] : messages,
+    isLoading: isLoading || isStale,
     isSending,
     chatSettings,
     setChatSettings,

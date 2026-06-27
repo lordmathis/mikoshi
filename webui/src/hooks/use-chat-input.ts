@@ -35,6 +35,9 @@ export function useChatInput({
   const [isEditingMode, setIsEditingMode] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+
   const handleSend = useCallback(async () => {
     if (!inputValue.trim() || isSending) return;
 
@@ -54,14 +57,14 @@ export function useChatInput({
   }, [inputValue, isSending, getFiles, isEditingMode, onSend, onEdit, onSendComplete, onEditComplete]);
 
   const handleEdit = useCallback(() => {
-    const lastUserMessage = [...messages].reverse().find((msg) => msg.role === "user");
+    const lastUserMessage = [...messagesRef.current].reverse().find((msg) => msg.role === "user");
 
     if (!lastUserMessage) return;
 
     setInputValue(lastUserMessage.content);
     setIsEditingMode(true);
     textareaRef.current?.focus();
-  }, [messages]);
+  }, []);
 
   const cancelEdit = useCallback(() => {
     setInputValue("");

@@ -24,6 +24,7 @@ interface SidebarSegmentedControlProps {
   onSelectWorkspace: (id: string | null) => void;
 
   workspaceTree: FileNode | null;
+  treeWorkspaceId: string | null;
   onWorkspaceTreeUpdate: (tree: FileNode) => void;
   activeFilePath: string | null;
   onFileClick: (path: string) => void;
@@ -59,6 +60,7 @@ export function SidebarSegmentedControl({
   onSelectWorkspace,
 
   workspaceTree,
+  treeWorkspaceId,
   onWorkspaceTreeUpdate,
   activeFilePath,
   onFileClick,
@@ -150,6 +152,7 @@ export function SidebarSegmentedControl({
                 activeFilePath={activeFilePath}
                 onFileClick={onFileClick}
                 tree={workspaceTree}
+                treeWorkspaceId={treeWorkspaceId}
                 onTreeUpdate={onWorkspaceTreeUpdate}
                 onFileDeleted={onFileDeleted}
                 onFileRenamed={onFileRenamed}

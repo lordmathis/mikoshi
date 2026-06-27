@@ -2,7 +2,7 @@ import { Bot } from "lucide-react";
 import { ChatMessage } from "./chat-message";
 import { ToolMessage } from "./tool-message";
 import { ScrollArea } from "./ui/scroll-area";
-import { useEffect } from "react";
+import { useEffect, memo } from "react";
 import type { Message } from "../lib/api";
 
 interface MessagesListProps {
@@ -16,7 +16,7 @@ interface MessagesListProps {
   onEdit?: () => void;
 }
 
-export function MessagesList({
+export const MessagesList = memo(function MessagesList({
   messages,
   isLoading,
   isSending,
@@ -132,4 +132,4 @@ export function MessagesList({
       </div>
     </ScrollArea>
   );
-}
+});

@@ -8,6 +8,7 @@ interface DataTabProps {
   activeFilePath: string | null;
   onFileClick: (path: string) => void;
   tree: FileNode | null;
+  treeWorkspaceId: string | null;
   onTreeUpdate: (tree: FileNode) => void;
   onFileDeleted: (path: string) => void;
   onFileRenamed: (oldPath: string, newPath: string) => void;
@@ -18,11 +19,14 @@ export function DataTab({
   activeFilePath,
   onFileClick,
   tree,
+  treeWorkspaceId,
   onTreeUpdate,
   onFileDeleted,
   onFileRenamed,
 }: DataTabProps) {
   const [isLoading, setIsLoading] = useState(false);
+
+  const isTreeValid = !!tree && treeWorkspaceId === activeWorkspaceId;
 
   const refreshTree = useCallback(async () => {
     if (!activeWorkspaceId) return;
@@ -35,14 +39,14 @@ export function DataTab({
   }, [activeWorkspaceId, onTreeUpdate]);
 
   useEffect(() => {
-    if (!activeWorkspaceId) return;
+    if (!activeWorkspaceId || isTreeValid) return;
     setIsLoading(true);
     api
       .getWorkspaceTree(activeWorkspaceId)
       .then((root) => onTreeUpdate(root))
       .catch((err) => console.error("Failed to load workspace tree:", err))
       .finally(() => setIsLoading(false));
-  }, [activeWorkspaceId, onTreeUpdate]);
+  }, [activeWorkspaceId, isTreeValid, onTreeUpdate]);
 
   if (!activeWorkspaceId) {
     return (
@@ -52,7 +56,7 @@ export function DataTab({
     );
   }
 
-  if (isLoading && !tree) {
+  if (isLoading || !isTreeValid) {
     return (
       <div className="py-12 flex items-center justify-center">
         <Loader2 className="h-5 w-5 animate-spin text-primary/50" />

@@ -24,27 +24,37 @@ export function ChatView() {
   const [workspacesLoading, setWorkspacesLoading] = useState(true);
   const [workspaceRefreshTrigger, setWorkspaceRefreshTrigger] = useState(0);
   const [sidebarWorkspaceTree, setSidebarWorkspaceTree] = useState<FileNode | null>(null);
+  const [treeWorkspaceId, setTreeWorkspaceId] = useState<string | null>(null);
   const [fileIndex, setFileIndex] = useState<Map<string, string>>(new Map());
 
   const conversations = useConversations();
   const sidebar = useSidebar();
   const filePreview = useFilePreview(sidebar.activeWorkspaceId);
 
+  const activeWorkspaceIdRef = useRef(sidebar.activeWorkspaceId);
+  activeWorkspaceIdRef.current = sidebar.activeWorkspaceId;
+  const currentFilePathRef = useRef(filePreview.filePath);
+  currentFilePathRef.current = filePreview.filePath;
+  const refreshCurrentFileRef = useRef(filePreview.refreshCurrentFile);
+  refreshCurrentFileRef.current = filePreview.refreshCurrentFile;
+
   const handleWorkspaceChange = useCallback(
     async (paths: string[]) => {
-      const wsId = sidebar.activeWorkspaceId;
+      const wsId = activeWorkspaceIdRef.current;
       if (!wsId) return;
 
       try {
         const tree = await api.getWorkspaceTree(wsId);
         setSidebarWorkspaceTree(tree);
+        setTreeWorkspaceId(wsId);
       } catch {}
 
-      if (filePreview.filePath && paths.includes(filePreview.filePath)) {
-        filePreview.refreshCurrentFile();
+      const currentPath = currentFilePathRef.current;
+      if (currentPath && paths.includes(currentPath)) {
+        refreshCurrentFileRef.current();
       }
     },
-    [sidebar.activeWorkspaceId, filePreview.filePath, filePreview.refreshCurrentFile]
+    []
   );
 
   const messages = useMessages(currentConversationId, handleWorkspaceChange);
@@ -104,10 +114,18 @@ export function ChatView() {
     },
   });
 
-  const handleRetry = async () => {
+  const currentConversationIdRef = useRef(currentConversationId);
+  currentConversationIdRef.current = currentConversationId;
+
+  const handleRetry = useCallback(async () => {
     await messages.retry();
     conversations.refresh();
-  };
+  }, [messages.retry, conversations.refresh]);
+
+  const handleBranch = useCallback(async (messageId: string) => {
+    const id = await conversations.branchConversation(currentConversationIdRef.current!, messageId);
+    setCurrentConversationId(id);
+  }, [conversations.branchConversation]);
 
   const handleFileUploadClick = () => {
     fileInputRef.current?.click();
@@ -123,6 +141,7 @@ export function ChatView() {
     if (sidebar.activeWorkspaceId === id) {
       sidebar.setActiveWorkspace(null);
       setSidebarWorkspaceTree(null);
+      setTreeWorkspaceId(null);
     }
     conversations.refresh();
   };
@@ -135,6 +154,7 @@ export function ChatView() {
 
   const handleSidebarTreeUpdate = useCallback((tree: FileNode) => {
     setSidebarWorkspaceTree(tree);
+    setTreeWorkspaceId(activeWorkspaceIdRef.current);
   }, []);
 
   const showPreview = filePreview.filePath !== null;
@@ -164,6 +184,7 @@ export function ChatView() {
         activeWorkspaceId={sidebar.activeWorkspaceId}
         onSelectWorkspace={sidebar.setActiveWorkspace}
         workspaceTree={sidebarWorkspaceTree}
+        treeWorkspaceId={treeWorkspaceId}
         onWorkspaceTreeUpdate={handleSidebarTreeUpdate}
         activeFilePath={filePreview.filePath}
         onFileClick={filePreview.openFile}
@@ -174,6 +195,7 @@ export function ChatView() {
         onClearFilter={() => {
           sidebar.setActiveWorkspace(null);
           setSidebarWorkspaceTree(null);
+          setTreeWorkspaceId(null);
           filePreview.closePreview();
         }}
         workspaces={workspaces}
@@ -216,10 +238,7 @@ export function ChatView() {
               isSending={messages.isSending}
               currentConversationId={currentConversationId}
               messagesEndRef={messagesEndRef}
-              onBranch={async (messageId) => {
-                const id = await conversations.branchConversation(currentConversationId!, messageId);
-                setCurrentConversationId(id);
-              }}
+              onBranch={handleBranch}
               onRetry={handleRetry}
               onEdit={chatInput.handleEdit}
             />

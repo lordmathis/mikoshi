@@ -1,6 +1,6 @@
 import { Wrench } from "lucide-react";
 import { cn } from "../lib/utils";
-import { useState, useMemo } from "react";
+import { useState, useMemo, memo } from "react";
 import ReactMarkdown from "react-markdown";
 import "highlight.js/styles/github-dark.css";
 import type { Message } from "../lib/api";
@@ -20,7 +20,7 @@ function extractDisplayContent(content: string): string {
   return content;
 }
 
-export function ToolMessage({ message }: ToolMessageProps) {
+export const ToolMessage = memo(function ToolMessage({ message }: ToolMessageProps) {
   const [showToolResult, setShowToolResult] = useState(false);
   const displayContent = useMemo(() => extractDisplayContent(message.content), [message.content]);
 
@@ -106,4 +106,4 @@ export function ToolMessage({ message }: ToolMessageProps) {
       </div>
     </div>
   );
-}
+});
