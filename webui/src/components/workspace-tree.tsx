@@ -11,6 +11,7 @@ interface WorkspaceTreeProps {
   onRefreshTree: () => Promise<void>;
   onFileDeleted: (path: string) => void;
   onFileRenamed: (oldPath: string, newPath: string) => void;
+  hasRepo?: boolean;
 }
 
 function TreeNode({
@@ -245,7 +246,7 @@ function TreeNode({
   );
 }
 
-export function WorkspaceTree({ tree, activeFilePath, onFileClick, workspaceId, onRefreshTree, onFileDeleted, onFileRenamed }: WorkspaceTreeProps) {
+export function WorkspaceTree({ tree, activeFilePath, onFileClick, workspaceId, onRefreshTree, onFileDeleted, onFileRenamed, hasRepo = true }: WorkspaceTreeProps) {
   const [loadingPaths, setLoadingPaths] = useState<Set<string>>(new Set());
   const [localTree, setLocalTree] = useState<FileNode | null>(tree);
   const [isCreating, setIsCreating] = useState(false);
@@ -420,38 +421,42 @@ export function WorkspaceTree({ tree, activeFilePath, onFileClick, workspaceId, 
         >
           <Plus className="h-3.5 w-3.5 text-foreground" />
         </button>
-        <button
-          className={btnClass("commit")}
-          onClick={() => setIsCommitting(true)}
-          disabled={git.isLoading}
-          title="Commit"
-        >
-          <Check className="h-3.5 w-3.5 text-foreground" />
-        </button>
-        <button
-          className={btnClass("pull")}
-          onClick={handleGitPull}
-          disabled={git.isLoading}
-          title={git.status ? `Pull (branch: ${git.status.branch})` : "Pull"}
-        >
-          {git.isLoading && flashBtn !== "pull" && shakeBtn !== "pull" ? (
-            <Loader2 className="h-3.5 w-3.5 text-foreground animate-spin" />
-          ) : (
-            <ArrowDownFromLine className="h-3.5 w-3.5 text-foreground" />
-          )}
-        </button>
-        <button
-          className={btnClass("push")}
-          onClick={handleGitPush}
-          disabled={git.isLoading}
-          title={git.status ? `Push (branch: ${git.status.branch})` : "Push"}
-        >
-          {git.isLoading && flashBtn !== "push" && shakeBtn !== "push" ? (
-            <Loader2 className="h-3.5 w-3.5 text-foreground animate-spin" />
-          ) : (
-            <ArrowUpFromLine className="h-3.5 w-3.5 text-foreground" />
-          )}
-        </button>
+        {hasRepo && (
+          <>
+            <button
+              className={btnClass("commit")}
+              onClick={() => setIsCommitting(true)}
+              disabled={git.isLoading}
+              title="Commit"
+            >
+              <Check className="h-3.5 w-3.5 text-foreground" />
+            </button>
+            <button
+              className={btnClass("pull")}
+              onClick={handleGitPull}
+              disabled={git.isLoading}
+              title={git.status ? `Pull (branch: ${git.status.branch})` : "Pull"}
+            >
+              {git.isLoading && flashBtn !== "pull" && shakeBtn !== "pull" ? (
+                <Loader2 className="h-3.5 w-3.5 text-foreground animate-spin" />
+              ) : (
+                <ArrowDownFromLine className="h-3.5 w-3.5 text-foreground" />
+              )}
+            </button>
+            <button
+              className={btnClass("push")}
+              onClick={handleGitPush}
+              disabled={git.isLoading}
+              title={git.status ? `Push (branch: ${git.status.branch})` : "Push"}
+            >
+              {git.isLoading && flashBtn !== "push" && shakeBtn !== "push" ? (
+                <Loader2 className="h-3.5 w-3.5 text-foreground animate-spin" />
+              ) : (
+                <ArrowUpFromLine className="h-3.5 w-3.5 text-foreground" />
+              )}
+            </button>
+          </>
+        )}
       </div>
       {isCommitting && (
         <div className="flex items-center gap-2 py-1 px-2 rounded-md bg-accent/50">

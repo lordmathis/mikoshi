@@ -12,6 +12,7 @@ def run_migrations(engine):
         _migrate_tool_call_id_column(conn)
         _migrate_file_source_column(conn)
         _migrate_chat_workspace_id_column(conn)
+        _migrate_workspace_repo_url_nullable(conn)
         conn.commit()
 
 
@@ -77,3 +78,49 @@ def _migrate_chat_workspace_id_column(conn):
         logger.info("Column workspace_id added to chats table.")
     else:
         logger.debug("Column workspace_id already exists in chats table.")
+
+
+def _migrate_workspace_repo_url_nullable(conn):
+    inspector = inspect(conn)
+
+    tables = inspector.get_table_names()
+    if "workspaces" not in tables:
+        return
+
+    columns = [col for col in inspector.get_columns("workspaces")]
+    repo_url_col = next((c for c in columns if c["name"] == "repo_url"), None)
+    if repo_url_col is None or repo_url_col.get("nullable", True):
+        logger.debug("Column repo_url already nullable (or absent) in workspaces table.")
+        return
+
+    logger.info("Making workspaces.repo_url nullable...")
+    conn.execute(text("PRAGMA foreign_keys=OFF"))
+    conn.execute(
+        text(
+            """
+            CREATE TABLE _workspaces_new (
+                id VARCHAR PRIMARY KEY,
+                name VARCHAR,
+                repo_url VARCHAR,
+                local_path VARCHAR,
+                connector VARCHAR,
+                created_at DATETIME,
+                updated_at DATETIME
+            )
+            """
+        )
+    )
+    conn.execute(
+        text(
+            """
+            INSERT INTO _workspaces_new
+                (id, name, repo_url, local_path, connector, created_at, updated_at)
+            SELECT id, name, repo_url, local_path, connector, created_at, updated_at
+            FROM workspaces
+            """
+        )
+    )
+    conn.execute(text("DROP TABLE workspaces"))
+    conn.execute(text("ALTER TABLE _workspaces_new RENAME TO workspaces"))
+    conn.execute(text("PRAGMA foreign_keys=ON"))
+    logger.info("Column repo_url is now nullable in workspaces table.")

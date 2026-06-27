@@ -12,6 +12,7 @@ interface DataTabProps {
   onTreeUpdate: (tree: FileNode) => void;
   onFileDeleted: (path: string) => void;
   onFileRenamed: (oldPath: string, newPath: string) => void;
+  hasRepo: boolean;
 }
 
 export function DataTab({
@@ -23,6 +24,7 @@ export function DataTab({
   onTreeUpdate,
   onFileDeleted,
   onFileRenamed,
+  hasRepo,
 }: DataTabProps) {
   const [isLoading, setIsLoading] = useState(false);
 
@@ -74,6 +76,7 @@ export function DataTab({
         onRefreshTree={refreshTree}
         onFileDeleted={onFileDeleted}
         onFileRenamed={onFileRenamed}
+        hasRepo={hasRepo}
       />
     </div>
   );

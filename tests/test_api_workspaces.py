@@ -120,6 +120,17 @@ class TestCreateWorkspace:
         assert resp.status_code == 200
         assert resp.json()["connector"] == "github"
 
+    @pytest.mark.asyncio
+    async def test_create_without_repo_url(self, client, db):
+        resp = await client.post(
+            "/api/workspaces",
+            json={"name": "research-only"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["name"] == "research-only"
+        assert data["repo_url"] is None
+
 
 class TestListWorkspaces:
     @pytest.mark.asyncio
@@ -308,3 +319,18 @@ class TestGitEndpoints:
     async def test_git_not_found_workspace(self, client):
         resp = await client.get("/api/workspaces/nonexistent/git/status")
         assert resp.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_git_status_rejected_without_repo(self, client, db):
+        ws = db.create_workspace(name="ws")
+        resp = await client.get(f"/api/workspaces/{ws.id}/git/status")
+        assert resp.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_git_commit_rejected_without_repo(self, client, db):
+        ws = db.create_workspace(name="ws")
+        resp = await client.post(
+            f"/api/workspaces/{ws.id}/git/commit",
+            json={"message": "msg"},
+        )
+        assert resp.status_code == 400

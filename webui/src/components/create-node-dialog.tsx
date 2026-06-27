@@ -45,14 +45,15 @@ export function CreateNodeDialog({ open, onOpenChange, onCreated }: CreateNodeDi
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !repoUrl.trim()) return;
+    if (!name.trim()) return;
 
     setIsCreating(true);
     setError(null);
     try {
+      const trimmedRepo = repoUrl.trim();
       const ws = await api.createWorkspace({
         name: name.trim(),
-        repo_url: repoUrl.trim(),
+        repo_url: trimmedRepo ? trimmedRepo : undefined,
         connector: connector === "__none__" ? undefined : connector,
       });
       onCreated(ws);
@@ -72,7 +73,7 @@ export function CreateNodeDialog({ open, onOpenChange, onCreated }: CreateNodeDi
             Spawn Node
           </DialogTitle>
           <DialogDescription className="cp-label">
-            Clone a repository to create a new workspace node.
+            Create a new workspace node. Add a repo URL to clone, or leave it empty for a local-only workspace.
           </DialogDescription>
         </DialogHeader>
 
@@ -89,7 +90,7 @@ export function CreateNodeDialog({ open, onOpenChange, onCreated }: CreateNodeDi
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="repo-url">Repo URL</Label>
+            <Label htmlFor="repo-url">Repo URL (optional)</Label>
             <Input
               id="repo-url"
               value={repoUrl}
@@ -135,12 +136,12 @@ export function CreateNodeDialog({ open, onOpenChange, onCreated }: CreateNodeDi
             </Button>
             <Button
               type="submit"
-              disabled={isCreating || !name.trim() || !repoUrl.trim()}
+              disabled={isCreating || !name.trim()}
             >
               {isCreating ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Cloning...
+                  {repoUrl.trim() ? "Cloning..." : "Creating..."}
                 </>
               ) : (
                 "SPAWN_NODE"

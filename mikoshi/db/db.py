@@ -487,7 +487,7 @@ class Database:
         return ids
 
     def create_workspace(
-        self, name: str, repo_url: str, connector: Optional[str] = None
+        self, name: str, repo_url: Optional[str] = None, connector: Optional[str] = None
     ) -> Workspace:
         with self.SessionLocal() as session:
             workspace = Workspace(

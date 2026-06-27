@@ -141,7 +141,7 @@ export interface FileNode {
 export interface Workspace {
   id: string;
   name: string;
-  repo_url: string;
+  repo_url: string | null;
   connector: string | null;
   created_at: string;
   updated_at: string;
@@ -458,7 +458,7 @@ class ApiClient {
     return this.request(`/workspaces/${id}`);
   }
 
-  async createWorkspace(data: { name: string; repo_url: string; connector?: string }): Promise<Workspace> {
+  async createWorkspace(data: { name: string; repo_url?: string | null; connector?: string }): Promise<Workspace> {
     return this.request('/workspaces', {
       method: 'POST',
       body: JSON.stringify(data),

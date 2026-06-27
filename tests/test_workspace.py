@@ -157,6 +157,13 @@ class TestWorkspaceOps:
             args = mock_run.call_args[0][0]
             assert "-c" not in args
 
+    def test_initialize_workspace_no_repo_url_skips_clone(self, ws):
+        with patch("mikoshi.workspace.subprocess.run") as mock_run:
+            ws.initialize_workspace("empty-ws", None)
+            mock_run.assert_not_called()
+        root = os.path.join(ws._workspaces_dir, "empty-ws")
+        assert os.path.isdir(root)
+
 
 class TestFileReadWrite:
     def test_write_and_read(self, ws):

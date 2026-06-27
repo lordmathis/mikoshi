@@ -68,6 +68,10 @@ def _run_git(cwd: str, args: list[str], timeout: int = 30) -> str:
     return output if output else result.stderr.strip() or "(no output)"
 
 
+def _has_git_repo(root: str) -> bool:
+    return os.path.isdir(os.path.join(root, ".git"))
+
+
 def _is_binary(file_path: str) -> bool:
     try:
         with open(file_path, "rb") as f:
@@ -636,6 +640,8 @@ class WorkspaceToolSetHandler(ToolSetHandler):
     )
     def git_status(self, context: ToolCallContext) -> str:
         root = _require_workspace(context)
+        if not _has_git_repo(root):
+            return "No git repository in this workspace."
         return _run_git(root, ["status", "--porcelain"])
 
     @tool(
@@ -647,6 +653,8 @@ class WorkspaceToolSetHandler(ToolSetHandler):
     )
     def git_diff(self, context: ToolCallContext) -> str:
         root = _require_workspace(context)
+        if not _has_git_repo(root):
+            return "No git repository in this workspace."
         return _run_git(root, ["diff"])
 
     @tool(
@@ -665,6 +673,9 @@ class WorkspaceToolSetHandler(ToolSetHandler):
     def git_commit(self, message: str, context: ToolCallContext) -> str:
         if not context.workspace:
             return "Error: No workspace linked to this chat."
+        root = _resolve_root(context)
+        if not _has_git_repo(root):
+            return "No git repository in this workspace."
         svc = self._get_git_service(context)
         ws = context.workspace
         result = svc.commit(message, ws.git_user_name, ws.git_user_email)
@@ -682,6 +693,9 @@ class WorkspaceToolSetHandler(ToolSetHandler):
         },
     )
     def git_pull(self, context: ToolCallContext) -> str:
+        root = _require_workspace(context)
+        if not _has_git_repo(root):
+            return "No git repository in this workspace."
         svc = self._get_git_service(context)
         auth_args = self._get_auth_git_args(context)
         result = svc.pull(auth_args)
@@ -697,6 +711,9 @@ class WorkspaceToolSetHandler(ToolSetHandler):
         },
     )
     def git_push(self, context: ToolCallContext) -> str:
+        root = _require_workspace(context)
+        if not _has_git_repo(root):
+            return "No git repository in this workspace."
         svc = self._get_git_service(context)
         auth_args = self._get_auth_git_args(context)
         result = svc.push(auth_args)

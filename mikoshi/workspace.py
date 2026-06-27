@@ -61,7 +61,7 @@ class WorkspaceService:
     def initialize_workspace(
         self,
         workspace_id: str,
-        repo_url: str,
+        repo_url: Optional[str] = None,
         connector_name: Optional[str] = None,
     ):
         target_dir = self._workspace_root(workspace_id)
@@ -69,6 +69,10 @@ class WorkspaceService:
             raise WorkspaceError(f"Workspace directory already exists: {target_dir}")
 
         os.makedirs(target_dir, exist_ok=True)
+
+        if not repo_url:
+            logger.info(f"Initialized empty workspace {workspace_id}")
+            return
 
         git_args = []
         if connector_name:

@@ -20,7 +20,7 @@ export function ChatView() {
   const connectorDialog = useConnectorDialog();
   const [currentConversationId, setCurrentConversationId] = useState<string | undefined>();
   const [isCreateNodeOpen, setIsCreateNodeOpen] = useState(false);
-  const [workspaces, setWorkspaces] = useState<{ id: string; name: string }[]>([]);
+  const [workspaces, setWorkspaces] = useState<{ id: string; name: string; repo_url: string | null }[]>([]);
   const [workspacesLoading, setWorkspacesLoading] = useState(true);
   const [workspaceRefreshTrigger, setWorkspaceRefreshTrigger] = useState(0);
   const [sidebarWorkspaceTree, setSidebarWorkspaceTree] = useState<FileNode | null>(null);
@@ -77,7 +77,7 @@ export function ChatView() {
   useEffect(() => {
     setWorkspacesLoading(true);
     api.listWorkspaces().then((res) => {
-      setWorkspaces(res.workspaces.map((w) => ({ id: w.id, name: w.name })));
+      setWorkspaces(res.workspaces.map((w) => ({ id: w.id, name: w.name, repo_url: w.repo_url })));
     }).catch(() => {}).finally(() => setWorkspacesLoading(false));
   }, [workspaceRefreshTrigger]);
 
@@ -159,6 +159,10 @@ export function ChatView() {
 
   const showPreview = filePreview.filePath !== null;
 
+  const activeWorkspaceHasRepo = !!workspaces.find(
+    (w) => w.id === sidebar.activeWorkspaceId
+  )?.repo_url;
+
   return (
     <div className="relative flex h-screen" style={{ background: "var(--color-background)" }}>
       <SidebarSegmentedControl
@@ -190,6 +194,7 @@ export function ChatView() {
         onFileClick={filePreview.openFile}
         onFileDeleted={filePreview.handleFileDeleted}
         onFileRenamed={filePreview.handleFileRenamed}
+        activeWorkspaceHasRepo={activeWorkspaceHasRepo}
         onNewWorkspace={handleNewWorkspace}
         onDeleteWorkspace={handleDeleteWorkspace}
         onClearFilter={() => {

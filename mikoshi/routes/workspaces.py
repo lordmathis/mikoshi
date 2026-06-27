@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 class CreateWorkspaceRequest(BaseModel):
     name: str
-    repo_url: str
+    repo_url: Optional[str] = None
     connector: Optional[str] = None
 
 
@@ -191,6 +191,13 @@ def _build_git_service(request: Request, workspace_id: str) -> tuple[GitService,
     workspace = _require_workspace(database, workspace_id)
 
     root = workspace_service.get_workspace_path(workspace_id)
+
+    if not workspace.repo_url:
+        raise HTTPException(
+            status_code=400,
+            detail="No git repository configured for this workspace",
+        )
+
     svc = GitService(root, workspace_id)
 
     auth_args: list[str] = []

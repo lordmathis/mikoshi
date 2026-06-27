@@ -21,7 +21,7 @@ class Workspace(Base):
     __tablename__ = "workspaces"
     id: Mapped[str] = mapped_column(String, primary_key=True)
     name: Mapped[str] = mapped_column(String)
-    repo_url: Mapped[str] = mapped_column(String)
+    repo_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     local_path: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     connector: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(UTC))

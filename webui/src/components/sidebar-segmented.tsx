@@ -30,6 +30,7 @@ interface SidebarSegmentedControlProps {
   onFileClick: (path: string) => void;
   onFileDeleted: (path: string) => void;
   onFileRenamed: (oldPath: string, newPath: string) => void;
+  activeWorkspaceHasRepo: boolean;
 
   onNewWorkspace: () => void;
   onDeleteWorkspace: (id: string) => void;
@@ -66,6 +67,7 @@ export function SidebarSegmentedControl({
   onFileClick,
   onFileDeleted,
   onFileRenamed,
+  activeWorkspaceHasRepo,
 
   onNewWorkspace,
   onDeleteWorkspace,
@@ -156,6 +158,7 @@ export function SidebarSegmentedControl({
                 onTreeUpdate={onWorkspaceTreeUpdate}
                 onFileDeleted={onFileDeleted}
                 onFileRenamed={onFileRenamed}
+                hasRepo={activeWorkspaceHasRepo}
               />
             )}
           </div>
