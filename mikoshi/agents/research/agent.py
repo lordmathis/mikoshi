@@ -21,6 +21,7 @@ from mikoshi.agents.research.stages import (
     Synthesizer,
 )
 from mikoshi.agents.streaming import STREAM_DONE, StreamEvent
+from mikoshi.tools.workspace import _workspace_result
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +73,8 @@ class ResearchAgent(BaseAgent):
     max_inner_iterations: int = 15
     context_window: Optional[int] = None
 
+    _active_queue: Optional[asyncio.Queue] = None
+
     async def _get_iteration_context(
         self, message: str
     ) -> List[ChatCompletionMessageParam]:
@@ -90,6 +93,7 @@ class ResearchAgent(BaseAgent):
         return {}
 
     async def _loop(self, message: str, queue: asyncio.Queue) -> Dict[str, Any]:
+        self._active_queue = queue
         try:
             plan = self._read_plan()
             if not plan:
@@ -102,9 +106,7 @@ class ResearchAgent(BaseAgent):
                     return {}
                 plan = self._read_plan()
             elif self.file_exists(REPORT_FILENAME):
-                await Planner(
-                    self, message, plan, self._read_report()
-                ).apply(queue)
+                await Planner(self, message, plan, self._read_report()).apply(queue)
                 plan = self._read_plan() or plan
 
             original_question = _parse_title(plan) or message
@@ -126,9 +128,9 @@ class ResearchAgent(BaseAgent):
                 if _parse_pending_tasks(plan) and findings_path:
                     findings = self.read_file(findings_path)
                     if findings:
-                        await Replanner(
-                            self, original_question, plan, findings
-                        ).apply(queue)
+                        await Replanner(self, original_question, plan, findings).apply(
+                            queue
+                        )
 
             self._reconcile_plan()
             await Synthesizer(self, original_question).apply(queue)
@@ -143,6 +145,8 @@ class ResearchAgent(BaseAgent):
             )
             await self._emit(queue, StreamEvent(type="error", data={"message": str(e)}))
             await self._emit(queue, STREAM_DONE)
+        finally:
+            self._active_queue = None
         return {}
 
     # --- file-state ops (source of truth for control flow) ---
@@ -175,6 +179,24 @@ class ResearchAgent(BaseAgent):
         if not self.workspace_id or not self._workspace_service:
             return
         self._workspace_service.write_file(self.workspace_id, path, content)
+        self._emit_workspace_change(path)
+
+    def _emit_workspace_change(self, path: str) -> None:
+        """Emit the same `__workspace` tool message the workspace write tool
+        produces, so the FE reloads the file tree and the open file. Mirrors
+        `BaseAgent._execute_tool_calls` — direct writes here would otherwise
+        bypass the streaming layer (e.g. REPORT.md, RESEARCH_PLAN.md)."""
+        queue = self._active_queue
+        if queue is None:
+            return
+        msg = self.db.save_message(
+            self.chat_id, "tool", _workspace_result(f"Wrote {path}", paths=[path])
+        )
+        asyncio.create_task(
+            self._emit(
+                queue, StreamEvent(type="message", data=self._format_message(msg))
+            )
+        )
 
     def list_files(self) -> List[str]:
         if not self.workspace_id or not self._workspace_service:
