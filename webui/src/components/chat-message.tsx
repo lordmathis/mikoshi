@@ -269,7 +269,7 @@ export const ChatMessage = memo(function ChatMessage({ message, onBranch, onRetr
           </div>
         )}
         
-        <div className="text-foreground/90 font-sans" style={{ lineHeight: '1.6' }}>
+        <div className="text-foreground/90 font-sans break-words" style={{ lineHeight: '1.6', overflowWrap: 'anywhere' }}>
           <ReactMarkdown
             remarkPlugins={REMARK_PLUGINS}
             rehypePlugins={REHYPE_PLUGINS}

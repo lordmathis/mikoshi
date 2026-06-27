@@ -64,7 +64,7 @@ export const markdownComponents = {
   ),
   code: ({ inline, className, children, ...props }: any) => {
     return inline ? (
-      <code className="bg-primary/[0.08] px-1.5 py-0.5 text-xs text-primary/90" {...props}>
+      <code className="bg-primary/[0.08] px-1.5 py-0.5 text-xs text-primary/90 break-words" {...props}>
         {children}
       </code>
     ) : (
@@ -73,6 +73,9 @@ export const markdownComponents = {
       </code>
     );
   },
+  pre: ({ children, ...props }: any) => (
+    <pre className="overflow-x-auto mb-4 text-sm" {...props}>{children}</pre>
+  ),
   a: ({ children, href, ...props }: any) => (
     <a
       href={href}

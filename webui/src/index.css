@@ -80,6 +80,10 @@
   border-color: var(--color-border);
 }
 
+[data-radix-scroll-area-viewport] > div {
+  display: block !important;
+}
+
 body {
   margin: 0;
   background-color: var(--color-background);
