@@ -49,6 +49,7 @@ class StageContext(Protocol):
         *,
         web: bool = False,
         tool_servers: Optional[List[str]] = None,
+        phase: Optional[str] = None,
     ) -> "_InnerResearchAgent": ...
 
     def file_exists(self, path: str) -> bool: ...
@@ -82,6 +83,7 @@ class Stage:
         *,
         tool_servers: Optional[List[str]],
         web: bool = False,
+        phase: str = "",
     ):
         self.ctx = ctx
         self.system_prompt = system_prompt
@@ -90,6 +92,7 @@ class Stage:
         self.artifact_path = artifact_path
         self.tool_servers = tool_servers
         self.web = web
+        self.phase = phase
 
     def _nudge(self) -> str:
         return NUDGE_PROMPT_TEMPLATE.format(file=self.artifact_path)
@@ -101,6 +104,7 @@ class Stage:
             queue,
             web=self.web,
             tool_servers=self.tool_servers,
+            phase=self.phase,
         )
 
     async def apply(self, queue: asyncio.Queue) -> Optional[str]:
@@ -154,6 +158,7 @@ class Planner(Stage):
             success=(lambda: True) if is_extend else (lambda: ctx.file_exists(PLAN_FILENAME)),
             artifact_path=PLAN_FILENAME,
             tool_servers=[WORKSPACE_SERVER_NAME],
+            phase="research_plan",
         )
 
 
@@ -182,6 +187,7 @@ class Researcher(Stage):
             artifact_path=findings_file,
             tool_servers=None,
             web=True,
+            phase=f"query_{task_idx:02d}",
         )
 
 
@@ -220,6 +226,7 @@ class Replanner(Stage):
             success=lambda: True,
             artifact_path=PLAN_FILENAME,
             tool_servers=[WORKSPACE_SERVER_NAME],
+            phase="replan",
         )
 
 
@@ -284,6 +291,7 @@ class Synthesizer:
                 ),
                 REPORT_FILENAME,
                 queue,
+                phase="synthesize",
             )
             return
 
@@ -304,6 +312,7 @@ class Synthesizer:
                 ),
                 batch_file,
                 queue,
+                phase="summarize",
             )
 
         batch_paths = sorted(
@@ -348,6 +357,7 @@ class Synthesizer:
             ),
             REPORT_FILENAME,
             queue,
+            phase="synthesize",
         )
 
     async def _run_synthesis_agent(
@@ -356,6 +366,8 @@ class Synthesizer:
         user_message: str,
         output_path: str,
         queue: asyncio.Queue,
+        *,
+        phase: str = "synthesize",
     ) -> None:
         """Run a no-tool synthesis/summary agent and persist its text response.
 
@@ -364,7 +376,7 @@ class Synthesizer:
         tools, emits the report/summary as its response, and this outer code
         writes the file. The response also streams live to the user."""
         agent = await self.ctx.spawn(
-            system_prompt, user_message, queue, tool_servers=[]
+            system_prompt, user_message, queue, tool_servers=[], phase=phase
         )
         content = agent.last_response
         if not content:
