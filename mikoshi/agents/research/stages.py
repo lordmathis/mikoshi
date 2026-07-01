@@ -65,9 +65,9 @@ class StageProtocol(Protocol):
 
 
 class Stage:
-    """Shared spawn -> nudge -> retry workhorse.
+    """Shared spawn -> nudge workhorse.
 
-    `success()` decides whether each later step runs. A predicate that always
+    `success()` decides whether the nudge runs. A predicate that always
     returns True collapses the stage to a single best-effort spawn (used by
     Planner-extend and Replanner, where not producing output is valid).
     """
@@ -114,15 +114,6 @@ class Stage:
             self.artifact_path,
         )
         await agent._loop(self._nudge(), queue=_FilteredQueue(queue))
-        if self.success():
-            return self.artifact_path
-
-        logger.warning(
-            "chat_id=%s %s still missing after nudge, fresh retry",
-            self.ctx.chat_id,
-            self.artifact_path,
-        )
-        await self._spawn(queue)
         return self.artifact_path if self.success() else None
 
 
@@ -139,7 +130,7 @@ def _planner_message(message: str, plan: Optional[str], report: Optional[str]) -
 
 class Planner(Stage):
     """Planner stage. With plan/report supplied -> extend (single best-effort
-    spawn appending follow-up tasks); without -> create (spawn/nudge/retry until
+    spawn appending follow-up tasks); without -> create (spawn/nudge until
     RESEARCH_PLAN.md exists)."""
 
     def __init__(
@@ -168,7 +159,7 @@ class Planner(Stage):
 
 class Researcher(Stage):
     """Researcher stage for one plan task. Spawns with web tools and the
-    inherited orchestrator tool servers; recovers via nudge/retry if the
+    inherited orchestrator tool servers; recovers via a single nudge if the
     findings file is not written."""
 
     def __init__(

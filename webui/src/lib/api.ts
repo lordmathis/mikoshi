@@ -39,7 +39,7 @@ export interface ConnectorEntry {
 
 export interface Message {
   id: string;
-  role: 'user' | 'assistant' | 'system' | 'tool';
+  role: 'user' | 'assistant' | 'system' | 'tool' | 'error';
   content: string;
   reasoning_content?: string | null;
   tool_calls?: Array<{

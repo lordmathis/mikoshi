@@ -85,7 +85,16 @@ export function useMessages(
       } else if (event.type === "error") {
         const errMsg = (event.data as { message: string }).message;
         console.error('[Messages] error event:', errMsg);
-        throw new Error(errMsg);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `error-${Date.now()}`,
+            role: "error",
+            content: errMsg,
+            sequence: prev.length,
+            created_at: new Date().toISOString(),
+          } as Message,
+        ]);
       }
     },
     [onWorkspaceChange]

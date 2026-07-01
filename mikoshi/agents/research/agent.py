@@ -98,11 +98,10 @@ class ResearchAgent(BaseAgent):
             plan = self._read_plan()
             if not plan:
                 if not await Planner(self, message).apply(queue):
-                    logger.error(
-                        "chat_id=%s failed to create research plan",
-                        self.chat_id,
+                    await self._emit_error(
+                        queue,
+                        "Couldn't create a research plan. Try rephrasing your request.",
                     )
-                    await self._emit(queue, STREAM_DONE)
                     return {}
                 plan = self._read_plan()
             elif self.file_exists(REPORT_FILENAME):
@@ -122,6 +121,12 @@ class ResearchAgent(BaseAgent):
                 findings_path = await Researcher(
                     self, task_desc, task_idx, original_question
                 ).apply(queue)
+                if not findings_path:
+                    await self._emit_error(
+                        queue,
+                        f"Research task failed and aborted: {task_desc}",
+                    )
+                    return {}
 
                 self._reconcile_plan()
                 plan = self._read_plan() or ""
@@ -134,6 +139,11 @@ class ResearchAgent(BaseAgent):
 
             self._reconcile_plan()
             await Synthesizer(self, original_question).apply(queue)
+            if not self.file_exists(REPORT_FILENAME):
+                await self._emit_error(
+                    queue, "Couldn't synthesize the research report."
+                )
+                return {}
 
             await self._emit(queue, STREAM_DONE)
         except Exception as e:
@@ -148,6 +158,16 @@ class ResearchAgent(BaseAgent):
         finally:
             self._active_queue = None
         return {}
+
+    async def _emit_error(self, queue: asyncio.Queue, message: str) -> None:
+        """Surface a user-visible error and end the turn.
+
+        Soft failures (a stage producing no artifact) aren't exceptions, so
+        they bypass `_loop`'s except block; this gives them the same
+        error-event + done treatment hard exceptions get."""
+        logger.error("chat_id=%s %s", self.chat_id, message)
+        await self._emit(queue, StreamEvent(type="error", data={"message": message}))
+        await self._emit(queue, STREAM_DONE)
 
     # --- file-state ops (source of truth for control flow) ---
 

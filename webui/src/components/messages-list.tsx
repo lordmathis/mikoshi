@@ -1,4 +1,4 @@
-import { Bot } from "lucide-react";
+import { Bot, AlertTriangle } from "lucide-react";
 import { ChatMessage } from "./chat-message";
 import { ToolMessage } from "./tool-message";
 import { ScrollArea } from "./ui/scroll-area";
@@ -70,6 +70,10 @@ export const MessagesList = memo(function MessagesList({
               if (message.role === "tool") {
                 return <ToolMessage key={message.id} message={message} />;
               }
+
+              if (message.role === "error") {
+                return <ErrorMessage key={message.id} message={message} />;
+              }
               
               return (
                 <ChatMessage 
@@ -133,3 +137,44 @@ export const MessagesList = memo(function MessagesList({
     </ScrollArea>
   );
 });
+
+function ErrorMessage({ message }: { message: Message }) {
+  return (
+    <div
+      className="group relative flex gap-4 px-4 py-6 sm:px-6 bg-cp-surface4 overflow-hidden cp-cut-z-16"
+      style={{ border: "1px solid rgb(var(--cp-rgb-red) / 0.4)" }}
+    >
+      <div
+        className="absolute top-0 left-0 w-[16px] h-[16px] opacity-40 cp-tri-tr"
+        style={{ background: 'var(--color-cp-red)' }}
+      />
+      <div className="flex-shrink-0 relative z-10">
+        <div
+          className="flex h-8 w-8 items-center justify-center cp-cut-8"
+          style={{ background: "rgb(var(--cp-rgb-red) / 0.15)" }}
+        >
+          <AlertTriangle className="h-4 w-4 text-[var(--color-cp-red)]" />
+        </div>
+      </div>
+      <div className="flex-1 space-y-2 overflow-hidden relative z-10">
+        <p
+          className="font-bold leading-none"
+          style={{
+            color: 'var(--color-cp-red)',
+            fontSize: '14px',
+            letterSpacing: '0.16em',
+            textTransform: 'uppercase',
+          }}
+        >
+          // ERROR
+        </p>
+        <div
+          className="text-foreground/90 font-sans break-words"
+          style={{ lineHeight: '1.6', overflowWrap: 'anywhere' }}
+        >
+          {message.content}
+        </div>
+      </div>
+    </div>
+  );
+}
