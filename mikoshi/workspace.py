@@ -7,6 +7,7 @@ from typing import List, Optional
 
 from mikoshi.config import ConnectorsConfig
 from mikoshi.connectors.client_base import FileNode
+from mikoshi.git import auth_header_value
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +79,7 @@ class WorkspaceService:
         if connector_name:
             token = self._resolve_connector_token(connector_name)
             if token:
-                git_args = ["-c", f"http.extraHeader=Authorization: token {token}"]
+                git_args = ["-c", f"http.extraHeader={auth_header_value(token)}"]
 
         try:
             subprocess.run(

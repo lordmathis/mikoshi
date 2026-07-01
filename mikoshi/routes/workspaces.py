@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import PlainTextResponse, Response
 from pydantic import BaseModel
 
-from mikoshi.git import GitService
+from mikoshi.git import GitService, auth_header_value
 from mikoshi.routes.schemas import format_timestamp, serialize_chat
 from mikoshi.workspace import WorkspaceError
 
@@ -212,7 +212,7 @@ def _build_git_service(request: Request, workspace_id: str) -> tuple[GitService,
                 cwd=root,
             )
             if url_result.stdout.strip().startswith("https://"):
-                auth_args = ["-c", f"http.extraHeader=Authorization: token {token}"]
+                auth_args = ["-c", f"http.extraHeader={auth_header_value(token)}"]
 
     return svc, auth_args
 

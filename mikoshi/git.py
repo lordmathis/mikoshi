@@ -1,9 +1,22 @@
+import base64
 import logging
 import os
 import subprocess
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
+
+
+def auth_header_value(token: str) -> str:
+    """Build an `Authorization` header value for git-over-HTTPS.
+
+    GitHub's git smart-HTTP endpoint requires HTTP Basic auth with the
+    token as the password. The username is ignored by GitHub but must be
+    present, otherwise GitHub responds with "invalid credentials".
+    """
+    raw = f"x-access-token:{token}".encode("utf-8")
+    encoded = base64.b64encode(raw).decode("ascii")
+    return f"Authorization: Basic {encoded}"
 
 
 @dataclass

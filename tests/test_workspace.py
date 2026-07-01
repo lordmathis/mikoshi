@@ -146,7 +146,7 @@ class TestWorkspaceOps:
             )
             args = mock_run.call_args[0][0]
             assert "-c" in args
-            assert "Authorization: token secret-token" in " ".join(args)
+            assert "Authorization: Basic" in " ".join(args)
 
     def test_initialize_workspace_connector_no_token(self, ws):
         with patch("mikoshi.workspace.subprocess.run") as mock_run:

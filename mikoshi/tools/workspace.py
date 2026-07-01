@@ -7,7 +7,7 @@ import os
 import re
 import subprocess
 
-from mikoshi.git import GitService
+from mikoshi.git import GitService, auth_header_value
 from mikoshi.tools.context import ToolCallContext
 from mikoshi.tools.edit_utils import EditError, apply_edits
 from mikoshi.tools.toolset_handler import ToolSetHandler, tool
@@ -629,7 +629,7 @@ class WorkspaceToolSetHandler(ToolSetHandler):
         if not url_result.stdout.strip().startswith("https://"):
             return []
 
-        return ["-c", f"http.extraHeader=Authorization: token {token}"]
+        return ["-c", f"http.extraHeader={auth_header_value(token)}"]
 
     @tool(
         description="Show the git status of the workspace.",
