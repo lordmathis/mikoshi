@@ -49,6 +49,7 @@ export interface Message {
   tool_call_id?: string | null;
   sequence: number;
   created_at: string;
+  phase?: string;
   files?: Array<{
     id: string;
     filename: string;

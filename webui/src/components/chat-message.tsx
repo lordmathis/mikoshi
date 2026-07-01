@@ -161,7 +161,7 @@ export const ChatMessage = memo(function ChatMessage({ message, onBranch, onRetr
         </div>
       </div>
       <div className="flex-1 space-y-2 overflow-hidden relative z-10">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <p
             className="font-bold leading-none"
             style={{
@@ -171,8 +171,26 @@ export const ChatMessage = memo(function ChatMessage({ message, onBranch, onRetr
               textTransform: 'uppercase',
             }}
           >
-            {isUser ? "// UPLINK" : `// DAEMON${message.step !== undefined ? ` STEP ${message.step}` : ''}`}
+            {isUser ? "// UPLINK" : "// DAEMON"}
           </p>
+          {!isUser && message.phase && (
+            <span
+              className="inline-flex items-center gap-1.5 border border-cp-cyan/30 bg-cp-cyan/8 px-2 py-0.5 cp-cut-6 cp-label"
+              style={{
+                color: 'var(--color-cp-cyan)',
+                fontSize: '10px',
+                letterSpacing: '0.14em',
+              }}
+            >
+              <span
+                className="text-[var(--color-cp-cyan-bright)]"
+                style={{ animation: 'cp-blink 1.4s step-end infinite' }}
+              >
+                ▸
+              </span>
+              {message.phase}
+            </span>
+          )}
         </div>
         
         {isUser && message.files && message.files.length > 0 && (

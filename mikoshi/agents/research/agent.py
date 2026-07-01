@@ -32,6 +32,7 @@ class _InnerResearchAgent(ReActAgent):
     the same in-memory conversation instead of starting fresh."""
 
     def __init__(self, **kwargs):
+        self.phase: Optional[str] = kwargs.pop("phase", None)
         super().__init__(**kwargs)
         self._messages: List[ChatCompletionMessageParam] = []
         self.last_response: str = ""
@@ -47,6 +48,12 @@ class _InnerResearchAgent(ReActAgent):
             {"role": "user", "content": message},
         ]
         return self._messages
+
+    def _format_message(self, msg) -> dict:
+        data = BaseAgent._format_message(msg)
+        if self.phase:
+            data["phase"] = self.phase
+        return data
 
     async def _process_final_response(
         self,
@@ -249,6 +256,7 @@ class ResearchAgent(BaseAgent):
         *,
         web: bool = False,
         tool_servers: Optional[List[str]] = None,
+        phase: Optional[str] = None,
     ) -> _InnerResearchAgent:
         base = (
             list(tool_servers)
@@ -274,6 +282,7 @@ class ResearchAgent(BaseAgent):
             skill_registry=self.skill_registry,
             temperature=self.temperature,
             max_tokens=self.max_tokens,
+            phase=phase,
         )
         filtered = _FilteredQueue(queue)
         await agent._loop(user_message, queue=filtered)
