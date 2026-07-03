@@ -9,9 +9,12 @@ A flexible chat client with Web UI that integrates multiple AI providers, tools,
 **Features**:
 - OpenAI-compatible and Anthropic API support
 - Plugin architecture (agents, tools, skills) and MCP integration
-- Git-based workspaces with file management
+- Four agent base classes: ReAct, Structured, Workspace, and Research agents
+- Git-based workspaces with built-in file operations (read/write/edit/grep/find/ls) and git operations (status/diff/commit/pull/push)
+- Repository browsing via GitHub and Forgejo/Gitea connectors
+- Chat branching, message edit, and retry
 - Audio transcription and text-to-speech
-- Tool approval system
+- Token estimation for repository files
 
 
 ## Quick Start
@@ -46,7 +49,14 @@ A flexible chat client with Web UI that integrates multiple AI providers, tools,
    uv run python -m mikoshi.main
    ```
 
-   Server will start on `http://localhost:8000` with the Web UI served at the same address
+   Server will start on `http://localhost:8000` with the Web UI served at the same address.
+
+   For development, the Web UI can be run separately with hot reload:
+   ```bash
+   cd webui
+   npm run dev
+   ```
+   The dev server runs on `http://localhost:5173` and proxies API calls to the backend.
 
 ### Running with Docker
 
@@ -66,7 +76,7 @@ A flexible chat client with Web UI that integrates multiple AI providers, tools,
 
 ## Configuration
 
-Mikoshi uses a YAML configuration file (`config.yaml`) to set up providers, MCP servers, and plugins. Environment variables can be referenced using `${ENV_VAR}` syntax, which will be automatically expanded with values from your environment.
+Mikoshi uses a YAML configuration file (`config.yaml`) to set up providers, MCP servers, and plugins. Environment variables can be referenced using `${ENV_VAR}` syntax, which will be automatically expanded with values from your environment (or a local `.env` file loaded on startup).
 
 ### Server Configuration
 
@@ -119,6 +129,9 @@ providers:
   - `contains`: Include models where field contains this substring
   - `excludes`: Exclude models where field contains this substring
   - `equals`: Include models where field exactly matches this value
+  - `endpoint`: Endpoint appended to `api_base` when listing models (default: `/models`)
+
+When no `model_ids` and no `model_filter.conditions` are set, all models advertised by the provider's `/models` endpoint are exposed.
 
 ### MCP (Model Context Protocol) Configuration
 
@@ -142,22 +155,19 @@ mcps:
 mcp_timeout: 60  # Timeout for MCP operations in seconds
 ```
 
-**MCP Types:**
-- `stdio`: Standard input/output communication
-- `sse`: Server-sent events
-
 **Configuration options:**
 - `command`: The command to run the MCP server
 - `args`: List of arguments to pass to the command
-- `type`: Communication type (`stdio` or `sse`)
+- `type`: Communication type. Currently only `stdio` is implemented (`sse` is accepted by the config schema but will raise at startup).
 - `env`: Environment variables to pass to the MCP server process
+- `mcp_timeout` (top-level): Timeout in seconds for MCP initialization, tool calls, and shutdown
 
 ### Plugin Configuration
 
 ```yaml
 plugins:
   agents_dir: "agents"  # Directory for agent plugins
-  tools_dir: "tools"  # Directory for tool plugins
+  tools_dir: "tools"    # Directory for tool plugins
   skills_dir: "skills"  # Directory for skill plugins
 ```
 
@@ -182,26 +192,28 @@ connectors:
 - `token`: Authentication token
 - `base_url`: API base URL (required for Forgejo)
 
+Connectors power the repository browser in the UI and provide authenticated `git pull`/`git push` for workspaces linked to a connector.
+
 ### Audio Configuration
 
-Configure audio transcription and text-to-speech services (optional):
+Optional audio transcription (ASR) and text-to-speech (TTS). Both services speak the OpenAI-compatible audio API (`/v1/audio/transcriptions` and `/v1/audio/speech`), so any provider implementing those endpoints works. Audio is disabled unless `base_url` is set.
 
 ```yaml
 audio:
   transcription:
-    model: "whisper-1"
-    base_url: "https://api.openai.com/v1"
-    api_key: "${OPENAI_API_KEY}"
+    model: "<transcription-model>"
+    base_url: "https://your-audio-provider.example.com/v1"
+    api_key: "${AUDIO_API_KEY}"
   tts:
-    model: "tts-1"
-    voice: "alloy"
-    base_url: "https://api.openai.com/v1"
-    api_key: "${OPENAI_API_KEY}"
+    model: "<tts-model>"
+    voice: "<voice-name>"
+    base_url: "https://your-audio-provider.example.com/v1"
+    api_key: "${AUDIO_API_KEY}"
 ```
 
 **Transcription options:**
 - `model`: Transcription model to use (default: `"whisper-1"`)
-- `base_url`: API base URL for the transcription service
+- `base_url`: API base URL for the transcription service (required to enable transcription)
 - `api_key`: API key (supports environment variables)
 
 **TTS options:**
@@ -222,12 +234,14 @@ logging:
   date_format: "%Y-%m-%d %H:%M:%S"
 ```
 
+When `target` is a file path, Mikoshi uses a rotating file handler (10 MB per file, 5 backups kept).
+
 ### Additional Configuration Options
 
 ```yaml
 history_db_path: "mikoshi.db"       # SQLite database for conversation history
 uploads_dir: "uploads"               # Directory for uploaded files
-data_dir: "data"                     # Directory for tool data storage
+data_dir: "data"                     # Directory for tool data storage and workspaces
 file_retention_hours: 24             # Hours before orphan files are cleaned up
 title_generation:                    # Optional: use a separate model for chat titles
   provider: "openrouter"
@@ -246,15 +260,15 @@ workspace:
 
 ## Plugins
 
-Mikoshi has a flexible plugin architecture supporting three types of plugins:
+Mikoshi has a flexible plugin architecture supporting three types of plugins. Plugins are discovered automatically from the directories configured under `plugins` (one Python file per class for agents/tools, one directory per skill).
 
 ### 1. Agent Plugins
 
-Agent plugins allow you to create custom chat agents with specific configurations. Three base classes are available:
+Agent plugins allow you to create custom chat agents with specific configurations. Four base classes are available, all sharing the same class attributes (`name`, `provider_id`, `model_id`, `system_prompt`, `tool_servers`, `max_iterations`, `temperature`, `max_tokens`, `context_window`, `default`). The first agent with `default = True` is selected for new chats; when a workspace chat is created, a `WorkspaceAgentPlugin` subclass is preferred.
 
 #### ReActAgentPlugin
 
-Standard ReAct-style tool-calling agents. Create a Python file in the configured `agents_dir` (e.g., `plugins/agents/my_agent.py`):
+Standard ReAct-style tool-calling agents. Create a Python file in the configured `agents_dir` (e.g., `agents/my_agent.py`):
 
 ```python
 from mikoshi.agents import ReActAgentPlugin
@@ -274,7 +288,7 @@ class MyAgent(ReActAgentPlugin):
 
 #### StructuredAgentPlugin
 
-Stateful agents that maintain JSON state across conversation turns. Useful for agents that need to track context (e.g., workout logging, task management):
+Stateful agents that maintain JSON state across conversation turns. Useful for agents that need to track context (e.g., workout logging, task management). The agent reads `CURRENT STATE` from the database, includes it in the system prompt, and expects the final response to be a JSON object with `user_message` (string) and `new_state` (object) keys. The returned state is merged into the persisted state.
 
 ```python
 from mikoshi.agents import StructuredAgentPlugin
@@ -286,31 +300,16 @@ class StatefulAgent(StructuredAgentPlugin):
     model_id = "openai/gpt-4"
     tool_servers = ["my_tools"]
     max_iterations = 5
-
-    system_prompt = """You are a stateful assistant. When ready to respond,
-output a JSON object with two keys:
-- "user_message": the response to show the user
-- "new_state": updated state object to persist
-"""
-```
-
-#### Custom Setup
-
-Both agent types support a `post_init()` hook for custom initialization after dependency injection:
-
-```python
-class MyAgent(ReActAgentPlugin):
-    name = "my-agent"
-    provider_id = "openrouter"
-    model_id = "openai/gpt-4"
-
-    def post_init(self) -> None:
-        self._custom_state = {}
 ```
 
 #### WorkspaceAgentPlugin
 
-Agent specialized for workspace interactions that automatically injects the workspace file tree into the LLM context on each iteration:
+Agent specialized for workspace interactions. It inherits from `ReActAgentPlugin` and automatically injects two pieces of context into every iteration:
+
+- A tree view of the workspace files
+- The contents of `AGENTS.md` if one exists at the workspace root
+
+The built-in `workspace` tool server is added automatically to the agent's `tool_servers` when a chat is linked to a workspace.
 
 ```python
 from mikoshi.agents.workspace import WorkspaceAgentPlugin
@@ -324,13 +323,56 @@ class RepositoryAssistant(WorkspaceAgentPlugin):
     tool_servers = ["workspace"]
 ```
 
+#### ResearchAgentPlugin
+
+A multi-stage research agent that plans, researches, replans, and synthesizes a final report. It runs an outer control loop driven entirely by workspace file state (no model output is trusted for control flow):
+
+1. **Planner** — produces `RESEARCH_PLAN.md` with a checklist of research tasks
+2. **Researcher** — runs an inner ReAct agent for each pending task, writing findings to `findings/NN-slug.md`
+3. **Replanner** — inspects plan + latest findings and revises remaining tasks
+4. **Synthesizer** — reads all findings and writes `REPORT.md`
+
+The outer loop reconciles the plan against existing findings files each iteration, so completed tasks are never re-researched. It requires a workspace (the workspace is the communication channel between stages) and typically benefits from a `web_tools` tool server.
+
+```python
+from mikoshi.agents import ResearchAgentPlugin
+
+
+class DeepResearch(ResearchAgentPlugin):
+    name = "research"
+    provider_id = "openrouter"
+    model_id = "anthropic/claude-3.5-sonnet"
+    tool_servers = ["web_tools"]
+    max_iterations = 15  # used as max_inner_iterations
+```
+
+`ResearchAgent` also exposes class-level `max_outer_iterations` (default `15`) and `max_inner_iterations` (default `15`).
+
+#### Custom Setup
+
+All agent types support a `post_init()` hook for custom initialization after dependency injection:
+
+```python
+class MyAgent(ReActAgentPlugin):
+    name = "my-agent"
+    provider_id = "openrouter"
+    model_id = "openai/gpt-4"
+
+    def post_init(self) -> None:
+        self._custom_state = {}
+```
+
 ### 2. Tool Plugins
 
-Tool plugins extend Mikoshi with custom capabilities. They inherit from `ToolSetHandler` and use the `@tool` decorator to define individual tools. Each tool server gets its own persistent storage directory via `self.get_persistent_storage()`, and tools are exposed to agents as `{server_name}__{tool_name}`. Tools can optionally access provider, model, and workspace info by accepting a `context: ToolCallContext` parameter, call other tools via `self.call_other_tool()`, or require explicit user approval before execution by passing `require_approval=True` to the decorator. Override `initialize()` and `cleanup()` for lifecycle setup.
+Tool plugins extend Mikoshi with custom capabilities. They inherit from `ToolSetHandler` and use the `@tool` decorator to define individual tools. Each tool server gets its own persistent storage directory via `self.get_persistent_storage()`, and tools are exposed to agents as `{server_name}__{tool_name}`. Tools can optionally:
+
+- Access provider, model, and workspace info by accepting a `context: ToolCallContext` parameter
+- Call other tools via `self.call_other_tool()`
+- Override `initialize()` and `cleanup()` for lifecycle setup
 
 **Creating a Tool Plugin:**
 
-1. Create a Python file in the configured `tools_dir` (e.g., `plugins/tools/my_tools.py`)
+1. Create a Python file in the configured `tools_dir` (e.g., `tools/my_tools.py`)
 2. Inherit from `ToolSetHandler`, set `server_name` as a class attribute, and define tools using the `@tool` decorator:
 
 ```python
@@ -360,14 +402,31 @@ class MyTools(ToolSetHandler):
         }
 ```
 
+#### Built-in Workspace Toolset
+
+A `workspace` tool server is registered automatically (no plugin required) and is added to any chat linked to a workspace. It exposes the following tools, all scoped to the workspace root with path-traversal protection:
+
+| Tool | Description |
+| --- | --- |
+| `read` | Read a text file (line-numbered, with optional `offset`/`limit`); images are returned as base64, binaries reported as metadata |
+| `write` | Create or overwrite a file (creates parent directories) |
+| `edit` | Apply targeted `oldText` → `newText` replacements; multiple edits per call; falls back to whitespace/quote-normalized fuzzy matching |
+| `grep` | Regex content search across files with optional `glob`, `ignoreCase`, `literal`, `contextLines`, and `limit` |
+| `find` | Glob-based file/directory finder |
+| `ls` | List directory contents |
+| `git_status` | `git status --porcelain` |
+| `git_diff` | `git diff` (unstaged) |
+| `git_commit` | Stage all and commit with a message (uses the workspace's configured git identity) |
+| `git_pull` / `git_push` | Pull/push using connector credentials when the remote is an HTTPS URL |
+
 ### 3. Skill Plugins
 
-Skill plugins provide reusable knowledge and prompt templates that can be injected into conversations via `@mention` syntax.
+Skill plugins provide reusable knowledge and prompt templates that can be injected into conversations via `/skill_name` syntax in the user's message. Mentioned skills are appended to the system prompt for that turn.
 
 **Creating a Skill Plugin:**
 
-1. Create a directory in the configured `skills_dir` (e.g., `plugins/skills/code_review/`)
-2. Add a `SKILL.md` file with the skill content:
+1. Create a directory in the configured `skills_dir` (e.g., `skills/code_review/`)
+2. Add a `SKILL.md` file with optional YAML frontmatter and the skill content:
 
 ```markdown
 ---
@@ -387,3 +446,11 @@ You are an expert code reviewer. When reviewing code:
 
 Be thorough but concise in your reviews.
 ```
+
+The `required_tool_servers` frontmatter key activates additional tool servers for the chat when the skill is mentioned.
+
+## Development
+
+- **Lint / type-check (Python):** `uv run ruff check .`
+- **Tests (Python):** `uv run pytest`
+- **Web UI:** `cd webui && npm run dev` (dev server), `npm run build` (production build), `npm run lint`, `npm run typecheck`, `npm run test`
