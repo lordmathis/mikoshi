@@ -66,12 +66,8 @@ async def lifespan(app: FastAPI):
     # Initialize and start tool manager
     try:
         tool_manager = ToolManager(
-            app_config.data_dir,
-            app_config.plugins.tools_dir,
-            app_config.mcps,
-            app_config.connectors,
-            app_config.mcp_timeout,
-            database,
+            app_config=app_config,
+            db=database,
         )
         await tool_manager.start()
         app.state.tool_manager = tool_manager

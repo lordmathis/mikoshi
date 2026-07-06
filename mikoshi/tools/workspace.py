@@ -131,7 +131,7 @@ def _require_workspace(context: ToolCallContext) -> str:
     return _resolve_root(context)
 
 
-class WorkspaceToolSetHandler(ToolSetHandler):
+class WorkspaceTools(ToolSetHandler):
     server_name = WORKSPACE_SERVER_NAME
 
     @tool(

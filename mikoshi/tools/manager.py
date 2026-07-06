@@ -3,7 +3,7 @@ import logging
 from contextlib import AsyncExitStack
 from typing import Any, Dict, List, Optional
 
-from mikoshi.config import ConnectorsConfig, MCPConfig
+from mikoshi.config import AppConfig
 from mikoshi.db.db import Database
 from mikoshi.plugins import discover_plugins
 from mikoshi.storage import get_persistent_storage
@@ -12,9 +12,16 @@ from mikoshi.tools.context import ToolCallContext
 from mikoshi.tools.handler_base import ToolHandler
 from mikoshi.tools.mcp_handler import MCPToolHandler
 from mikoshi.tools.toolset_handler import ToolSetHandler
-from mikoshi.tools.workspace import WorkspaceToolSetHandler
+from mikoshi.tools.workspace import WorkspaceTools
+from mikoshi.tools.web import WebTools
 
 logger = logging.getLogger(__name__)
+
+# Map tool server -> config key
+BUILTIN_TOOLS: list[tuple[ToolSetHandler, str]] = [
+    (WorkspaceTools, None),
+    (WebTools, "search")
+]
 
 
 def _parse_tool_name(call_name: str) -> tuple[str, str]:
@@ -30,32 +37,32 @@ def _parse_tool_name(call_name: str) -> tuple[str, str]:
 class ToolManager:
     def __init__(
         self,
-        data_dir: str,
-        tools_dir: str,
-        servers: Dict[str, MCPConfig],
-        connectors_config: Optional[Dict[str, ConnectorsConfig]] = None,
-        mcp_timeout: int = 30,
+        app_config: AppConfig,
         db: Optional[Database] = None,
     ):
         self._server_map: Dict[str, ToolHandler] = {}
-        self._data_dir = data_dir
-        self._tools_dir = tools_dir
-        self._db = db
-        self.mcp_timeout = mcp_timeout
-        self.mcp_exit_stack = AsyncExitStack()
-        self._pending_approvals: Dict[str, PendingApproval] = {}
-        self._connectors_config = connectors_config or {}
 
+        self._app_config = app_config
+        self._db = db
+
+        self._data_dir = app_config.data_dir
+        self._tools_dir = app_config.plugins.tools_dir
+
+        self._pending_approvals: Dict[str, PendingApproval] = {}
+        self._connectors_config = app_config.connectors
+
+        self.mcp_timeout = app_config.mcp_timeout
+        self.mcp_exit_stack = AsyncExitStack()
         self._mcp_handlers: Dict[str, MCPToolHandler] = {}
-        for server_name, config in servers.items():
+        for server_name, config in app_config.mcps.items():
             mcp_handler = MCPToolHandler(
-                server_name, config, mcp_timeout, self.mcp_exit_stack
+                server_name, config, self.mcp_timeout, self.mcp_exit_stack
             )
             self._mcp_handlers[server_name] = mcp_handler
 
         self._toolset_handlers: Dict[
             str, ToolSetHandler
-        ] = {}  # Store discovered toolset handlers
+        ] = {}
 
     def _discover_toolset_plugins(self) -> Dict[str, type]:
         return discover_plugins(
@@ -109,16 +116,20 @@ class ToolManager:
                     exc_info=True,
                 )
 
-        # Register built-in workspace toolset
-        try:
-            workspace_handler = WorkspaceToolSetHandler()
-            workspace_handler.set_tool_manager(self)
-            await workspace_handler.initialize()
-            self._toolset_handlers[workspace_handler.server_name] = workspace_handler
-            self._server_map[workspace_handler.server_name] = workspace_handler
-            logger.info("Initialized built-in workspace toolset")
-        except Exception as e:
-            logger.error(f"Failed to initialize workspace toolset: {e}", exc_info=True)
+        # Register built-in tools
+        for toolset_cls, cfg_key in BUILTIN_TOOLS:
+            try:
+                tool_cfg = getattr(self._app_config, cfg_key, None) if cfg_key else None
+                instance = toolset_cls(tool_cfg) if tool_cfg is not None else toolset_cls()
+
+                await instance.initialize()
+
+                self._toolset_handlers[instance.server_name] = instance
+                self._server_map[instance.server_name] = instance
+
+                logger.info(f"Initialized built-in {instance.server_name} toolset")
+            except Exception as e:
+                logger.error(f"Failed to initialize toolset: {e}", exc_info=True)
 
         logger.info("ToolManager initialization completed successfully")
 

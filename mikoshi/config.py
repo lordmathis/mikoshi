@@ -12,18 +12,13 @@ class ProviderType(str, Enum):
 
 
 class FilterCondition(BaseModel):
-    """A single filter condition"""
-
     field: str  # JSONPath expression to the field (e.g., "id", "architecture", "pricing.prompt")
     contains: Optional[str] = None
     excludes: Optional[str] = None
     equals: Optional[Any] = None
-    # Could add more operators: gt, lt, in_list, regex, etc.
 
 
 class ModelFilter(BaseModel):
-    """Filter configuration for dynamically fetching model IDs"""
-
     conditions: List[FilterCondition] = []
     endpoint: str = "/models"  # Endpoint to append to api_base
 
@@ -106,6 +101,12 @@ class WorkspaceConfig(BaseModel):
     git_user_name: str = "Mikoshi Agent"
     git_user_email: str = "agent@mikoshi"
 
+class SearchConfig(BaseModel):
+    searxng_url: str
+    max_results: int = 10
+    rate_limit: float = 1.0
+    firecrawl_api_key: Optional[str]
+    firecrawl_api_url: str = "https://api.firecrawl.de"
 
 class AppConfig(BaseModel):
     server: ServerConfig = ServerConfig()
