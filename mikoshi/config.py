@@ -3,7 +3,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 import yaml
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 class ProviderType(str, Enum):
@@ -108,6 +108,20 @@ class SearchConfig(BaseModel):
     firecrawl_api_key: Optional[str]
     firecrawl_api_url: str = "https://api.firecrawl.de"
 
+
+class MemoryConfig(BaseModel):
+    embed_provider: str = ""
+    embed_model: str = ""
+    vector_size: int = 0
+    qdrant_url: str = "http://localhost:6333"
+    collection: str = "memories"
+
+    @field_validator("qdrant_url")
+    @classmethod
+    def _strip_trailing_slash(cls, v: str) -> str:
+        return v.rstrip("/")
+
+
 class AppConfig(BaseModel):
     server: ServerConfig = ServerConfig()
     providers: Dict[str, ProviderConfig] = {}
@@ -123,6 +137,7 @@ class AppConfig(BaseModel):
     file_retention_hours: int = 24
     title_generation: TitleGenerationConfig = TitleGenerationConfig()
     workspace: WorkspaceConfig = WorkspaceConfig()
+    memory: Optional[MemoryConfig] = None
 
 
 def load_config(path: str) -> AppConfig:

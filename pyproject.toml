@@ -20,6 +20,7 @@ dependencies = [
     "prompt-toolkit>=3.0.0",
     "pydantic>=2.12.5",
     "python-dotenv>=1.2.1",
+    "qdrant-client>=1.18.0",
     "rich>=14.2.0",
     "sqlalchemy>=2.0.45",
     "tiktoken>=0.13.0",

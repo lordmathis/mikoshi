@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 from mikoshi.config import AppConfig
 from mikoshi.db.db import Database
 from mikoshi.plugins import discover_plugins
+from mikoshi.providers import Provider, ProviderRegistry
 from mikoshi.storage import get_persistent_storage
 from mikoshi.tools.approval import PendingApproval, ToolDeniedError
 from mikoshi.tools.context import ToolCallContext
@@ -14,13 +15,15 @@ from mikoshi.tools.mcp_handler import MCPToolHandler
 from mikoshi.tools.toolset_handler import ToolSetHandler
 from mikoshi.tools.workspace import WorkspaceTools
 from mikoshi.tools.web import WebTools
+from mikoshi.tools.memory import MemoryTools
 
 logger = logging.getLogger(__name__)
 
 # Map tool server -> config key
 BUILTIN_TOOLS: list[tuple[ToolSetHandler, str]] = [
     (WorkspaceTools, None),
-    (WebTools, "search")
+    (WebTools, "search"),
+    (MemoryTools, "memory"),
 ]
 
 
@@ -38,11 +41,13 @@ class ToolManager:
     def __init__(
         self,
         app_config: AppConfig,
+        provider_registry: ProviderRegistry,
         db: Optional[Database] = None,
     ):
         self._server_map: Dict[str, ToolHandler] = {}
 
         self._app_config = app_config
+        self._provider_registry = provider_registry
         self._db = db
 
         self._data_dir = app_config.data_dir
@@ -75,6 +80,9 @@ class ToolManager:
     def get_connector_token(self, connector_name: str) -> str | None:
         cfg = self._connectors_config.get(connector_name)
         return cfg.token if cfg else None
+
+    def get_provider(self, name: str) -> Provider | None:
+        return self._provider_registry.get_provider(name)
 
     async def start(self):
         """Initialize all handlers"""
@@ -121,6 +129,7 @@ class ToolManager:
             try:
                 tool_cfg = getattr(self._app_config, cfg_key, None) if cfg_key else None
                 instance = toolset_cls(tool_cfg) if tool_cfg is not None else toolset_cls()
+                instance.set_tool_manager(self)
 
                 await instance.initialize()
 

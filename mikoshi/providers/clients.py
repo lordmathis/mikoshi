@@ -39,6 +39,20 @@ class LLMClient(ABC):
         """
         return []
 
+    async def create_embedding(
+        self, model: str, input: str
+    ) -> Optional[List[float]]:
+        """Create an embedding vector for the input text.
+
+        Args:
+            model: Embedding model identifier
+            input: Text to embed
+
+        Returns:
+            Embedding vector, or None if the provider does not support embeddings.
+        """
+        return None
+
 
 class OpenAIClient(LLMClient):
     """Client for OpenAI-compatible APIs."""
@@ -85,6 +99,15 @@ class OpenAIClient(LLMClient):
 
         response = await self.client.chat.completions.create(**api_params)
         return response.model_dump()
+
+    async def create_embedding(
+        self, model: str, input: str
+    ) -> Optional[List[float]]:
+        """Create an embedding vector using the OpenAI-compatible embeddings API."""
+        response = await self.client.embeddings.create(model=model, input=input)
+        if not response.data:
+            return None
+        return response.data[0].embedding
 
 
 class AnthropicClient(LLMClient):
