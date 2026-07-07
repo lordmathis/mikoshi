@@ -20,7 +20,7 @@ from mikoshi.tools.memory import MemoryTools
 logger = logging.getLogger(__name__)
 
 # Map tool server -> config key
-BUILTIN_TOOLS: list[tuple[ToolSetHandler, str]] = [
+BUILTIN_TOOLS: list[tuple[type[ToolSetHandler], Optional[str]]] = [
     (WorkspaceTools, None),
     (WebTools, "search"),
     (MemoryTools, "memory"),
