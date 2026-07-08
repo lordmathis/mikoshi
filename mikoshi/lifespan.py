@@ -152,4 +152,8 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Error during database shutdown: {e}", exc_info=True)
 
+    from mikoshi.observability import flush_observability
+
+    flush_observability()
+
     logger.info("Server shutdown complete")

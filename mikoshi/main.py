@@ -7,6 +7,7 @@ import uvicorn
 from dotenv import load_dotenv
 
 from mikoshi.config import AppConfig, LoggingConfig, load_config
+from mikoshi.observability import init_observability
 from mikoshi.server import app
 
 
@@ -42,6 +43,7 @@ if __name__ == "__main__":
 
     app_config: AppConfig = load_config("config.yaml")
     configure_logging(app_config.logging)
+    init_observability(app_config.langfuse)
     app.state.app_config = app_config
 
     uvicorn.run(

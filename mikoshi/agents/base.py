@@ -15,6 +15,7 @@ from mikoshi.agents.streaming import STREAM_DONE, StreamEvent
 from mikoshi.config import WorkspaceConfig
 from mikoshi.db.db import Database
 from mikoshi.db.models import Message
+from mikoshi.observability import observe, record_generation, trace_session
 from mikoshi.providers.provider import Provider
 from mikoshi.skills.registry import SkillRegistry
 from mikoshi.tools.approval import ToolDeniedError
@@ -78,6 +79,7 @@ class BaseAgent(ABC):
             git_user_email=wc.git_user_email,
         )
 
+    @observe(as_type="tool", name="tool_calls")
     async def _execute_tool_calls(
         self, tool_calls_raw: list, messages: List[dict], queue: asyncio.Queue
     ) -> None:
@@ -228,7 +230,9 @@ class BaseAgent(ABC):
         await self._emit(queue, STREAM_DONE)
         return {"error": "Max iterations reached without final response"}
 
+    @observe(name="agent_turn")
     async def _loop(self, message: str, queue: asyncio.Queue) -> Dict[str, Any]:
+        trace_session(self.chat_id)
         logger.info(
             "chat_id=%s _loop START message_len=%d",
             self.chat_id,
@@ -533,6 +537,7 @@ class BaseAgent(ABC):
                 )
         return api_tools
 
+    @observe(as_type="generation", name="llm_completion")
     async def _llm(
         self,
         messages: List[ChatCompletionMessageParam],
@@ -541,13 +546,15 @@ class BaseAgent(ABC):
         retries = 3
         for attempt in range(retries):
             try:
-                return await self._llm_client.chat_completion(
+                response = await self._llm_client.chat_completion(
                     model=self.model_id,
                     messages=messages,
                     tools=tools if tools else None,
                     temperature=self.temperature,
                     max_tokens=self.max_tokens,
                 )
+                record_generation(self.model_id, response.get("usage"))
+                return response
             except APIConnectionError:
                 if attempt == retries - 1:
                     raise

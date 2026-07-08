@@ -26,6 +26,7 @@ from mikoshi.agents.research.prompts import (
     SYNTHESIS_SUMMARIZE_PROMPT,
     SYNTHESIS_SYSTEM_PROMPT,
 )
+from mikoshi.observability import observe
 from mikoshi.tools.workspace import WORKSPACE_SERVER_NAME
 
 if TYPE_CHECKING:
@@ -107,6 +108,7 @@ class Stage:
             phase=self.phase,
         )
 
+    @observe(name="research_stage")
     async def apply(self, queue: asyncio.Queue) -> Optional[str]:
         agent = await self._spawn(queue)
         if self.success():
@@ -239,6 +241,7 @@ class Synthesizer:
         self.ctx = ctx
         self.original_question = original_question
 
+    @observe(name="synthesis")
     async def apply(self, queue: asyncio.Queue) -> None:
         ctx = self.ctx
         if not ctx.workspace_id:

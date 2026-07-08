@@ -21,6 +21,7 @@ from mikoshi.agents.research.stages import (
     Synthesizer,
 )
 from mikoshi.agents.streaming import STREAM_DONE, StreamEvent
+from mikoshi.observability import observe, trace_session
 from mikoshi.tools.workspace import _workspace_result
 
 logger = logging.getLogger(__name__)
@@ -99,7 +100,9 @@ class ResearchAgent(BaseAgent):
         await self._emit(queue, STREAM_DONE)
         return {}
 
+    @observe(name="research_turn")
     async def _loop(self, message: str, queue: asyncio.Queue) -> Dict[str, Any]:
+        trace_session(self.chat_id)
         self._active_queue = queue
         try:
             plan = self._read_plan()
