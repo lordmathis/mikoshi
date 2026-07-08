@@ -50,6 +50,7 @@ export interface Message {
   sequence: number;
   created_at: string;
   phase?: string;
+  status?: string | null;
   files?: Array<{
     id: string;
     filename: string;
@@ -64,9 +65,24 @@ export interface WorkspaceChangeResult {
   paths: string[];
 }
 
+export interface PendingApproval {
+  id: string;
+  message_id: string | null;
+  tool_name: string;
+  arguments: Record<string, any>;
+  created_at: string | null;
+}
+
+export interface ApprovalRequestEvent {
+  approval_id: string;
+  message_id: string;
+  tool_name: string;
+  arguments: Record<string, any>;
+}
+
 export interface StreamEvent {
-  type: 'message' | 'error' | 'done';
-  data: Message | { message: string } | Record<string, never>;
+  type: 'message' | 'error' | 'done' | 'tool_approval_request';
+  data: Message | { message: string } | ApprovalRequestEvent | Record<string, never>;
 }
 
 export interface ModelParams {
@@ -364,6 +380,24 @@ class ApiClient {
   // Tools endpoints
   async listTools(): Promise<{ tool_servers: ToolServer[] }> {
     return this.request('/tools');
+  }
+
+  // Approval endpoints
+  async listApprovals(chatId: string): Promise<{ approvals: PendingApproval[] }> {
+    return this.request(`/approvals?chat_id=${encodeURIComponent(chatId)}`);
+  }
+
+  async approveTool(approvalId: string, scope: 'once' | 'always' = 'once'): Promise<{ status: string; result: string }> {
+    return this.request(`/approvals/${approvalId}/approve`, {
+      method: 'POST',
+      body: JSON.stringify({ scope }),
+    });
+  }
+
+  async denyTool(approvalId: string): Promise<{ status: string }> {
+    return this.request(`/approvals/${approvalId}/deny`, {
+      method: 'POST',
+    });
   }
 
   // Skills endpoints

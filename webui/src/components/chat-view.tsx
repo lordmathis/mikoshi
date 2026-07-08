@@ -243,6 +243,9 @@ export function ChatView() {
               isSending={messages.isSending}
               currentConversationId={currentConversationId}
               messagesEndRef={messagesEndRef}
+              pendingApprovals={messages.pendingApprovals}
+              onApprove={messages.approveApproval}
+              onDeny={messages.denyApproval}
               onBranch={handleBranch}
               onRetry={handleRetry}
               onEdit={chatInput.handleEdit}

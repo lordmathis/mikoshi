@@ -116,13 +116,25 @@ class BaseAgent(ABC):
                 json.dumps(tool_args, default=str, ensure_ascii=False)[:1000],
             )
 
+            approval_msg_id: List[str] = []
+
             if not parse_failed:
+                async def _on_approval_requested(
+                    approval_id: str,
+                    _tool_name: str,
+                    _arguments: dict,
+                ) -> str:
+                    return await self._request_approval(
+                        queue, tool_call, _tool_name, approval_id, approval_msg_id
+                    )
+
                 try:
                     ctx = ToolCallContext(
                         provider=self.provider,
                         model_id=self.model_id,
                         chat_id=self.chat_id,
                         workspace=self._build_workspace_context(),
+                        on_approval_requested=_on_approval_requested,
                     )
                     result = await self.tool_manager.call_tool(
                         tool_name, tool_args, ctx
@@ -142,12 +154,18 @@ class BaseAgent(ABC):
             )
             logger.debug("Tool %s result: %s", tool_name, result_str[:1000])
 
-            msg = await self._save_message(
-                "tool", str(result), tool_call_id=tool_call["id"]
-            )
-            await self._emit(
-                queue, StreamEvent(type="message", data=self._format_message(msg))
-            )
+            if approval_msg_id:
+                msg_id = approval_msg_id[0]
+                self.db.update_message_content(msg_id, result_str)
+                self.db.update_message_status(msg_id, "completed")
+            else:
+                msg = await self._save_message(
+                    "tool", result_str, tool_call_id=tool_call["id"]
+                )
+                await self._emit(
+                    queue,
+                    StreamEvent(type="message", data=self._format_message(msg)),
+                )
 
             messages.append(
                 {
@@ -156,6 +174,44 @@ class BaseAgent(ABC):
                     "content": str(result),
                 }
             )
+
+    async def _request_approval(
+        self,
+        queue: asyncio.Queue,
+        tool_call: dict,
+        tool_name: str,
+        approval_id: str,
+        approval_msg_id: List[str],
+    ) -> str:
+        """Save a placeholder tool message, emit it + the approval request event.
+
+        The persisted message_id is stashed in ``approval_msg_id`` so the caller
+        can update it in place once the tool finishes.
+        """
+        placeholder = f"Awaiting approval for {tool_name}…"
+        msg = await self._save_message(
+            "tool", placeholder, tool_call_id=tool_call["id"]
+        )
+        self.db.update_message_status(msg.id, "awaiting_tool_approval")
+        approval_msg_id.append(msg.id)
+        await self._emit(
+            queue, StreamEvent(type="message", data=self._format_message(msg))
+        )
+        await self._emit(
+            queue,
+            StreamEvent(
+                type="tool_approval_request",
+                data={
+                    "approval_id": approval_id,
+                    "message_id": msg.id,
+                    "tool_name": tool_name,
+                    "arguments": json.loads(tool_call["function"]["arguments"])
+                    if isinstance(tool_call["function"]["arguments"], str)
+                    else tool_call["function"]["arguments"],
+                },
+            ),
+        )
+        return msg.id
 
     async def _handle_max_iterations(self, queue: asyncio.Queue) -> Dict[str, Any]:
         logger.warning(

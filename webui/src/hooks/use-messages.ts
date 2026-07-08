@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { api, type Message, type FileResource } from "../lib/api";
+import { api, type Message, type FileResource, type PendingApproval } from "../lib/api";
 import { type ChatSettings } from "../components/chat-settings-dialog";
 
 function tryParseWorkspaceChange(
@@ -19,10 +19,13 @@ export function useMessages(
   onWorkspaceChange?: (paths: string[]) => void
 ) {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [pendingApprovals, setPendingApprovals] = useState<Record<string, PendingApproval>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [loadedChatId, setLoadedChatId] = useState<string | undefined>(undefined);
   const streamAbortRef = useRef<AbortController | null>(null);
+  const pendingApprovalsRef = useRef<Record<string, PendingApproval>>({});
+  pendingApprovalsRef.current = pendingApprovals;
   const [chatSettings, setChatSettings] = useState<ChatSettings>({
     baseModel: "",
     systemPrompt: "",
@@ -60,6 +63,12 @@ export function useMessages(
           max_iterations: 5,
         },
       });
+      const { approvals } = await api.listApprovals(chatId);
+      const map: Record<string, PendingApproval> = {};
+      for (const a of approvals) {
+        if (a.message_id) map[a.message_id] = a;
+      }
+      setPendingApprovals(map);
     } catch (error) {
       console.error("Failed to reload messages:", error);
     }
@@ -74,7 +83,15 @@ export function useMessages(
     (event: { type: string; data: unknown }) => {
       if (event.type === "message") {
         const msg = event.data as Message;
-        setMessages((prev) => [...prev, msg]);
+        setMessages((prev) => {
+          const idx = prev.findIndex((m) => m.id === msg.id);
+          if (idx >= 0) {
+            const next = [...prev];
+            next[idx] = msg;
+            return next;
+          }
+          return [...prev, msg];
+        });
 
         if (msg.role === "tool") {
           const change = tryParseWorkspaceChange(msg.content);
@@ -82,6 +99,21 @@ export function useMessages(
             onWorkspaceChange?.(change.paths);
           }
         }
+      } else if (event.type === "tool_approval_request") {
+        const req = event.data as {
+          approval_id: string;
+          message_id: string;
+          tool_name: string;
+          arguments: Record<string, unknown>;
+        };
+        const approval: PendingApproval = {
+          id: req.approval_id,
+          message_id: req.message_id,
+          tool_name: req.tool_name,
+          arguments: req.arguments,
+          created_at: null,
+        };
+        setPendingApprovals((prev) => ({ ...prev, [req.message_id]: approval }));
       } else if (event.type === "error") {
         const errMsg = (event.data as { message: string }).message;
         console.error('[Messages] error event:', errMsg);
@@ -103,6 +135,7 @@ export function useMessages(
   useEffect(() => {
     if (!chatId) {
       setMessages([]);
+      setPendingApprovals({});
       setLoadedChatId(undefined);
       loadDefaultSettings();
       return;
@@ -204,6 +237,55 @@ export function useMessages(
     }
   }, [chatId, abortActiveStream, reloadMessages, handleEvent]);
 
+  const resolveApproval = useCallback(
+    (messageId: string, content: string) => {
+      setPendingApprovals((prev) => {
+        const next = { ...prev };
+        delete next[messageId];
+        return next;
+      });
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId
+            ? { ...m, content, status: "completed" }
+            : m
+        )
+      );
+    },
+    []
+  );
+
+  const approveApproval = useCallback(
+    async (messageId: string, scope: "once" | "always") => {
+      const approval = pendingApprovalsRef.current[messageId];
+      if (!approval) return;
+      try {
+        const { result } = await api.approveTool(approval.id, scope);
+        resolveApproval(messageId, result);
+      } catch (e) {
+        console.error("[Messages] approve failed:", e);
+      }
+    },
+    [resolveApproval]
+  );
+
+  const denyApproval = useCallback(
+    async (messageId: string) => {
+      const approval = pendingApprovalsRef.current[messageId];
+      if (!approval) return;
+      try {
+        await api.denyTool(approval.id);
+        resolveApproval(
+          messageId,
+          `Tool '${approval.tool_name}' was denied by the user.`
+        );
+      } catch (e) {
+        console.error("[Messages] deny failed:", e);
+      }
+    },
+    [resolveApproval]
+  );
+
   const isStale = loadedChatId !== chatId;
 
   return {
@@ -212,8 +294,11 @@ export function useMessages(
     isSending,
     chatSettings,
     setChatSettings,
+    pendingApprovals: isStale ? {} : pendingApprovals,
     send,
     retry,
     edit,
+    approveApproval,
+    denyApproval,
   };
 }

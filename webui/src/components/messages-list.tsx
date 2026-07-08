@@ -3,7 +3,7 @@ import { ChatMessage } from "./chat-message";
 import { ToolMessage } from "./tool-message";
 import { ScrollArea } from "./ui/scroll-area";
 import { useEffect, memo } from "react";
-import type { Message } from "../lib/api";
+import type { Message, PendingApproval } from "../lib/api";
 
 interface MessagesListProps {
   messages: Message[];
@@ -11,6 +11,9 @@ interface MessagesListProps {
   isSending: boolean;
   currentConversationId: string | undefined;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
+  pendingApprovals?: Record<string, PendingApproval>;
+  onApprove?: (messageId: string, scope: "once" | "always") => void;
+  onDeny?: (messageId: string) => void;
   onBranch?: (messageId: string) => void;
   onRetry?: () => void;
   onEdit?: () => void;
@@ -22,6 +25,9 @@ export const MessagesList = memo(function MessagesList({
   isSending,
   currentConversationId,
   messagesEndRef,
+  pendingApprovals,
+  onApprove,
+  onDeny,
   onBranch,
   onRetry,
   onEdit,
@@ -68,7 +74,15 @@ export const MessagesList = memo(function MessagesList({
               const isLastUserMessage = lastUserMessageIndex !== -1 && index === lastUserMessageIndex;
               
               if (message.role === "tool") {
-                return <ToolMessage key={message.id} message={message} />;
+                return (
+                  <ToolMessage
+                    key={message.id}
+                    message={message}
+                    pendingApproval={pendingApprovals?.[message.id]}
+                    onApprove={onApprove}
+                    onDeny={onDeny}
+                  />
+                );
               }
 
               if (message.role === "error") {

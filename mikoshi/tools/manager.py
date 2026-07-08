@@ -1,5 +1,7 @@
 import asyncio
+import json
 import logging
+import uuid
 from contextlib import AsyncExitStack
 from typing import Any, Dict, List, Optional
 
@@ -54,6 +56,7 @@ class ToolManager:
         self._tools_dir = app_config.plugins.tools_dir
 
         self._pending_approvals: Dict[str, PendingApproval] = {}
+        self._chat_allowlist: Dict[str, set[str]] = {}
         self._connectors_config = app_config.connectors
 
         self.mcp_timeout = app_config.mcp_timeout
@@ -142,6 +145,12 @@ class ToolManager:
 
         logger.info("ToolManager initialization completed successfully")
 
+    def is_allowed(self, chat_id: str, call_name: str) -> bool:
+        return call_name in self._chat_allowlist.get(chat_id, set())
+
+    def allow(self, chat_id: str, call_name: str) -> None:
+        self._chat_allowlist.setdefault(chat_id, set()).add(call_name)
+
     async def call_tool(
         self,
         call_name: str,
@@ -159,9 +168,14 @@ class ToolManager:
             raise ValueError(f"Tool server '{server_name}' not found")
 
         tool_def = self.get_tool_definition(call_name)
-        if tool_def and tool_def.require_approval:
-            logger.warning(f"Tool '{call_name}' requires approval - auto-denying")
-            raise ToolDeniedError(call_name)
+        if (
+            tool_def
+            and tool_def.require_approval
+            and not self.is_allowed(context.chat_id, call_name)
+        ):
+            return await self._call_with_approval(
+                call_name, arguments, context, handler, tool_name
+            )
 
         logger.info(
             "call_tool EXECUTING %s via handler %s", call_name, type(handler).__name__
@@ -172,6 +186,50 @@ class ToolManager:
             call_name,
             type(result).__name__,
         )
+        return result
+
+    async def _call_with_approval(
+        self,
+        call_name: str,
+        arguments: dict,
+        context: ToolCallContext,
+        handler: ToolHandler,
+        tool_name: str,
+    ) -> Any:
+        logger.info("call_tool APPROVAL REQUIRED %s", call_name)
+        approval_id = str(uuid.uuid4())
+        future: asyncio.Future = asyncio.get_running_loop().create_future()
+        approval = PendingApproval(
+            approval_id=approval_id,
+            chat_id=context.chat_id,
+            tool_name=call_name,
+            arguments=arguments,
+            future=future,
+            context=context,
+        )
+        self._pending_approvals[approval_id] = approval
+
+        message_id = None
+        if context.on_approval_requested is not None:
+            message_id = await context.on_approval_requested(
+                approval_id, call_name, arguments
+            )
+            approval.message_id = message_id
+
+        if self._db is not None:
+            self._db.create_pending_approval(
+                context.chat_id,
+                message_id,
+                call_name,
+                json.dumps(arguments),
+                approval_id,
+            )
+
+        result = await future
+        self._pending_approvals.pop(approval_id, None)
+
+        if result == "denied":
+            raise ToolDeniedError(call_name)
         return result
 
     async def list_tools(self, server_name: str) -> list:
@@ -202,11 +260,13 @@ class ToolManager:
         tool_def = handler._tools.get(tool_name)
         return tool_def
 
-    async def approve_tool(self, approval_id: str) -> Any:
+    async def approve_tool(self, approval_id: str, scope: str = "once") -> Any:
         """Approve a pending tool call
 
         Args:
             approval_id: The id of the approval to approve
+            scope: "once" runs the tool this time; "always" also adds the tool
+                to the chat-scoped allowlist so future calls skip the prompt.
 
         Returns:
             The tool execution result
@@ -214,6 +274,9 @@ class ToolManager:
         approval = self._pending_approvals.get(approval_id)
         if approval is None:
             raise ValueError(f"Approval {approval_id} not found")
+
+        if scope == "always":
+            self.allow(approval.chat_id, approval.tool_name)
 
         if self._db is not None:
             self._db.update_approval_status(approval_id, "approved")
@@ -256,6 +319,7 @@ class ToolManager:
             {
                 "id": a.approval_id,
                 "chat_id": a.chat_id,
+                "message_id": a.message_id,
                 "tool_name": a.tool_name,
                 "arguments": a.arguments,
                 "created_at": None,

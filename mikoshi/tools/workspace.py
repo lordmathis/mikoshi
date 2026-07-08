@@ -237,6 +237,7 @@ class WorkspaceTools(ToolSetHandler):
             },
             "required": ["path", "content"],
         },
+        require_approval=True,
     )
     def write(self, path: str, content: str, context: ToolCallContext) -> str:
         root = _require_workspace(context)
@@ -289,6 +290,7 @@ class WorkspaceTools(ToolSetHandler):
             },
             "required": ["path", "edits"],
         },
+        require_approval=True,
     )
     def edit(
         self,
