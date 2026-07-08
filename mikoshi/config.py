@@ -117,13 +117,8 @@ class MemoryConfig(BaseModel):
     collection: str = "memories"
 
 
-class LangfuseConfig(BaseModel):
-    enabled: bool = False
-    host: Optional[str] = None
-    public_key: Optional[str] = None
-    secret_key: Optional[str] = None
-    environment: Optional[str] = None
-    sample_rate: float = 1.0
+class TracingConfig(BaseModel):
+    endpoint: Optional[str] = None
 
 
 class AppConfig(BaseModel):
@@ -143,7 +138,7 @@ class AppConfig(BaseModel):
     workspace: WorkspaceConfig = WorkspaceConfig()
     search: Optional[SearchConfig] = None
     memory: Optional[MemoryConfig] = None
-    langfuse: Optional[LangfuseConfig] = None
+    tracing: Optional[TracingConfig] = None
 
 
 def load_config(path: str) -> AppConfig:

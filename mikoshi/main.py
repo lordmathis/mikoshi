@@ -43,7 +43,7 @@ if __name__ == "__main__":
 
     app_config: AppConfig = load_config("config.yaml")
     configure_logging(app_config.logging)
-    init_observability(app_config.langfuse)
+    init_observability(app_config.tracing)
     app.state.app_config = app_config
 
     uvicorn.run(
