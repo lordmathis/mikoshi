@@ -62,29 +62,6 @@ class TestResolveAgentParams:
         assert result["system_prompt"] == "override"
         assert result["max_iterations"] == 3
 
-
-class TestInjectWorkspaceTools:
-    def test_no_workspace_id(self):
-        params = {"tool_servers": ["mcp"]}
-        AgentManager._inject_workspace_tools(params, None)
-        assert params["tool_servers"] == ["mcp"]
-
-    def test_appends_workspace_server(self):
-        params = {"tool_servers": ["mcp"]}
-        AgentManager._inject_workspace_tools(params, "ws-1")
-        assert params["tool_servers"] == ["mcp", "workspace"]
-
-    def test_no_duplicate(self):
-        params = {"tool_servers": ["workspace", "mcp"]}
-        AgentManager._inject_workspace_tools(params, "ws-1")
-        assert params["tool_servers"] == ["workspace", "mcp"]
-
-    def test_creates_tool_servers_if_missing(self):
-        params = {}
-        AgentManager._inject_workspace_tools(params, "ws-1")
-        assert params["tool_servers"] == ["workspace"]
-
-
 class TestResolveTitleParams:
     def test_no_title_config(self):
         m = _manager(title_generation=None)

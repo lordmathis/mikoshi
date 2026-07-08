@@ -283,8 +283,6 @@ class ResearchAgent(BaseAgent):
             if tool_servers is not None
             else list(self.tool_servers or [])
         )
-        if web and "web_tools" not in base:
-            base.append("web_tools")
         agent = _InnerResearchAgent(
             chat_id=self.chat_id,
             db=self.db,

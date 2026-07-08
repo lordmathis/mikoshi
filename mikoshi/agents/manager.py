@@ -157,14 +157,6 @@ class AgentManager:
             "title_model_id": self.title_generation.model,
         }
 
-    @staticmethod
-    def _inject_workspace_tools(params: Dict, workspace_id: Optional[str]) -> None:
-        if workspace_id:
-            servers = list(params.get("tool_servers", []))
-            if WORKSPACE_SERVER_NAME not in servers:
-                servers.append(WORKSPACE_SERVER_NAME)
-            params["tool_servers"] = servers
-
     def _construct_agent(
         self,
         agent_cls: Type[BaseAgent],
@@ -222,7 +214,6 @@ class AgentManager:
                 raise ValueError(f"Provider '{provider_name}' not found")
 
             params = self._resolve_agent_params(config)
-            self._inject_workspace_tools(params, workspace_id)
             agent_cls = WorkspaceAgent if workspace_id else ReActAgent
             return self._construct_agent(
                 agent_cls,
@@ -251,7 +242,6 @@ class AgentManager:
             "max_iterations": agent_class.max_iterations,
         }
         params = self._resolve_agent_params(config, defaults)
-        self._inject_workspace_tools(params, workspace_id)
         return self._construct_agent(
             agent_class,
             chat_id,
