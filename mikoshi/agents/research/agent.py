@@ -22,7 +22,7 @@ from mikoshi.agents.research.stages import (
 )
 from mikoshi.agents.streaming import STREAM_DONE, StreamEvent
 from mikoshi.observability import observe, trace_session
-from mikoshi.tools.workspace import _workspace_result
+from mikoshi.tools.builtin.workspace import _workspace_result
 
 logger = logging.getLogger(__name__)
 

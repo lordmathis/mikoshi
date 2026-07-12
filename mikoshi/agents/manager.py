@@ -12,7 +12,7 @@ from mikoshi.plugins import discover_plugins
 from mikoshi.providers.registry import ProviderRegistry
 from mikoshi.skills.registry import SkillRegistry
 from mikoshi.tools.manager import ToolManager
-from mikoshi.tools.workspace import WORKSPACE_SERVER_NAME
+from mikoshi.tools.builtin.workspace import WORKSPACE_SERVER_NAME
 from mikoshi.workspace import WorkspaceService
 
 logger = logging.getLogger(__name__)

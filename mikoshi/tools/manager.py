@@ -15,15 +15,14 @@ from mikoshi.tools.context import ToolCallContext
 from mikoshi.tools.handler_base import ToolHandler
 from mikoshi.tools.mcp_handler import MCPToolHandler
 from mikoshi.tools.toolset_handler import ToolSetHandler
-from mikoshi.tools.workspace import WorkspaceTools
-from mikoshi.tools.web import WebTools
-from mikoshi.tools.memory import MemoryTools
+from mikoshi.tools.builtin import BashTools, MemoryTools, WebTools, WorkspaceTools
 
 logger = logging.getLogger(__name__)
 
 # Map tool server -> config key
 BUILTIN_TOOLS: list[tuple[type[ToolSetHandler], Optional[str]]] = [
     (WorkspaceTools, None),
+    (BashTools, None),
     (WebTools, "search"),
     (MemoryTools, "memory"),
 ]

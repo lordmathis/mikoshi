@@ -16,7 +16,7 @@ dependencies = [
     { name = "beautifulsoup4" },
     { name = "ddgs" },
     { name = "fastapi" },
-    { name = "firecrawl" },
+    { name = "firecrawl-py" },
     { name = "httpx" },
     { name = "huggingface-hub" },
     { name = "isort" },
@@ -48,7 +48,7 @@ requires-dist = [
     { name = "beautifulsoup4", specifier = ">=4.14.3" },
     { name = "ddgs", specifier = ">=9.10.0" },
     { name = "fastapi", specifier = ">=0.128.0" },
-    { name = "firecrawl", specifier = ">=4.31.0" },
+    { name = "firecrawl-py", specifier = ">=4.32.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "huggingface-hub", specifier = ">=0.36.0" },
     { name = "isort", specifier = ">=7.0.0" },
@@ -595,8 +595,8 @@ wheels = [
 ]
 
 [[package]]
-name = "firecrawl"
-version = "4.31.0"
+name = "firecrawl-py"
+version = "4.32.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -607,9 +607,9 @@ dependencies = [
     { name = "requests" },
     { name = "websockets" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/7c/a4/a732ce69060d424d1384298c3e1e1d17b0d6315bf02c054a394964c633bc/firecrawl-4.31.0.tar.gz", hash = "sha256:a365de1e27af5188b805ed3be507fce3c409d118f3da4634947180b71adca8ad", size = 199166, upload-time = "2026-06-30T03:00:28.441Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/61/9f/aaf93b8119f239cda04ecc56a4518fb78545750cefa9760fd39ec4e47155/firecrawl_py-4.32.0.tar.gz", hash = "sha256:5010bc7ba2ba5e69d20e96299d40e47f5960a6bf98d42da4775f26321b9a8152", size = 202245, upload-time = "2026-07-08T10:57:13.783Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/6e/12/c61266298fb6ac24709f5dedabc63f8e8ffa71fa4450cc0bcd5b0ec2eca6/firecrawl-4.31.0-py3-none-any.whl", hash = "sha256:94d14545b1d805eb8c9d2d5fc499a777dea396601620dbd404dc783795885900", size = 248231, upload-time = "2026-06-30T03:00:26.61Z" },
+    { url = "https://files.pythonhosted.org/packages/49/a4/8f211bfe563cb7fc80bcebd01d269ff52069d08a3de0832526ab27111dac/firecrawl_py-4.32.0-py3-none-any.whl", hash = "sha256:aa734f28703aadf40bd98b09f17f4c1e5725524f0e27fdc0a6ec422de37dad85", size = 252196, upload-time = "2026-07-08T10:57:12.06Z" },
 ]
 
 [[package]]

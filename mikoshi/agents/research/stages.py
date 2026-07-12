@@ -27,7 +27,7 @@ from mikoshi.agents.research.prompts import (
     SYNTHESIS_SYSTEM_PROMPT,
 )
 from mikoshi.observability import observe
-from mikoshi.tools.workspace import WORKSPACE_SERVER_NAME
+from mikoshi.tools.builtin.workspace import WORKSPACE_SERVER_NAME
 
 if TYPE_CHECKING:
     from mikoshi.agents.research.agent import _InnerResearchAgent
