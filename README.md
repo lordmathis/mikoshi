@@ -242,7 +242,7 @@ Optional OpenTelemetry tracing via [Arize Phoenix](https://github.com/Arize-ai/p
 
 ```yaml
 tracing:
-  endpoint: "http://localhost:4318/v1/traces"
+  endpoint: "http://localhost:6006/v1/traces"
   project_name: "mikoshi"
   batch: true
   service_version: null        # optional, e.g. "1.2.0"
@@ -251,13 +251,13 @@ tracing:
 ```
 
 **Configuration options:**
-- `endpoint`: OTLP endpoint. For Phoenix over HTTP (the default), use the `/v1/traces` path on port **4318** (e.g. `http://localhost:4318/v1/traces`).
+- `endpoint`: OTLP endpoint. For Phoenix over HTTP (the default), use the `/v1/traces` path on the **same port as the UI (6006)** — e.g. `http://localhost:6006/v1/traces`. (OTLP gRPC on `4317` is also available.)
 - `project_name`: Phoenix project traces are grouped under (default `"mikoshi"`).
 - `batch`: `true` (default, `BatchSpanProcessor` for production) or `false` (`SimpleSpanProcessor`, synchronous — handy for local dev).
 - `service_version` / `deployment_environment`: optional resource attributes for filtering by version/environment in Phoenix.
 - `headers`: optional request headers (e.g. `{"authorization": "Bearer ..."}` for Phoenix Cloud).
 
-**Running Phoenix locally:** the dev compose file exposes the UI on `6006`, OTLP gRPC on `4317`, and OTLP HTTP on `4318`:
+**Running Phoenix locally:** the dev compose file exposes the UI and OTLP HTTP endpoints on `6006`, and OTLP gRPC on `4317`:
 
 ```bash
 docker compose -f docker-compose.dev.yaml up phoenix

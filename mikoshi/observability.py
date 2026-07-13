@@ -29,7 +29,6 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "flush_observability",
     "init_observability",
-    "instrument_app",
     "observe",
     "start_embedding_span",
     "start_retriever_span",
@@ -102,20 +101,6 @@ def _instrument_llm_sdks() -> None:
 
     OpenAIInstrumentor().instrument()
     AnthropicInstrumentor().instrument()
-
-
-def instrument_app(app: Any) -> None:
-    """Instrument the FastAPI app and the outbound httpx client.
-
-    Call after ``init_observability`` and once the ``app`` object exists.
-    Safe when tracing is disabled — OTel produces non-recording spans
-    when no provider is configured.
-    """
-    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-    from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
-
-    FastAPIInstrumentor.instrument_app(app)
-    HTTPXClientInstrumentor().instrument()
 
 
 def flush_observability() -> None:
