@@ -18,9 +18,13 @@ logger = logging.getLogger(__name__)
 class StreamHub:
     def __init__(self):
         self._subscribers: list[asyncio.Queue] = []
+        self._pre_subscribe_buffer: list = []
 
     def subscribe(self) -> asyncio.Queue:
         q = asyncio.Queue()
+        for event in self._pre_subscribe_buffer:
+            q.put_nowait(event)
+        self._pre_subscribe_buffer.clear()
         self._subscribers.append(q)
         return q
 
@@ -31,6 +35,9 @@ class StreamHub:
             pass
 
     async def put(self, event):
+        if not self._subscribers:
+            self._pre_subscribe_buffer.append(event)
+            return
         for q in self._subscribers:
             await q.put(event)
 
