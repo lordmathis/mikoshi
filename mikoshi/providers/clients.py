@@ -4,6 +4,8 @@ import json
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Sequence
 
+from mikoshi.observability import start_embedding_span
+
 
 class LLMClient(ABC):
     """Abstract base class for LLM API clients."""
@@ -104,10 +106,11 @@ class OpenAIClient(LLMClient):
         self, model: str, input: str
     ) -> Optional[List[float]]:
         """Create an embedding vector using the OpenAI-compatible embeddings API."""
-        response = await self.client.embeddings.create(model=model, input=input)
-        if not response.data:
-            return None
-        return response.data[0].embedding
+        with start_embedding_span(model, input):
+            response = await self.client.embeddings.create(model=model, input=input)
+            if not response.data:
+                return None
+            return response.data[0].embedding
 
 
 class AnthropicClient(LLMClient):

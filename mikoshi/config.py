@@ -119,6 +119,11 @@ class MemoryConfig(BaseModel):
 
 class TracingConfig(BaseModel):
     endpoint: Optional[str] = None
+    project_name: str = "mikoshi"
+    batch: bool = True
+    service_version: Optional[str] = None
+    deployment_environment: Optional[str] = None
+    headers: Dict[str, str] = {}
 
 
 class AppConfig(BaseModel):

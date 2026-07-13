@@ -7,6 +7,9 @@ from typing import Any, Dict, List, Optional, Tuple
 from openai import APIConnectionError
 
 from openai.types.chat import ChatCompletionMessageParam
+from opentelemetry.trace import get_current_span
+from openinference.semconv.trace import SpanAttributes
+from phoenix.otel import using_attributes
 
 from mikoshi.agents.context import format_history, generate_title, parse_mentions
 from mikoshi.agents.context.messages import extract_assistant_content
@@ -15,7 +18,7 @@ from mikoshi.agents.streaming import STREAM_DONE, StreamEvent
 from mikoshi.config import WorkspaceConfig
 from mikoshi.db.db import Database
 from mikoshi.db.models import Message
-from mikoshi.observability import observe, record_generation, trace_session
+from mikoshi.observability import observe, start_tool_span
 from mikoshi.providers.provider import Provider
 from mikoshi.skills.registry import SkillRegistry
 from mikoshi.tools.approval import ToolDeniedError
@@ -79,7 +82,6 @@ class BaseAgent(ABC):
             git_user_email=wc.git_user_email,
         )
 
-    @observe(as_type="tool", name="tool_calls")
     async def _execute_tool_calls(
         self, tool_calls_raw: list, messages: List[dict], queue: asyncio.Queue
     ) -> None:
@@ -120,34 +122,71 @@ class BaseAgent(ABC):
 
             approval_msg_id: List[str] = []
 
-            if not parse_failed:
-                async def _on_approval_requested(
-                    approval_id: str,
-                    _tool_name: str,
-                    _arguments: dict,
-                ) -> str:
-                    return await self._request_approval(
-                        queue, tool_call, _tool_name, approval_id, approval_msg_id
-                    )
+            with start_tool_span(tool_name) as span:
+                span.set_attribute(
+                    SpanAttributes.INPUT_VALUE,
+                    json.dumps(tool_args, default=str),
+                )
+                span.set_attribute(
+                    SpanAttributes.INPUT_MIME_TYPE, "application/json"
+                )
+                if not parse_failed:
+                    async def _on_approval_requested(
+                        approval_id: str,
+                        _tool_name: str,
+                        _arguments: dict,
+                    ) -> str:
+                        msg_id = await self._request_approval(
+                            queue, tool_call, _tool_name, approval_id, approval_msg_id
+                        )
+                        get_current_span().add_event(
+                            "tool.approval.requested",
+                            attributes={
+                                "tool.name": _tool_name,
+                                "approval.id": approval_id,
+                                "approval.message_id": msg_id,
+                            },
+                        )
+                        return msg_id
 
-                try:
-                    ctx = ToolCallContext(
-                        provider=self.provider,
-                        model_id=self.model_id,
-                        chat_id=self.chat_id,
-                        workspace=self._build_workspace_context(),
-                        on_approval_requested=_on_approval_requested,
-                    )
-                    result = await self.tool_manager.call_tool(
-                        tool_name, tool_args, ctx
-                    )
-                except ToolDeniedError as e:
-                    result = f"Tool '{e.tool_name}' was denied by the user."
-                    logger.info(
-                        "chat_id=%s tool %s denied by user", self.chat_id, tool_name
-                    )
+                    try:
+                        ctx = ToolCallContext(
+                            provider=self.provider,
+                            model_id=self.model_id,
+                            chat_id=self.chat_id,
+                            workspace=self._build_workspace_context(),
+                            on_approval_requested=_on_approval_requested,
+                        )
+                        result = await self.tool_manager.call_tool(
+                            tool_name, tool_args, ctx
+                        )
+                    except ToolDeniedError as e:
+                        result = f"Tool '{e.tool_name}' was denied by the user."
+                        logger.info(
+                            "chat_id=%s tool %s denied by user", self.chat_id, tool_name
+                        )
+                        get_current_span().add_event(
+                            "tool.approval.denied",
+                            attributes={
+                                "tool.name": tool_name,
+                                "approval.message_id": approval_msg_id[0]
+                                if approval_msg_id
+                                else "",
+                            },
+                        )
+                    else:
+                        if approval_msg_id:
+                            get_current_span().add_event(
+                                "tool.approval.granted",
+                                attributes={
+                                    "tool.name": tool_name,
+                                    "approval.message_id": approval_msg_id[0],
+                                },
+                            )
 
-            result_str = str(result)
+                result_str = str(result)
+                span.set_attribute(SpanAttributes.OUTPUT_VALUE, result_str)
+
             logger.info(
                 "chat_id=%s tool %s completed (result_len=%d)",
                 self.chat_id,
@@ -232,107 +271,112 @@ class BaseAgent(ABC):
 
     @observe(name="agent_turn")
     async def _loop(self, message: str, queue: asyncio.Queue) -> Dict[str, Any]:
-        trace_session(self.chat_id)
-        logger.info(
-            "chat_id=%s _loop START message_len=%d",
-            self.chat_id,
-            len(message),
-        )
-        messages = await self._get_iteration_context(message)
-        tools = await self._get_tools(self.tool_servers)
-
-        try:
-            for iteration in range(self.max_iterations):
-                logger.info(
-                    "chat_id=%s iteration %d/%d — Sending %d messages to LLM (model=%s)",
-                    self.chat_id,
-                    iteration + 1,
-                    self.max_iterations,
-                    len(messages),
-                    self.model_id,
-                )
-                for i, m in enumerate(messages):
-                    role = m.get("role", "?")
-                    content = m.get("content")
-                    if isinstance(content, str) and len(content) > 500:
-                        content = content[:500] + "... [truncated]"
-                    logger.debug("  messages[%d] role=%s content=%s", i, role, content)
-
-                if tools:
-                    tool_names = [t["function"]["name"] for t in tools]
-                    logger.debug("Available tools: %s", tool_names)
-
-                logger.info(
-                    "chat_id=%s iteration %d — calling LLM provider...",
-                    self.chat_id,
-                    iteration + 1,
-                )
-                response = await self._llm(messages, tools if tools else None)
-                logger.info(
-                    "chat_id=%s iteration %d — LLM response received",
-                    self.chat_id,
-                    iteration + 1,
-                )
-                logger.debug(
-                    "LLM raw response: %s",
-                    json.dumps(response, default=str, ensure_ascii=False)[:2000],
-                )
-
-                message_data = response["choices"][0]["message"]
-                finish_reason = response["choices"][0].get("finish_reason")
-                has_tool_calls = bool(message_data.get("tool_calls"))
-                logger.info(
-                    "chat_id=%s iteration %d — finish_reason=%s, has_tool_calls=%s, content_len=%s",
-                    self.chat_id,
-                    iteration + 1,
-                    finish_reason,
-                    has_tool_calls,
-                    len(message_data.get("content", "") or ""),
-                )
-
-                if (
-                    not message_data.get("tool_calls")
-                    or len(message_data.get("tool_calls", [])) == 0
-                ):
-                    logger.info(
-                        "chat_id=%s no tool calls — processing final response",
-                        self.chat_id,
-                    )
-                    return await self._process_final_response(
-                        response, message_data, queue
-                    )
-
-                tool_calls_raw = message_data["tool_calls"]
-                logger.info(
-                    "chat_id=%s iteration %d — %d tool call(s) to execute: %s",
-                    self.chat_id,
-                    iteration + 1,
-                    len(tool_calls_raw),
-                    [tc["function"]["name"] for tc in tool_calls_raw],
-                )
-
-                msg = await self._save_message("assistant", response)
-                await self._emit(
-                    queue, StreamEvent(type="message", data=self._format_message(msg))
-                )
-
-                messages.append(
-                    {
-                        "role": "assistant",
-                        "content": message_data.get("content"),
-                        "tool_calls": tool_calls_raw,
-                    }
-                )
-
-                await self._execute_tool_calls(tool_calls_raw, messages, queue)
-
-            return await self._handle_max_iterations(queue)
-        except Exception as e:
-            logger.error(
-                "chat_id=%s agent loop error: %s", self.chat_id, e, exc_info=True
+        with using_attributes(
+            session_id=self.chat_id,
+            user_id=self.workspace_id or "",
+            metadata={"agent": type(self).__name__, "model": self.model_id},
+            tags=["base"],
+        ):
+            logger.info(
+                "chat_id=%s _loop START message_len=%d",
+                self.chat_id,
+                len(message),
             )
-            await self._emit(queue, StreamEvent(type="error", data={"message": str(e)}))
-            await self._emit(queue, STREAM_DONE)
+            messages = await self._get_iteration_context(message)
+            tools = await self._get_tools(self.tool_servers)
+
+            try:
+                for iteration in range(self.max_iterations):
+                    logger.info(
+                        "chat_id=%s iteration %d/%d — Sending %d messages to LLM (model=%s)",
+                        self.chat_id,
+                        iteration + 1,
+                        self.max_iterations,
+                        len(messages),
+                        self.model_id,
+                    )
+                    for i, m in enumerate(messages):
+                        role = m.get("role", "?")
+                        content = m.get("content")
+                        if isinstance(content, str) and len(content) > 500:
+                            content = content[:500] + "... [truncated]"
+                        logger.debug("  messages[%d] role=%s content=%s", i, role, content)
+
+                    if tools:
+                        tool_names = [t["function"]["name"] for t in tools]
+                        logger.debug("Available tools: %s", tool_names)
+
+                    logger.info(
+                        "chat_id=%s iteration %d — calling LLM provider...",
+                        self.chat_id,
+                        iteration + 1,
+                    )
+                    response = await self._llm(messages, tools if tools else None)
+                    logger.info(
+                        "chat_id=%s iteration %d — LLM response received",
+                        self.chat_id,
+                        iteration + 1,
+                    )
+                    logger.debug(
+                        "LLM raw response: %s",
+                        json.dumps(response, default=str, ensure_ascii=False)[:2000],
+                    )
+
+                    message_data = response["choices"][0]["message"]
+                    finish_reason = response["choices"][0].get("finish_reason")
+                    has_tool_calls = bool(message_data.get("tool_calls"))
+                    logger.info(
+                        "chat_id=%s iteration %d — finish_reason=%s, has_tool_calls=%s, content_len=%s",
+                        self.chat_id,
+                        iteration + 1,
+                        finish_reason,
+                        has_tool_calls,
+                        len(message_data.get("content", "") or ""),
+                    )
+
+                    if (
+                        not message_data.get("tool_calls")
+                        or len(message_data.get("tool_calls", [])) == 0
+                    ):
+                        logger.info(
+                            "chat_id=%s no tool calls — processing final response",
+                            self.chat_id,
+                        )
+                        return await self._process_final_response(
+                            response, message_data, queue
+                        )
+
+                    tool_calls_raw = message_data["tool_calls"]
+                    logger.info(
+                        "chat_id=%s iteration %d — %d tool call(s) to execute: %s",
+                        self.chat_id,
+                        iteration + 1,
+                        len(tool_calls_raw),
+                        [tc["function"]["name"] for tc in tool_calls_raw],
+                    )
+
+                    msg = await self._save_message("assistant", response)
+                    await self._emit(
+                        queue, StreamEvent(type="message", data=self._format_message(msg))
+                    )
+
+                    messages.append(
+                        {
+                            "role": "assistant",
+                            "content": message_data.get("content"),
+                            "tool_calls": tool_calls_raw,
+                        }
+                    )
+
+                    await self._execute_tool_calls(tool_calls_raw, messages, queue)
+
+                return await self._handle_max_iterations(queue)
+            except Exception as e:
+                logger.error(
+                    "chat_id=%s agent loop error: %s", self.chat_id, e, exc_info=True
+                )
+                await self._emit(queue, StreamEvent(type="error", data={"message": str(e)}))
+                await self._emit(queue, STREAM_DONE)
 
     async def chat(
         self, message: str, queue: asyncio.Queue, file_ids: Optional[List[str]] = None
@@ -537,7 +581,6 @@ class BaseAgent(ABC):
                 )
         return api_tools
 
-    @observe(as_type="generation", name="llm_completion")
     async def _llm(
         self,
         messages: List[ChatCompletionMessageParam],
@@ -553,7 +596,6 @@ class BaseAgent(ABC):
                     temperature=self.temperature,
                     max_tokens=self.max_tokens,
                 )
-                record_generation(self.model_id, response.get("usage"))
                 return response
             except APIConnectionError:
                 if attempt == retries - 1:
@@ -566,9 +608,28 @@ class BaseAgent(ABC):
                     retries,
                     delay,
                 )
+                get_current_span().add_event(
+                    "llm.retry",
+                    attributes={
+                        "retry.attempt": attempt + 1,
+                        "retry.delay_s": delay,
+                        "error.type": "APIConnectionError",
+                    },
+                )
                 await asyncio.sleep(delay)
 
     async def _generate_title(self) -> None:
         client = self._title_llm_client or self._llm_client
         model = self._title_model_id or self.model_id
-        asyncio.create_task(generate_title(self.chat_id, self.db, client, model))
+
+        async def _run() -> None:
+            # Background task: explicitly tag with the session id so the
+            # title-generation LLM call groups under the same Phoenix session
+            # (create_task does not inherit the agent turn's OTel context).
+            with using_attributes(
+                session_id=self.chat_id,
+                tags=["title_generation"],
+            ):
+                await generate_title(self.chat_id, self.db, client, model)
+
+        asyncio.create_task(_run())

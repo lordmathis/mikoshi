@@ -1,10 +1,12 @@
 """Memory tool server: persistent semantic memory backed by Qdrant."""
 
+import json
 import logging
 import time
 import uuid
 from typing import Any, Dict, List, Optional
 
+from openinference.semconv.trace import SpanAttributes
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import (
     Distance,
@@ -16,6 +18,7 @@ from qdrant_client.models import (
 )
 
 from mikoshi.config import MemoryConfig
+from mikoshi.observability import start_retriever_span
 from mikoshi.tools.context import ToolCallContext
 from mikoshi.tools.toolset_handler import ToolSetHandler, tool
 
@@ -213,13 +216,26 @@ class MemoryTools(ToolSetHandler):
             )
 
         try:
-            response = await self._client.query_points(
-                collection_name=self._collection,
-                query=vec,
-                query_filter=query_filter,
-                limit=max(1, min(int(limit or 5), 50)),
-            )
-            hits = response.points
+            with start_retriever_span("recall_memory", query) as span:
+                response = await self._client.query_points(
+                    collection_name=self._collection,
+                    query=vec,
+                    query_filter=query_filter,
+                    limit=max(1, min(int(limit or 5), 50)),
+                )
+                hits = response.points
+                span.set_attribute(
+                    SpanAttributes.RETRIEVAL_DOCUMENTS,
+                    json.dumps(
+                        [
+                            {
+                                "document.content": (hit.payload or {}).get("text", ""),
+                                "document.score": hit.score,
+                            }
+                            for hit in hits
+                        ]
+                    ),
+                )
         except Exception as e:
             logger.error("qdrant search failed: %s", e, exc_info=True)
             return f"Error: failed to search memory: {e}"

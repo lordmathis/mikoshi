@@ -21,8 +21,9 @@ from mikoshi.agents.research.stages import (
     Synthesizer,
 )
 from mikoshi.agents.streaming import STREAM_DONE, StreamEvent
-from mikoshi.observability import observe, trace_session
+from mikoshi.observability import observe
 from mikoshi.tools.builtin.workspace import _workspace_result
+from phoenix.otel import using_attributes
 
 logger = logging.getLogger(__name__)
 
@@ -102,72 +103,77 @@ class ResearchAgent(BaseAgent):
 
     @observe(name="research_turn")
     async def _loop(self, message: str, queue: asyncio.Queue) -> Dict[str, Any]:
-        trace_session(self.chat_id)
-        self._active_queue = queue
-        try:
-            plan = self._read_plan()
-            if not plan:
-                if not await Planner(self, message).apply(queue):
-                    await self._emit_error(
-                        queue,
-                        "Couldn't create a research plan. Try rephrasing your request.",
-                    )
-                    return {}
+        with using_attributes(
+            session_id=self.chat_id,
+            user_id=self.workspace_id or "",
+            metadata={"agent": type(self).__name__, "model": self.model_id},
+            tags=["research"],
+        ):
+            self._active_queue = queue
+            try:
                 plan = self._read_plan()
-            elif self.file_exists(REPORT_FILENAME):
-                await Planner(self, message, plan, self._read_report()).apply(queue)
-                plan = self._read_plan() or plan
+                if not plan:
+                    if not await Planner(self, message).apply(queue):
+                        await self._emit_error(
+                            queue,
+                            "Couldn't create a research plan. Try rephrasing your request.",
+                        )
+                        return {}
+                    plan = self._read_plan()
+                elif self.file_exists(REPORT_FILENAME):
+                    await Planner(self, message, plan, self._read_report()).apply(queue)
+                    plan = self._read_plan() or plan
 
-            original_question = _parse_title(plan) or message
+                original_question = _parse_title(plan) or message
 
-            for _ in range(self.max_outer_iterations):
+                for _ in range(self.max_outer_iterations):
+                    self._reconcile_plan()
+                    plan = self._read_plan() or ""
+                    pending = _parse_pending_tasks(plan)
+                    if not pending:
+                        break
+
+                    task_desc, task_idx = pending[0]
+                    findings_path = await Researcher(
+                        self, task_desc, task_idx, original_question
+                    ).apply(queue)
+                    if not findings_path:
+                        await self._emit_error(
+                            queue,
+                            f"Research task failed and aborted: {task_desc}",
+                        )
+                        return {}
+
+                    self._reconcile_plan()
+                    plan = self._read_plan() or ""
+                    if _parse_pending_tasks(plan) and findings_path:
+                        findings = self.read_file(findings_path)
+                        if findings:
+                            await Replanner(self, original_question, plan, findings).apply(
+                                queue
+                            )
+
                 self._reconcile_plan()
-                plan = self._read_plan() or ""
-                pending = _parse_pending_tasks(plan)
-                if not pending:
-                    break
-
-                task_desc, task_idx = pending[0]
-                findings_path = await Researcher(
-                    self, task_desc, task_idx, original_question
-                ).apply(queue)
-                if not findings_path:
+                await Synthesizer(self, original_question).apply(queue)
+                if not self.file_exists(REPORT_FILENAME):
                     await self._emit_error(
-                        queue,
-                        f"Research task failed and aborted: {task_desc}",
+                        queue, "Couldn't synthesize the research report."
                     )
                     return {}
 
-                self._reconcile_plan()
-                plan = self._read_plan() or ""
-                if _parse_pending_tasks(plan) and findings_path:
-                    findings = self.read_file(findings_path)
-                    if findings:
-                        await Replanner(self, original_question, plan, findings).apply(
-                            queue
-                        )
-
-            self._reconcile_plan()
-            await Synthesizer(self, original_question).apply(queue)
-            if not self.file_exists(REPORT_FILENAME):
-                await self._emit_error(
-                    queue, "Couldn't synthesize the research report."
+                await self._emit(queue, STREAM_DONE)
+            except Exception as e:
+                logger.error(
+                    "chat_id=%s research agent error: %s",
+                    self.chat_id,
+                    e,
+                    exc_info=True,
                 )
-                return {}
-
-            await self._emit(queue, STREAM_DONE)
-        except Exception as e:
-            logger.error(
-                "chat_id=%s research agent error: %s",
-                self.chat_id,
-                e,
-                exc_info=True,
-            )
-            await self._emit(queue, StreamEvent(type="error", data={"message": str(e)}))
-            await self._emit(queue, STREAM_DONE)
-        finally:
-            self._active_queue = None
-        return {}
+                await self._emit(queue, StreamEvent(type="error", data={"message": str(e)}))
+                await self._emit(queue, STREAM_DONE)
+            finally:
+                self._active_queue = None
+            return {}
 
     async def _emit_error(self, queue: asyncio.Queue, message: str) -> None:
         """Surface a user-visible error and end the turn.

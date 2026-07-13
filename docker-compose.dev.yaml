@@ -26,6 +26,7 @@ services:
     ports:
       - "6006:6006"
       - "4317:4317"
+      - "4318:4318"
 
 configs:
   searxng_settings:

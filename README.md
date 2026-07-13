@@ -236,6 +236,35 @@ logging:
 
 When `target` is a file path, Mikoshi uses a rotating file handler (10 MB per file, 5 backups kept).
 
+### Tracing Configuration
+
+Optional OpenTelemetry tracing via [Arize Phoenix](https://github.com/Arize-ai/phoenix) (or any OTLP-compatible backend). When omitted, tracing is disabled and all spans are harmless no-ops.
+
+```yaml
+tracing:
+  endpoint: "http://localhost:4318/v1/traces"
+  project_name: "mikoshi"
+  batch: true
+  service_version: null        # optional, e.g. "1.2.0"
+  deployment_environment: null # optional, e.g. "production"
+  headers: {}                  # optional auth / Phoenix cloud headers
+```
+
+**Configuration options:**
+- `endpoint`: OTLP endpoint. For Phoenix over HTTP (the default), use the `/v1/traces` path on port **4318** (e.g. `http://localhost:4318/v1/traces`).
+- `project_name`: Phoenix project traces are grouped under (default `"mikoshi"`).
+- `batch`: `true` (default, `BatchSpanProcessor` for production) or `false` (`SimpleSpanProcessor`, synchronous — handy for local dev).
+- `service_version` / `deployment_environment`: optional resource attributes for filtering by version/environment in Phoenix.
+- `headers`: optional request headers (e.g. `{"authorization": "Bearer ..."}` for Phoenix Cloud).
+
+**Running Phoenix locally:** the dev compose file exposes the UI on `6006`, OTLP gRPC on `4317`, and OTLP HTTP on `4318`:
+
+```bash
+docker compose -f docker-compose.dev.yaml up phoenix
+```
+
+Then open the Phoenix UI at `http://localhost:6006`. Standard `OTEL_*` environment variables are also respected by the underlying `register()` helper.
+
 ### Additional Configuration Options
 
 ```yaml

@@ -1,23 +1,26 @@
 """OpenTelemetry-based observability for agent tracing.
 
 Exports traces via OTLP to any compatible backend (Phoenix, Jaeger,
-Tempo, etc.). When tracing is disabled, all decorators and helpers
-are harmless no-ops — OTel returns non-recording spans when no
-TracerProvider is configured.
+Tempo, etc.). The provider is wired up through ``arize-phoenix-otel``'s
+``register()`` helper, which reads standard ``OTEL_*`` env vars. When
+tracing is disabled, all decorators and helpers are harmless no-ops —
+OTel returns non-recording spans when no TracerProvider is configured.
 """
 
+import contextlib
 import functools
 import inspect
 import json
 import logging
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Dict, Optional
 
 from opentelemetry import trace
-from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.trace import get_current_span
+from openinference.semconv.trace import (
+    OpenInferenceSpanKindValues,
+    SpanAttributes,
+)
+from phoenix.otel import register
 
 from mikoshi.config import TracingConfig
 
@@ -26,29 +29,20 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "flush_observability",
     "init_observability",
+    "instrument_app",
     "observe",
-    "record_generation",
-    "trace_session",
+    "start_embedding_span",
+    "start_retriever_span",
+    "start_tool_span",
 ]
 
 _tracer = trace.get_tracer("mikoshi")
 
-# OpenInference attribute keys (recognized by Phoenix)
-_SPAN_KIND = "openinference.span.kind"
-_KIND_CHAIN = "CHAIN"
-_KIND_TOOL = "TOOL"
-_KIND_LLM = "LLM"
-
-_INPUT_VALUE = "input.value"
-_INPUT_MIME_TYPE = "input.mime_type"
-_OUTPUT_VALUE = "output.value"
-_OUTPUT_MIME_TYPE = "output.mime_type"
-
-_LLM_MODEL_NAME = "llm.model_name"
-_LLM_TOKEN_COUNT_PROMPT = "llm.token_count.prompt"
-_LLM_TOKEN_COUNT_COMPLETION = "llm.token_count.completion"
-
-_SESSION_ID = "session.id"
+# OpenInference span-kind values (recognized by Phoenix)
+_KIND_CHAIN = OpenInferenceSpanKindValues.CHAIN.value
+_KIND_TOOL = OpenInferenceSpanKindValues.TOOL.value
+_KIND_EMBEDDING = OpenInferenceSpanKindValues.EMBEDDING.value
+_KIND_RETRIEVER = OpenInferenceSpanKindValues.RETRIEVER.value
 
 
 def _safe_json(obj: Any) -> Optional[str]:
@@ -59,22 +53,69 @@ def _safe_json(obj: Any) -> Optional[str]:
 
 
 def init_observability(config: Optional[TracingConfig]) -> None:
-    """Initialize the OTel tracer provider with an OTLP exporter.
+    """Initialize the OTel tracer provider via arize-phoenix-otel.
 
+    Standard ``OTEL_*`` environment variables are respected by ``register()``.
     No config or no endpoint → tracing stays as no-op spans.
     """
     if not config or not config.endpoint:
         logger.info("Tracing disabled")
         return
 
-    provider = TracerProvider(
-        resource=Resource.create({"service.name": "mikoshi"})
-    )
-    exporter = OTLPSpanExporter(endpoint=config.endpoint)
-    provider.add_span_processor(BatchSpanProcessor(exporter))
-    trace.set_tracer_provider(provider)
+    resource_attrs: Dict[str, Any] = {}
+    if config.service_version:
+        resource_attrs["service.version"] = config.service_version
+    if config.deployment_environment:
+        resource_attrs["deployment.environment"] = config.deployment_environment
 
-    logger.info("Tracing enabled (endpoint=%s)", config.endpoint)
+    register_kwargs: Dict[str, Any] = {
+        "project_name": config.project_name,
+        "endpoint": config.endpoint,
+        "batch": config.batch,
+        "auto_instrument": False,
+        "verbose": False,
+    }
+    if config.headers:
+        register_kwargs["headers"] = dict(config.headers)
+    if resource_attrs:
+        register_kwargs["resource"] = Resource.create(resource_attrs)
+
+    register(**register_kwargs)
+
+    # Auto-instrument the LLM SDKs so every chat completion becomes a
+    # structured LLM span (messages, invocation params, token usage).
+    # Registered after the provider is set as global; they patch the
+    # underlying SDKs, so OpenAIClient/AnthropicClient are traced for free.
+    _instrument_llm_sdks()
+
+    logger.info(
+        "Tracing enabled (endpoint=%s, project=%s)",
+        config.endpoint,
+        config.project_name,
+    )
+
+
+def _instrument_llm_sdks() -> None:
+    """Register OpenInference auto-instrumentors for the LLM SDKs in use."""
+    from openinference.instrumentation.anthropic import AnthropicInstrumentor
+    from openinference.instrumentation.openai import OpenAIInstrumentor
+
+    OpenAIInstrumentor().instrument()
+    AnthropicInstrumentor().instrument()
+
+
+def instrument_app(app: Any) -> None:
+    """Instrument the FastAPI app and the outbound httpx client.
+
+    Call after ``init_observability`` and once the ``app`` object exists.
+    Safe when tracing is disabled — OTel produces non-recording spans
+    when no provider is configured.
+    """
+    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+    from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+
+    FastAPIInstrumentor.instrument_app(app)
+    HTTPXClientInstrumentor().instrument()
 
 
 def flush_observability() -> None:
@@ -84,50 +125,46 @@ def flush_observability() -> None:
         if hasattr(provider, "force_flush"):
             provider.force_flush()
     except Exception:
-        pass
+        logger.warning("Failed to flush tracing data", exc_info=True)
 
 
 def observe(func=None, *, name=None, as_type=None):
     """Decorator that creates an OTel span around an async function.
 
-    as_type "generation" → LLM span, "tool" → TOOL span, else CHAIN.
-    Captures input (stripping self) and output automatically.
+    as_type "tool" → TOOL span, else CHAIN. Captures input (stripping
+    self) and output automatically.
     """
 
     def decorator(fn: Callable) -> Callable:
         span_name = name or fn.__name__
-        kind = (
-            _KIND_LLM
-            if as_type == "generation"
-            else _KIND_TOOL if as_type == "tool" else _KIND_CHAIN
-        )
+        kind = _KIND_TOOL if as_type == "tool" else _KIND_CHAIN
         params = inspect.signature(fn).parameters
         is_method = "self" in params or "cls" in params
 
         @functools.wraps(fn)
         async def wrapper(*args, **kwargs):
             with _tracer.start_as_current_span(span_name) as span:
-                span.set_attribute(_SPAN_KIND, kind)
+                span.set_attribute(SpanAttributes.OPENINFERENCE_SPAN_KIND, kind)
 
                 logged_args = args[1:] if is_method else args
                 input_json = _safe_json({"args": logged_args, "kwargs": kwargs})
                 if input_json:
-                    span.set_attribute(_INPUT_VALUE, input_json)
-                    span.set_attribute(_INPUT_MIME_TYPE, "application/json")
+                    span.set_attribute(SpanAttributes.INPUT_VALUE, input_json)
+                    span.set_attribute(SpanAttributes.INPUT_MIME_TYPE, "application/json")
 
                 try:
                     result = await fn(*args, **kwargs)
                     if result is not None:
                         output_json = _safe_json(result)
                         if output_json:
-                            span.set_attribute(_OUTPUT_VALUE, output_json)
-                            span.set_attribute(_OUTPUT_MIME_TYPE, "application/json")
+                            span.set_attribute(SpanAttributes.OUTPUT_VALUE, output_json)
+                            span.set_attribute(
+                                SpanAttributes.OUTPUT_MIME_TYPE, "application/json"
+                            )
                     return result
                 except Exception as e:
                     span.record_exception(e)
-                    span.set_status(
-                        trace.Status(trace.StatusCode.ERROR, str(e))
-                    )
+                    span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
                     raise
 
         return wrapper
@@ -137,24 +174,44 @@ def observe(func=None, *, name=None, as_type=None):
     return decorator
 
 
-def trace_session(session_id: str, *, name: Optional[str] = None) -> None:
-    """Tag the current trace with a session ID for grouping in the UI."""
-    span = get_current_span()
-    if not span.is_recording():
-        return
-    span.set_attribute(_SESSION_ID, session_id)
+@contextlib.contextmanager
+def start_tool_span(name: str):
+    """Open a TOOL-kind span for an individual tool call.
+
+    Sets the OpenInference span kind and ``tool.name``. The caller sets
+    ``INPUT_VALUE``/``OUTPUT_VALUE`` (and any events) on the yielded span.
+    """
+    with _tracer.start_as_current_span(name) as span:
+        span.set_attribute(SpanAttributes.OPENINFERENCE_SPAN_KIND, _KIND_TOOL)
+        span.set_attribute(SpanAttributes.TOOL_NAME, name)
+        yield span
 
 
-def record_generation(model: str, usage: Optional[dict] = None) -> None:
-    """Enrich the current LLM span with model name and token usage."""
-    span = get_current_span()
-    if not span.is_recording():
-        return
-    span.set_attribute(_LLM_MODEL_NAME, model)
-    if usage:
-        span.set_attribute(
-            _LLM_TOKEN_COUNT_PROMPT, usage.get("prompt_tokens", 0)
-        )
-        span.set_attribute(
-            _LLM_TOKEN_COUNT_COMPLETION, usage.get("completion_tokens", 0)
-        )
+@contextlib.contextmanager
+def start_embedding_span(model: str, text: str):
+    """Open an EMBEDDING-kind span around an embedding call.
+
+    Sets the OpenInference span kind, ``embedding.model_name`` and the
+    input text. The raw vector is intentionally not recorded to avoid
+    span bloat (see spec gotcha). Exceptions propagate and are
+    auto-recorded with ERROR status by the OTel SDK.
+    """
+    with _tracer.start_as_current_span("embedding") as span:
+        span.set_attribute(SpanAttributes.OPENINFERENCE_SPAN_KIND, _KIND_EMBEDDING)
+        span.set_attribute(SpanAttributes.EMBEDDING_MODEL_NAME, model)
+        span.set_attribute(SpanAttributes.INPUT_VALUE, text)
+        yield span
+
+
+@contextlib.contextmanager
+def start_retriever_span(name: str, query: str):
+    """Open a RETRIEVER-kind span around a vector search.
+
+    Sets the OpenInference span kind and the query as input. The caller
+    sets ``RETRIEVAL_DOCUMENTS`` (JSON list of ``document.content`` /
+    ``document.score`` objects) on the yielded span after searching.
+    """
+    with _tracer.start_as_current_span(name) as span:
+        span.set_attribute(SpanAttributes.OPENINFERENCE_SPAN_KIND, _KIND_RETRIEVER)
+        span.set_attribute(SpanAttributes.INPUT_VALUE, query)
+        yield span
