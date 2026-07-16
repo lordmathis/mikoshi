@@ -18,6 +18,7 @@ class LLMClient(ABC):
         tools: Optional[List[Dict[str, Any]]] = None,
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
+        response_format: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Create a chat completion.
 
@@ -27,6 +28,9 @@ class LLMClient(ABC):
             tools: Optional list of tool definitions
             temperature: Optional temperature parameter
             max_tokens: Optional max tokens parameter
+            response_format: Optional OpenAI-style response format spec
+                (e.g. ``{"type": "json_schema", "json_schema": {...}}``) to
+                constrain the final text output.
 
         Returns:
             Response dictionary in OpenAI format
@@ -83,6 +87,7 @@ class OpenAIClient(LLMClient):
         tools: Optional[List[Dict[str, Any]]] = None,
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
+        response_format: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Create a chat completion using OpenAI API."""
         api_params: Dict[str, Any] = {
@@ -98,6 +103,9 @@ class OpenAIClient(LLMClient):
 
         if tools:
             api_params["tools"] = tools
+
+        if response_format:
+            api_params["response_format"] = response_format
 
         response = await self.client.chat.completions.create(**api_params)
         return response.model_dump()
@@ -126,6 +134,7 @@ class AnthropicClient(LLMClient):
         tools: Optional[List[Dict[str, Any]]] = None,
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
+        response_format: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         system_prompt, anthropic_messages = self._convert_messages(messages)
         anthropic_tools = self._convert_tools(tools) if tools else None

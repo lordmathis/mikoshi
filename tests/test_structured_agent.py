@@ -1,4 +1,6 @@
+import asyncio
 import json
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -8,6 +10,22 @@ from mikoshi.agents.structured import StructuredAgent
 def _parse(content: str):
     agent = StructuredAgent.__new__(StructuredAgent)
     return agent._parse_final_response(content)
+
+
+class _FakeProvider:
+    def get_llm_client(self):
+        return MagicMock()
+
+
+def _make_structured_agent(db, chat_id):
+    return StructuredAgent(
+        chat_id=chat_id,
+        db=db,
+        provider=_FakeProvider(),
+        tool_manager=MagicMock(),
+        model_id="m",
+        data_dir="/tmp",
+    )
 
 
 class TestParseFinalResponse:
@@ -69,3 +87,51 @@ class TestParseFinalResponse:
         msg, state = _parse(raw)
         assert msg == "hi"
         assert state == "not an object"
+
+
+class TestProcessFinalResponse:
+    """The state merge is what actually keeps (or loses) a running workout."""
+
+    @pytest.mark.asyncio
+    async def test_partial_new_state_merges_and_persists(self, db):
+        chat = db.create_chat()
+        agent = _make_structured_agent(db, chat.id)
+        db.update_chat_state(
+            chat.id,
+            {
+                "status": "active",
+                "date": "2026-01-01",
+                "exercises": [
+                    {"name": "squat", "sets": [{"weight": "60kg", "reps": "5"}]}
+                ],
+            },
+        )
+        # new_state re-emits the FULL exercises array but omits status/date;
+        # the omitted keys must survive, the updated key must replace wholesale.
+        content = json.dumps(
+            {
+                "user_message": "logged set 2",
+                "new_state": {
+                    "exercises": [
+                        {
+                            "name": "squat",
+                            "sets": [
+                                {"weight": "60kg", "reps": "5"},
+                                {"weight": "60kg", "reps": "5"},
+                            ],
+                        }
+                    ]
+                },
+            }
+        )
+
+        queue = asyncio.Queue()
+        result = await agent._process_final_response(
+            {}, {"content": content}, queue
+        )
+
+        state = db.get_chat_state(chat.id)
+        assert state["status"] == "active"
+        assert state["date"] == "2026-01-01"
+        assert len(state["exercises"][0]["sets"]) == 2
+        assert result["user_message"] == "logged set 2"
