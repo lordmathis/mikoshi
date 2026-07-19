@@ -13,27 +13,6 @@ logger = logging.getLogger(__name__)
 
 
 class StructuredAgent(BaseAgent):
-    response_schema: Dict[str, Any] = {
-        "type": "object",
-        "properties": {
-            "user_message": {"type": "string"},
-            "new_state": {"type": "object"},
-        },
-        "required": ["user_message", "new_state"],
-    }
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        if not self.response_format:
-            self.response_format = {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "structured_response",
-                    "schema": self.response_schema,
-                    "strict": False,
-                },
-            }
-
     system_prompt: str = """\
 You are a stateful agent that maintains persistent state across conversation turns. You receive a CURRENT STATE object and must return an updated state along with a message to the user.
 

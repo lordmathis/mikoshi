@@ -45,7 +45,6 @@ class BaseAgent(ABC):
         self.max_tokens = kwargs.get("max_tokens")
         self.context_window = kwargs.get("context_window")
         self.max_iterations = kwargs.get("max_iterations", 5)
-        self.response_format = kwargs.get("response_format")
         self.workspace_id = kwargs.get("workspace_id")
         self.data_dir = kwargs["data_dir"]
         self.connector_name = kwargs.get("connector_name")
@@ -312,11 +311,7 @@ class BaseAgent(ABC):
                         self.chat_id,
                         iteration + 1,
                     )
-                    response = await self._llm(
-                        messages,
-                        tools if tools else None,
-                        response_format=self.response_format,
-                    )
+                    response = await self._llm(messages, tools if tools else None)
                     logger.info(
                         "chat_id=%s iteration %d — LLM response received",
                         self.chat_id,
@@ -590,7 +585,6 @@ class BaseAgent(ABC):
         self,
         messages: List[ChatCompletionMessageParam],
         tools: Optional[List[dict]] = None,
-        response_format: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         retries = 3
         for attempt in range(retries):
@@ -601,7 +595,6 @@ class BaseAgent(ABC):
                     tools=tools if tools else None,
                     temperature=self.temperature,
                     max_tokens=self.max_tokens,
-                    response_format=response_format,
                 )
                 return response
             except APIConnectionError:
