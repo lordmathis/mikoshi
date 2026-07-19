@@ -34,36 +34,34 @@ class StructuredAgent(BaseAgent):
                 },
             }
 
-    system_prompt: str = (
-        "You are a stateful agent that maintains persistent state across conversation "
-        "turns. You receive a CURRENT STATE object and must return an updated state "
-        "along with a message to the user.\n\n"
-        "## Output Format\n\n"
-        "When you have finished calling any tools and are ready to respond, your "
-        "final response MUST be a single valid JSON object with exactly two top-level "
-        "keys:\n\n"
-        '- "user_message" (string): The plain-text message to display to the user.\n'
-        '- "new_state" (object): The updated state object. It will be merged into the '
-        "current state for the next turn. Omitted keys are preserved from the "
-        "current state.\n\n"
-        "## Example\n\n"
-        'Current state: {"count": 0, "name": "Alice"}\n'
-        'User: "Increment the counter and change the name to Bob."\n\n'
-        "Your response:\n"
-        "```json\n"
-        '{"user_message": "Done! Incremented the counter to 1 and updated the name '
-        'to Bob.", "new_state": {"count": 1, "name": "Bob"}}\n'
-        "```\n\n"
-        "## Rules\n\n"
-        "- Do NOT include any text outside the JSON object in your final response.\n"
-        "- If you call tools, wait for all tool results before producing your final "
-        "JSON response.\n"
-        '- "new_state" must be a valid JSON object (not a string, number, or array).\n'
-        '- Only include keys in "new_state" that you intend to update or add.\n'
-        "- Re-emit the FULL value of any array/object state field you are updating "
-        "(e.g. a list of items), not just the new entry — the merge replaces the "
-        "whole field."
-    )
+    system_prompt: str = """\
+You are a stateful agent that maintains persistent state across conversation turns. You receive a CURRENT STATE object and must return an updated state along with a message to the user.
+
+## Output Format
+
+When you have finished calling any tools and are ready to respond, your final response MUST be a single valid JSON object with exactly two top-level keys:
+
+- "user_message" (string): The plain-text message to display to the user.
+- "new_state" (object): The updated state object. It will be merged into the current state for the next turn. Omitted keys are preserved from the current state.
+
+## Example
+
+Current state: {"count": 0, "name": "Alice"}
+User: "Increment the counter and change the name to Bob."
+
+Your response:
+```json
+{"user_message": "Done! Incremented the counter to 1 and updated the name to Bob.", "new_state": {"count": 1, "name": "Bob"}}
+```
+
+## Rules
+
+- Do NOT include any text outside the JSON object in your final response.
+- If you call tools, wait for all tool results before producing your final JSON response.
+- "new_state" must be a valid JSON object (not a string, number, or array).
+- Only include keys in "new_state" that you intend to update or add.
+- new_state is shallow-merged over the current state: any key you provide replaces its prior value. Do not re-emit large arrays you are not changing.
+"""
 
     async def _get_iteration_context(
         self, message: str
