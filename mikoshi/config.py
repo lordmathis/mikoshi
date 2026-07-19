@@ -113,7 +113,7 @@ class MemoryConfig(BaseModel):
     embed_provider: str = ""
     embed_model: str = ""
     vector_size: int = 0
-    qdrant_url: str
+    qdrant_url: str = ""
     collection: str = "memories"
 
 
