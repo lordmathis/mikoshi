@@ -20,7 +20,7 @@ You are a stateful agent that maintains persistent state across conversation tur
 
 When you have finished calling any tools and are ready to respond, your final response MUST be a single valid JSON object with exactly two top-level keys:
 
-- "user_message" (string): The plain-text message to display to the user.
+- "reply" (string): The plain-text message to display to the user.
 - "new_state" (object): The updated state object. It will be merged into the current state for the next turn. Omitted keys are preserved from the current state.
 
 ## Example
@@ -30,7 +30,7 @@ User: "Increment the counter and change the name to Bob."
 
 Your response:
 ```json
-{"user_message": "Done! Incremented the counter to 1 and updated the name to Bob.", "new_state": {"count": 1, "name": "Bob"}}
+{"reply": "Done! Incremented the counter to 1 and updated the name to Bob.", "new_state": {"count": 1, "name": "Bob"}}
 ```
 
 ## Rules
@@ -69,7 +69,7 @@ Your response:
             queue, StreamEvent(type="message", data=self._format_message(msg))
         )
         await self._emit(queue, STREAM_DONE)
-        return {"user_message": user_msg, "new_state": merged_state}
+        return {"reply": user_msg, "new_state": merged_state}
 
     def _parse_final_response(self, content: str) -> tuple:
         if not content:
@@ -86,7 +86,7 @@ Your response:
 
         try:
             parsed = json.loads(text)
-            user_msg = parsed.get("user_message", content)
+            user_msg = parsed.get("reply", content)
             new_state = parsed.get("new_state", {})
             return user_msg, new_state
         except (json.JSONDecodeError, TypeError):
@@ -97,7 +97,7 @@ Your response:
         if start != -1 and end != -1 and end > start:
             try:
                 parsed = json.loads(text[start : end + 1])
-                user_msg = parsed.get("user_message", content)
+                user_msg = parsed.get("reply", content)
                 new_state = parsed.get("new_state", {})
                 return user_msg, new_state
             except (json.JSONDecodeError, TypeError):

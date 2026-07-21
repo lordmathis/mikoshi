@@ -31,7 +31,7 @@ def _make_structured_agent(db, chat_id):
 class TestParseFinalResponse:
     def test_clean_json(self):
         msg, state = _parse(json.dumps({
-            "user_message": "Done!",
+            "reply": "Done!",
             "new_state": {"count": 1},
         }))
         assert msg == "Done!"
@@ -43,26 +43,26 @@ class TestParseFinalResponse:
         "  ```\n  {payload}  \n  ```  ",
     ])
     def test_json_in_code_block(self, fence):
-        payload = json.dumps({"user_message": "ok", "new_state": {}})
+        payload = json.dumps({"reply": "ok", "new_state": {}})
         msg, state = _parse(fence.format(payload=payload))
         assert msg == "ok"
         assert state == {}
 
     def test_json_embedded_in_prose(self):
-        obj = {"user_message": "hello", "new_state": {"k": "v"}}
+        obj = {"reply": "hello", "new_state": {"k": "v"}}
         raw = f'Some text before {json.dumps(obj)} and after'
         msg, state = _parse(raw)
         assert msg == "hello"
         assert state == {"k": "v"}
 
-    def test_missing_user_message_falls_back_to_full_content(self):
+    def test_missing_reply_falls_back_to_full_content(self):
         raw = json.dumps({"new_state": {"a": 1}})
         msg, state = _parse(raw)
         assert msg == raw
         assert state == {"a": 1}
 
     def test_missing_new_state_defaults_empty(self):
-        raw = json.dumps({"user_message": "hi"})
+        raw = json.dumps({"reply": "hi"})
         msg, state = _parse(raw)
         assert msg == "hi"
         assert state == {}
@@ -83,7 +83,7 @@ class TestParseFinalResponse:
         assert state == {}
 
     def test_new_state_non_object_returned_as_is(self):
-        raw = json.dumps({"user_message": "hi", "new_state": "not an object"})
+        raw = json.dumps({"reply": "hi", "new_state": "not an object"})
         msg, state = _parse(raw)
         assert msg == "hi"
         assert state == "not an object"
@@ -110,7 +110,7 @@ class TestProcessFinalResponse:
         # the omitted keys must survive, the updated key must replace wholesale.
         content = json.dumps(
             {
-                "user_message": "logged set 2",
+                "reply": "logged set 2",
                 "new_state": {
                     "exercises": [
                         {
@@ -134,4 +134,4 @@ class TestProcessFinalResponse:
         assert state["status"] == "active"
         assert state["date"] == "2026-01-01"
         assert len(state["exercises"][0]["sets"]) == 2
-        assert result["user_message"] == "logged set 2"
+        assert result["reply"] == "logged set 2"
