@@ -32,3 +32,7 @@ All styling tokens are centralized in `webui/src/index.css`. Do not hardcode col
 - Prefer Tailwind utility classes over inline styles.
 - If an inline `style` prop is needed (dynamic values, complex backgrounds), use CSS variables — not hardcoded values.
 - Do not duplicate values that already exist as theme tokens or utility classes.
+
+## Backwards compatibility
+
+There is no need for maintaining backwards compatibility. Prefer proper long-term solutions even if they might introduce breaking changes. The only deployment is [homelab](https://github.com/lordmathis/homelab). Check `mikoshi/plugins` path in the homelab repo if your changes affect any of the plugins and highlight them.
