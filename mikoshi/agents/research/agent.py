@@ -9,9 +9,9 @@ from mikoshi.agents.plugin_base import AgentPluginBase
 from mikoshi.agents.react import ReActAgent
 from mikoshi.agents.research.helpers import (
     _FilteredQueue,
+    _find_findings_file,
     _parse_pending_tasks,
     _parse_title,
-    _slugify,
 )
 from mikoshi.agents.research.prompts import PLAN_FILENAME, REPORT_FILENAME
 from mikoshi.agents.research.stages import (
@@ -248,12 +248,13 @@ class ResearchAgent(BaseAgent):
         The research agent sometimes writes findings but forgets to update the
         plan; without this, the outer loop would re-research the same task and
         synthesis would miss the findings. Findings-file existence is the source
-        of truth.
+        of truth, matched by task index prefix (findings/NN-*.md) so the
+        model's choice of suffix doesn't matter.
         """
         plan = self._read_plan()
         if not plan:
             return
-        files = set(self.list_files())
+        files = self.list_files()
 
         new_lines = []
         changed = False
@@ -262,10 +263,8 @@ class ResearchAgent(BaseAgent):
             stripped = line.strip()
             if stripped.startswith("- [ ]"):
                 idx += 1
-                desc = stripped[5:].strip()
-                findings_file = f"findings/{idx:02d}-{_slugify(desc)}.md"
-                if findings_file in files:
-                    new_lines.append(f"- [x] {desc}")
+                if _find_findings_file(files, idx):
+                    new_lines.append(f"- [x] {stripped[5:].strip()}")
                     changed = True
                     continue
             elif stripped.startswith("- [x]"):

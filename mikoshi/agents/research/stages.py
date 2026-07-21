@@ -9,6 +9,7 @@ from mikoshi.agents.research.helpers import (
     _FilteredQueue,
     _batch_findings,
     _count_tokens,
+    _find_findings_file,
     _format_material_block,
     _slugify,
     _parse_findings_files,
@@ -69,9 +70,11 @@ class StageProtocol(Protocol):
 class Stage:
     """Shared spawn -> nudge workhorse.
 
-    `success()` decides whether the nudge runs. A predicate that always
-    returns True collapses the stage to a single best-effort spawn (used by
-    Planner-extend and Replanner, where not producing output is valid).
+    `success()` returns the resolved artifact path on success or None on
+    failure; it also decides whether the nudge runs. A predicate that always
+    returns `artifact_path` collapses the stage to a single best-effort spawn
+    (used by Planner-extend and Replanner, where not producing output is
+    valid).
     """
 
     def __init__(
@@ -79,7 +82,7 @@ class Stage:
         ctx: StageContext,
         system_prompt: str,
         user_message: str,
-        success: Callable[[], bool],
+        success: Callable[[], Optional[str]],
         artifact_path: str,
         *,
         tool_servers: Optional[List[str]],
@@ -111,8 +114,9 @@ class Stage:
     @observe(name="research_stage")
     async def apply(self, queue: asyncio.Queue) -> Optional[str]:
         agent = await self._spawn(queue)
-        if self.success():
-            return self.artifact_path
+        resolved = self.success()
+        if resolved:
+            return resolved
 
         logger.info(
             "chat_id=%s %s not produced after spawn, sending nudge",
@@ -120,7 +124,26 @@ class Stage:
             self.artifact_path,
         )
         await agent._loop(self._nudge(), queue=_FilteredQueue(queue))
-        return self.artifact_path if self.success() else None
+        resolved = self.success()
+        if resolved:
+            return resolved
+
+        # Soft failure: stage produced no artifact. The outer agent only sees
+        # `None`; log the diagnostic context here so the cause (model gave up,
+        # wrote to the wrong path, hit an exception inside the inner loop, etc.)
+        # is recoverable from logs alone.
+        last = (agent.last_response or "").strip()
+        if len(last) > 500:
+            last = last[:500] + "... [truncated]"
+        logger.error(
+            "chat_id=%s stage '%s' failed: %s not written after spawn+nudge; "
+            "inner agent last response: %s",
+            self.ctx.chat_id,
+            self.phase or "<no phase>",
+            self.artifact_path,
+            last or "<empty>",
+        )
+        return None
 
 
 def _planner_message(message: str, plan: Optional[str], report: Optional[str]) -> str:
@@ -157,7 +180,13 @@ class Planner(Stage):
             ctx,
             system_prompt=PLANNER_SYSTEM_PROMPT,
             user_message=_planner_message(message, plan, report),
-            success=(lambda: True) if is_extend else (lambda: ctx.file_exists(PLAN_FILENAME)),
+            success=(
+                (lambda: PLAN_FILENAME)
+                if is_extend
+                else (
+                    lambda: PLAN_FILENAME if ctx.file_exists(PLAN_FILENAME) else None
+                )
+            ),
             artifact_path=PLAN_FILENAME,
             tool_servers=[WORKSPACE_SERVER_NAME],
             phase="research_plan",
@@ -167,7 +196,11 @@ class Planner(Stage):
 class Researcher(Stage):
     """Researcher stage for one plan task. Spawns with web tools and the
     inherited orchestrator tool servers; recovers via a single nudge if the
-    findings file is not written."""
+    findings file is not written.
+
+    The slug-based filename is a *suggestion* in the prompt — success is
+    matched by task index prefix (findings/NN-*.md), so a slightly different
+    suffix chosen by the model still counts."""
 
     def __init__(
         self,
@@ -185,7 +218,7 @@ class Researcher(Stage):
                 findings_file=findings_file,
             ),
             user_message=task_desc,
-            success=lambda: ctx.file_exists(findings_file),
+            success=lambda: _find_findings_file(ctx.list_files(), task_idx),
             artifact_path=findings_file,
             tool_servers=None,
             web=True,
@@ -206,8 +239,9 @@ def _replanner_message(
 
 
 class Replanner(Stage):
-    """Replanner stage. Always-true success predicate: a single spawn, because
-    not changing the plan is a valid outcome (e.g. "No changes needed.")."""
+    """Replanner stage. Always-resolved success predicate: a single spawn,
+    because not changing the plan is a valid outcome (e.g. "No changes
+    needed.")."""
 
     def __init__(
         self,
@@ -225,7 +259,7 @@ class Replanner(Stage):
             ctx,
             system_prompt=REPLANNER_SYSTEM_PROMPT,
             user_message=_replanner_message(original_question, plan, findings),
-            success=lambda: True,
+            success=lambda: PLAN_FILENAME,
             artifact_path=PLAN_FILENAME,
             tool_servers=[WORKSPACE_SERVER_NAME],
             phase="replan",
@@ -248,10 +282,11 @@ class Synthesizer:
             return
 
         plan = ctx.read_file(PLAN_FILENAME) or ""
-        paths = [p for p in _parse_findings_files(plan) if ctx.file_exists(p)]
+        paths = _parse_findings_files(plan, ctx.list_files())
         if not paths:
-            logger.warning(
-                "chat_id=%s no findings files found, skipping synthesis",
+            logger.error(
+                "chat_id=%s synthesis produced no report: no findings files on "
+                "disk match the plan's checked tasks",
                 ctx.chat_id,
             )
             return
@@ -269,8 +304,9 @@ class Synthesizer:
             items.append((path, content, _count_tokens(content)))
 
         if not items:
-            logger.warning(
-                "chat_id=%s all findings files unreadable, skipping synthesis",
+            logger.error(
+                "chat_id=%s synthesis produced no report: all findings files "
+                "were empty or unreadable",
                 ctx.chat_id,
             )
             return
@@ -336,8 +372,9 @@ class Synthesizer:
             summary_items.append((path, content, _count_tokens(content)))
 
         if not summary_items:
-            logger.warning(
-                "chat_id=%s no batch summaries produced, skipping report",
+            logger.error(
+                "chat_id=%s synthesis produced no report: no batch summaries "
+                "could be written",
                 ctx.chat_id,
             )
             return

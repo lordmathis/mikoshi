@@ -1,5 +1,5 @@
 import re
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import tiktoken
 
@@ -66,13 +66,34 @@ def _slugify(text: str) -> str:
     return re.sub(r"[\s_]+", "-", slug).strip("-")[:50]
 
 
-def _parse_findings_files(plan: str) -> List[str]:
-    """Findings-file paths for completed tasks, in plan order. Derived from the
-    task index + description via the same naming convention as the
-    research/reconcile loops (findings/{idx:02d}-{slug}.md) — never parsed from
-    the plan text. Indexing mirrors _reconcile_plan: both [ ] and [x]
-    increment idx."""
-    paths = []
+def _find_findings_file(files: List[str], task_idx: int) -> Optional[str]:
+    """Find the findings file for `task_idx` by prefix match: any
+    `findings/NN-*.md` path counts, regardless of the descriptive suffix.
+
+    The model is suggested a slug-based name in the prompt, but matching is
+    tolerant — what matters is the task index. This avoids brittle exact-path
+    checks that silently fail when the model picks a slightly different suffix.
+    """
+    prefix = f"findings/{task_idx:02d}-"
+    for path in files:
+        if path.startswith(prefix) and path.endswith(".md"):
+            return path
+    return None
+
+
+def _parse_findings_files(plan: str, files: List[str]) -> List[str]:
+    """Findings-file paths for completed tasks, in plan order.
+
+    For each checked task, looks up the actual findings file on disk by task
+    index prefix (`findings/NN-*.md`) — never derives a path from the task
+    description, so a slightly different suffix chosen by the model doesn't
+    cause findings to be dropped from synthesis. Indexing mirrors
+    _reconcile_plan: both [ ] and [x] increment idx.
+
+    Returns only paths that exist on disk; an unchecked task or a missing file
+    contributes nothing.
+    """
+    paths: List[str] = []
     idx = 0
     for line in plan.split("\n"):
         stripped = line.strip()
@@ -80,8 +101,9 @@ def _parse_findings_files(plan: str) -> List[str]:
             idx += 1
         elif stripped.startswith("- [x]"):
             idx += 1
-            desc = stripped[5:].strip()
-            paths.append(f"findings/{idx:02d}-{_slugify(desc)}.md")
+            match = _find_findings_file(files, idx)
+            if match:
+                paths.append(match)
     return paths
 
 
