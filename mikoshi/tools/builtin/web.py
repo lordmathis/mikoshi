@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_MAX_CHARS = 50000
 SUMMARIZE_MAX_CHARS = 20000
+SEARCH_INITIAL_BACKOFF = 5.0  # seconds before the first retry; doubles up to retry_max_backoff
 
 SUMMARIZE_SYSTEM_PROMPT = """\
 You are a helpful assistant. You are given the markdown content of a web page \
@@ -46,6 +47,8 @@ class WebTools(ToolSetHandler):
         self.rate_limit = config.rate_limit
         self._min_interval = 1.0 / self.rate_limit if self.rate_limit else 0.0
         self._last_request_time = 0.0
+        self.retry_timeout = config.retry_timeout
+        self.retry_max_backoff = config.retry_max_backoff
         self._firecrawl_api_key = config.firecrawl_api_key
         self._firecrawl_api_url = config.firecrawl_api_url
         self._firecrawl = None
@@ -246,15 +249,14 @@ class WebTools(ToolSetHandler):
             await self._enforce_rate_limit()
 
             logger.info(f"Searching via SearXNG: {query}")
-            response = await self._client.get(
-                f"{self._searxng_url}/search",
-                params={"q": query, "format": "json"},
-            )
-            response.raise_for_status()
-            results = response.json().get("results", [])
+            results = await self._search_with_retries(query)
 
             if not results:
-                return None
+                return (
+                    f"No results found for '{query}'. The search engines may be "
+                    "rate-limited or blocked by CAPTCHAs. Try rephrasing the "
+                    "query or retrying in a moment."
+                )
 
             postprocessed = [
                 f"[{r.get('title', '')}]({r.get('url', '')})\n{r.get('content', '')}"
@@ -267,6 +269,49 @@ class WebTools(ToolSetHandler):
                 f"SearXNG search failed for '{query}': {e}"
             )
             return f"Error performing search: {str(e)}"
+
+    async def _search_with_retries(self, query: str) -> list[dict]:
+        """Query SearXNG, retrying until results arrive or the time budget runs out.
+        """
+        deadline = time.monotonic() + self.retry_timeout
+        delay = SEARCH_INITIAL_BACKOFF
+        attempt = 0
+        while True:
+            attempt += 1
+            try:
+                response = await self._client.get(
+                    f"{self._searxng_url}/search",
+                    params={"q": query, "format": "json"},
+                )
+                response.raise_for_status()
+                results = response.json().get("results", [])
+                if results:
+                    if attempt > 1:
+                        logger.info(
+                            "SearXNG search '%s' recovered after %d attempts",
+                            query, attempt,
+                        )
+                    return results
+                logger.info(
+                    "SearXNG returned no results for '%s' (attempt %d); "
+                    "engines may be suspended",
+                    query, attempt,
+                )
+            except Exception as e:
+                logger.warning(
+                    "SearXNG request failed for '%s' (attempt %d): %s",
+                    query, attempt, e,
+                )
+
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                logger.warning(
+                    "SearXNG search '%s' exhausted retry budget after %d attempts",
+                    query, attempt,
+                )
+                return []
+            await asyncio.sleep(min(delay, self.retry_max_backoff, remaining))
+            delay = min(delay * 2, self.retry_max_backoff)
 
 
     async def _enforce_rate_limit(self) -> None:

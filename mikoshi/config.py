@@ -105,6 +105,8 @@ class SearchConfig(BaseModel):
     searxng_url: str
     max_results: int = 10
     rate_limit: float = 1.0
+    retry_timeout: float = 300.0  # total seconds to keep retrying on empty/failed results
+    retry_max_backoff: float = 60.0  # max delay between retry attempts
     firecrawl_api_key: Optional[str] = None
     firecrawl_api_url: str = "https://api.firecrawl.de"
 
