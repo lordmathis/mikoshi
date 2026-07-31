@@ -1,24 +1,22 @@
-"""Web tools: page fetching, summarization, and web search.
+"""Web tools: page summarization and web search.
+
+Page fetching lives in :mod:`mikoshi.tools.builtin.scraper` (``WebFetcher``),
+shared by ``summarize_website`` here and the standalone ``scraper`` tool server.
 """
 
 import asyncio
 import logging
-import os
-import re
 import time
 
 import httpx
-from bs4 import BeautifulSoup
-from firecrawl import AsyncFirecrawl
-from markdownify import markdownify as md
 
 from mikoshi.config import SearchConfig
+from mikoshi.tools.builtin.scraper import WebFetcher
 from mikoshi.tools.context import ToolCallContext
 from mikoshi.tools.toolset_handler import ToolSetHandler, tool
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MAX_CHARS = 50000
 SUMMARIZE_MAX_CHARS = 20000
 SEARCH_INITIAL_BACKOFF = 5.0  # seconds before the first retry; doubles up to retry_max_backoff
 
@@ -35,11 +33,10 @@ class WebTools(ToolSetHandler):
     server_name = "web"
 
     def __init__(self, config: SearchConfig):
-        """Initialize WebTools with HTTP client and DuckDuckGo search capabilities.
+        """Initialize WebTools with SearXNG search capabilities and a shared fetcher.
 
         Args:
-            max_results: Maximum number of search results to return (default: 10)
-            rate_limit: Maximum queries per second for web search. Set to None to disable (default: 1.0)
+            config: Search configuration (rate limit, retry budget, firecrawl, searxng url).
         """
         super().__init__()
         self._client = None
@@ -49,127 +46,24 @@ class WebTools(ToolSetHandler):
         self._last_request_time = 0.0
         self.retry_timeout = config.retry_timeout
         self.retry_max_backoff = config.retry_max_backoff
-        self._firecrawl_api_key = config.firecrawl_api_key
-        self._firecrawl_api_url = config.firecrawl_api_url
-        self._firecrawl = None
+        self._fetcher = WebFetcher(config.firecrawl_api_key, config.firecrawl_api_url)
         self._searxng_url = config.searxng_url
 
     async def initialize(self):
-        """Set up HTTP client and DDGS client"""
+        """Set up HTTP client for search and initialize the shared page fetcher."""
         await super().initialize()
         self._client = httpx.AsyncClient(
             timeout=30.0,
             follow_redirects=True,
             headers={"User-Agent": "Mozilla/5.0 (compatible; AgentKit/1.0)"},
         )
-        if self._firecrawl_api_key:
-            self._firecrawl = AsyncFirecrawl(
-                api_key=self._firecrawl_api_key,
-                api_url=self._firecrawl_api_url,
-            )
+        await self._fetcher.initialize()
 
     async def cleanup(self):
-        """Clean up HTTP client"""
+        """Clean up HTTP client and fetcher."""
         if self._client:
             await self._client.aclose()
-
-    async def fetch_page(
-        self,
-        url: str,
-        include_links: bool = True,
-        include_images: bool = False,
-        max_chars: int | None = None,
-    ) -> str:
-        """Fetch a web page and convert HTML to clean markdown. Internal helper.
-
-        Uses the Firecrawl scrape API when configured, falling back to the local
-        httpx + BeautifulSoup pipeline on error or if FIRECRAWL_API_KEY is unset.
-
-        Raises httpx.HTTPError (or other exceptions) on failure; callers handle.
-        """
-        markdown_text = None
-
-        if self._firecrawl:
-            markdown_text = await self._firecrawl_scrape(url)
-
-        if markdown_text is None:
-            markdown_text = await self._bs4_fetch(url)
-
-        if not include_images:
-            markdown_text = re.sub(r"!\[.*?\]\(.*?\)", "", markdown_text)
-
-        if not include_links:
-            markdown_text = re.sub(
-                r"\[([^\]]+)\]\([^)]+\)", r"\1", markdown_text
-            )
-
-        markdown_text = self._clean_markdown(markdown_text)
-
-        limit = max_chars if max_chars is not None else DEFAULT_MAX_CHARS
-        if len(markdown_text) > limit:
-            markdown_text = (
-                markdown_text[:limit]
-                + f"\n\n[... truncated: {len(markdown_text)} total chars, "
-                f"showing first {limit} ...]"
-            )
-
-        logger.info(
-            f"Successfully fetched and converted {url} ({len(markdown_text)} characters)"
-        )
-        return f"# Content from {url}\n\n{markdown_text}"
-
-    async def _firecrawl_scrape(self, url: str) -> str | None:
-        """Scrape a URL via the Firecrawl API and return its markdown.
-        """
-        try:
-            logger.info(f"Scraping URL via Firecrawl: {url}")
-            document = await self._firecrawl.scrape(
-                url, formats=["markdown"], only_main_content=True
-            )
-            markdown_text = getattr(document, "markdown", None)
-            if not markdown_text:
-                logger.warning(f"Firecrawl returned no markdown for {url}")
-                return None
-            return markdown_text
-        except Exception as e:
-            logger.warning(
-                f"Firecrawl scrape failed for {url}: {e}; falling back to local fetch"
-            )
-            return None
-
-    async def _bs4_fetch(self, url: str) -> str:
-        """Fetch a page with httpx and convert HTML to markdown via BeautifulSoup."""
-        logger.info(f"Fetching URL (local): {url}")
-        response = await self._client.get(url)
-        response.raise_for_status()
-
-        soup = BeautifulSoup(response.text, "html.parser")
-
-        for element in soup(["script", "style", "nav", "footer", "header"]):
-            element.decompose()
-
-        for comment in soup.find_all(
-            string=lambda text: (
-                isinstance(text, str) and text.strip().startswith("<!--")
-            )
-        ):
-            comment.extract()
-
-        main_content = (
-            soup.find("article")
-            or soup.find("main")
-            or soup.find("div", class_=lambda c: c and "content" in c.lower())
-            or soup.body
-            or soup
-        )
-
-        return md(
-            str(main_content),
-            heading_style="ATX",
-            bullets="-",
-            escape_asterisks=False,
-            escape_underscores=False,
-        )
+        await self._fetcher.cleanup()
 
     @tool(
         description=(
@@ -194,7 +88,7 @@ class WebTools(ToolSetHandler):
     ) -> str:
         """Fetch a page (capped) and summarize it focused on `focus` via one LLM call."""
         try:
-            page = await self.fetch_page(
+            page = await self._fetcher.fetch_page(
                 url,
                 include_links=False,
                 include_images=False,
@@ -313,7 +207,6 @@ class WebTools(ToolSetHandler):
             await asyncio.sleep(min(delay, self.retry_max_backoff, remaining))
             delay = min(delay * 2, self.retry_max_backoff)
 
-
     async def _enforce_rate_limit(self) -> None:
         """Enforce rate limiting between requests"""
         # No rate limit enforced
@@ -325,17 +218,3 @@ class WebTools(ToolSetHandler):
         if elapsed < self._min_interval:
             await asyncio.sleep(self._min_interval - elapsed)
         self._last_request_time = time.time()
-
-    def _clean_markdown(self, text: str) -> str:
-        """Clean up markdown text"""
-        # Remove excessive newlines (more than 2)
-        text = re.sub(r"\n{3,}", "\n\n", text)
-
-        # Remove leading/trailing whitespace from each line
-        lines = [line.rstrip() for line in text.split("\n")]
-        text = "\n".join(lines)
-
-        # Remove empty list items
-        text = re.sub(r"\n[-*+]\s*\n", "\n", text)
-
-        return text.strip()

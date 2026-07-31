@@ -15,7 +15,13 @@ from mikoshi.tools.context import ToolCallContext
 from mikoshi.tools.handler_base import ToolHandler
 from mikoshi.tools.mcp_handler import MCPToolHandler
 from mikoshi.tools.toolset_handler import ToolSetHandler
-from mikoshi.tools.builtin import BashTools, MemoryTools, WebTools, WorkspaceTools
+from mikoshi.tools.builtin import (
+    BashTools,
+    MemoryTools,
+    ScraperTools,
+    WebTools,
+    WorkspaceTools,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +30,7 @@ BUILTIN_TOOLS: list[tuple[type[ToolSetHandler], Optional[str]]] = [
     (WorkspaceTools, None),
     (BashTools, None),
     (WebTools, "search"),
+    (ScraperTools, "search"),
     (MemoryTools, "memory"),
 ]
 
