@@ -1,9 +1,13 @@
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
 import rehypeHighlight from "rehype-highlight";
+import { Mermaid } from "../components/mermaid";
 
 export const REMARK_PLUGINS: any[] = [remarkGfm, remarkBreaks];
-export const REHYPE_PLUGINS: any[] = [rehypeHighlight];
+export const REHYPE_PLUGINS: any[] = [[rehypeHighlight, { ignoreMissing: true }]];
+
+const isMermaid = (className: string | undefined) =>
+  /language-mermaid/.test(className || "");
 
 const baseTableComponents = (rgbVar: string) => ({
   table: ({ children, ...props }: any) => (
@@ -63,6 +67,9 @@ export const markdownComponents = {
     <hr className="my-6 border-border" {...props} />
   ),
   code: ({ inline, className, children, ...props }: any) => {
+    if (isMermaid(className)) {
+      return <Mermaid chart={String(children).replace(/\n$/, "")} />;
+    }
     return inline ? (
       <code className="bg-primary/[0.08] px-1.5 py-0.5 text-xs text-primary/90 break-words" {...props}>
         {children}
@@ -73,9 +80,13 @@ export const markdownComponents = {
       </code>
     );
   },
-  pre: ({ children, ...props }: any) => (
-    <pre className="overflow-x-auto mb-4 text-sm" {...props}>{children}</pre>
-  ),
+  pre: ({ children, ...props }: any) => {
+    const child: any = Array.isArray(children) ? children[0] : children;
+    if (child?.props && isMermaid(child.props.className)) {
+      return <>{children}</>;
+    }
+    return <pre className="overflow-x-auto mb-4 text-sm" {...props}>{children}</pre>;
+  },
   a: ({ children, href, ...props }: any) => (
     <a
       href={href}

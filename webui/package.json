@@ -51,6 +51,7 @@
     "highlight.js": "^11.11.1",
     "lucide-react": "^0.562.0",
     "mathjax-full": "^3.2.2",
+    "mermaid": "^11.16.1",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "react-markdown": "^10.1.0",
