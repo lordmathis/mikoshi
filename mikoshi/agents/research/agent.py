@@ -282,7 +282,6 @@ class ResearchAgent(BaseAgent):
         user_message: str,
         queue: asyncio.Queue,
         *,
-        web: bool = False,
         tool_servers: Optional[List[str]] = None,
         phase: Optional[str] = None,
     ) -> _InnerResearchAgent:

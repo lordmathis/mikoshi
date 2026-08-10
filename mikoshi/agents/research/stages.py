@@ -49,7 +49,6 @@ class StageContext(Protocol):
         user_message: str,
         queue: asyncio.Queue,
         *,
-        web: bool = False,
         tool_servers: Optional[List[str]] = None,
         phase: Optional[str] = None,
     ) -> "_InnerResearchAgent": ...
@@ -86,7 +85,6 @@ class Stage:
         artifact_path: str,
         *,
         tool_servers: Optional[List[str]],
-        web: bool = False,
         phase: str = "",
     ):
         self.ctx = ctx
@@ -95,7 +93,6 @@ class Stage:
         self.success = success
         self.artifact_path = artifact_path
         self.tool_servers = tool_servers
-        self.web = web
         self.phase = phase
 
     def _nudge(self) -> str:
@@ -106,7 +103,6 @@ class Stage:
             self.system_prompt,
             self.user_message,
             queue,
-            web=self.web,
             tool_servers=self.tool_servers,
             phase=self.phase,
         )
@@ -221,7 +217,6 @@ class Researcher(Stage):
             success=lambda: _find_findings_file(ctx.list_files(), task_idx),
             artifact_path=findings_file,
             tool_servers=None,
-            web=True,
             phase=f"query_{task_idx:02d}",
         )
 
