@@ -282,14 +282,9 @@ class ResearchAgent(BaseAgent):
         user_message: str,
         queue: asyncio.Queue,
         *,
-        tool_servers: Optional[List[str]] = None,
+        tool_servers: List[str],
         phase: Optional[str] = None,
     ) -> _InnerResearchAgent:
-        base = (
-            list(tool_servers)
-            if tool_servers is not None
-            else list(self.tool_servers or [])
-        )
         agent = _InnerResearchAgent(
             chat_id=self.chat_id,
             db=self.db,
@@ -297,7 +292,7 @@ class ResearchAgent(BaseAgent):
             tool_manager=self.tool_manager,
             model_id=self.model_id,
             system_prompt=system_prompt,
-            tool_servers=base,
+            tool_servers=list(tool_servers),
             max_iterations=self.max_inner_iterations,
             workspace_id=self.workspace_id,
             data_dir=self.data_dir,

@@ -42,6 +42,7 @@ class StageContext(Protocol):
     workspace_id: Optional[str]
     chat_id: str
     context_window: Optional[int]
+    tool_servers: List[str]
 
     async def spawn(
         self,
@@ -49,7 +50,7 @@ class StageContext(Protocol):
         user_message: str,
         queue: asyncio.Queue,
         *,
-        tool_servers: Optional[List[str]] = None,
+        tool_servers: List[str],
         phase: Optional[str] = None,
     ) -> "_InnerResearchAgent": ...
 
@@ -84,7 +85,7 @@ class Stage:
         success: Callable[[], Optional[str]],
         artifact_path: str,
         *,
-        tool_servers: Optional[List[str]],
+        tool_servers: List[str],
         phase: str = "",
     ):
         self.ctx = ctx
@@ -190,8 +191,8 @@ class Planner(Stage):
 
 
 class Researcher(Stage):
-    """Researcher stage for one plan task. Spawns with web tools and the
-    inherited orchestrator tool servers; recovers via a single nudge if the
+    """Researcher stage for one plan task. Spawns with the plugin's configured
+    tool_servers (web/scraper/etc.); recovers via a single nudge if the
     findings file is not written.
 
     The slug-based filename is a *suggestion* in the prompt — success is
@@ -216,7 +217,7 @@ class Researcher(Stage):
             user_message=task_desc,
             success=lambda: _find_findings_file(ctx.list_files(), task_idx),
             artifact_path=findings_file,
-            tool_servers=None,
+            tool_servers=list(ctx.tool_servers),
             phase=f"query_{task_idx:02d}",
         )
 
