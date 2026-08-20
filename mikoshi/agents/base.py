@@ -559,11 +559,14 @@ class BaseAgent(ABC):
                 )
 
         messages = format_history(self.db, self.chat_id)
-        messages = apply_skill_context(messages, skill_context)
 
+        # Persona must be inserted before skill context so the skill appends
+        # to the system message instead of claiming index 0 for itself.
         if self.system_prompt:
             if not messages or messages[0].get("role") != "system":
                 messages.insert(0, {"role": "system", "content": self.system_prompt})
+
+        messages = apply_skill_context(messages, skill_context)
 
         return messages
 

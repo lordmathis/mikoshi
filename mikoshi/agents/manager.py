@@ -130,7 +130,9 @@ class AgentManager:
             "tool_servers": config.get("tool_servers") or d.get("tool_servers", []),
             "temperature": model_params.get("temperature", d.get("temperature")),
             "max_tokens": model_params.get("max_tokens", d.get("max_tokens")),
-            "context_window": model_params.get("context_window", d.get("context_window")),
+            "context_window": model_params.get(
+                "context_window", d.get("context_window")
+            ),
             "max_iterations": model_params.get(
                 "max_iterations", d.get("max_iterations", 5)
             ),
@@ -261,13 +263,12 @@ class AgentManager:
         if not chat:
             raise ValueError(f"Chat '{chat_id}' not found")
 
-        agent = self._hydrate(chat_id, config)
-        self._agents[chat_id] = agent
-
         model = config.get("model")
-
         if model is None:
             raise ValueError("Model is required in config")
+
+        agent = self._hydrate(chat_id, config)
+        self._agents[chat_id] = agent
 
         system_prompt = config.get("system_prompt")
         tool_servers = config.get("tool_servers") or []

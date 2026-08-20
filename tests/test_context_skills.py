@@ -1,22 +1,27 @@
 import pytest
+from unittest.mock import MagicMock
 
 from mikoshi.agents.context.skills import (
     apply_skill_context,
     build_skill_context,
     parse_mentions,
 )
+from mikoshi.agents.react import ReActAgent
 from tests.conftest import FakeRegistry, FakeSkill
 
 
 class TestParseMentions:
-    @pytest.mark.parametrize("text,expected", [
-        ("hello /world", ["world"]),
-        ("/foo and /bar", ["foo", "bar"]),
-        ("hello world", []),
-        ("/foo/bar", ["foo", "bar"]),
-        ("/my-tool", ["my-tool"]),
-        ("user/example.com", ["example"]),
-    ])
+    @pytest.mark.parametrize(
+        "text,expected",
+        [
+            ("hello /world", ["world"]),
+            ("/foo and /bar", ["foo", "bar"]),
+            ("hello world", []),
+            ("/foo/bar", ["foo", "bar"]),
+            ("/my-tool", ["my-tool"]),
+            ("user/example.com", ["example"]),
+        ],
+    )
     def test_parse_mentions(self, text, expected):
         assert parse_mentions(text) == expected
 
@@ -104,3 +109,59 @@ class TestApplySkillContext:
         ]
         result = apply_skill_context(msgs, " extra")
         assert result[0]["content"] == "instructions extra"
+
+
+class _FakeProvider:
+    def get_llm_client(self):
+        return MagicMock()
+
+
+class TestBuildContextOrdering:
+    """Regression: a /skill mention on the first message must not drop the
+    configured system prompt."""
+
+    @pytest.mark.asyncio
+    async def test_skill_mention_keeps_persona_system_prompt(self, db):
+        chat = db.create_chat()
+        agent = ReActAgent(
+            chat_id=chat.id,
+            db=db,
+            provider=_FakeProvider(),
+            tool_manager=MagicMock(),
+            model_id="m",
+            data_dir="/tmp",
+            system_prompt="You are Mikoshi.",
+            skill_registry=FakeRegistry(
+                skills={"foo": FakeSkill(content="Foo skill instructions.")}
+            ),
+        )
+        db.save_message(chat.id, "user", "/foo do X")
+
+        messages = await agent._build_context("/foo do X")
+
+        assert messages[0]["role"] == "system"
+        assert messages[0]["content"].startswith("You are Mikoshi.")
+        assert "Foo skill instructions." in messages[0]["content"]
+        assert messages[1]["role"] == "user"
+        assert messages[1]["content"] == "/foo do X"
+
+    @pytest.mark.asyncio
+    async def test_skill_without_persona_uses_skill_as_system(self, db):
+        chat = db.create_chat()
+        agent = ReActAgent(
+            chat_id=chat.id,
+            db=db,
+            provider=_FakeProvider(),
+            tool_manager=MagicMock(),
+            model_id="m",
+            data_dir="/tmp",
+            skill_registry=FakeRegistry(
+                skills={"foo": FakeSkill(content="Foo skill instructions.")}
+            ),
+        )
+        db.save_message(chat.id, "user", "/foo do X")
+
+        messages = await agent._build_context("/foo do X")
+
+        assert messages[0]["role"] == "system"
+        assert "Foo skill instructions." in messages[0]["content"]

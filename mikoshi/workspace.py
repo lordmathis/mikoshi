@@ -2,12 +2,11 @@ import logging
 import mimetypes
 import os
 import shutil
-import subprocess
 from typing import List, Optional
 
 from mikoshi.config import ConnectorsConfig
 from mikoshi.connectors.client_base import FileNode
-from mikoshi.git import auth_header_value
+from mikoshi.git import GitTimeout, auth_header_value, run_git
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +58,7 @@ class WorkspaceService:
         if not resolved_path.startswith(workspace_root):
             raise PathTraversalError(f"Path traversal detected: {resolved_path}")
 
-    def initialize_workspace(
+    async def initialize_workspace(
         self,
         workspace_id: str,
         repo_url: Optional[str] = None,
@@ -82,21 +81,17 @@ class WorkspaceService:
                 git_args = ["-c", f"http.extraHeader={auth_header_value(token)}"]
 
         try:
-            subprocess.run(
-                ["git", *git_args, "clone", repo_url, target_dir],
-                capture_output=True,
-                text=True,
-                check=True,
-                timeout=300,
+            rc, _, stderr = await run_git(
+                [*git_args, "clone", repo_url, target_dir], timeout=300
             )
-        except subprocess.CalledProcessError as e:
-            if os.path.exists(target_dir):
-                shutil.rmtree(target_dir, ignore_errors=True)
-            raise WorkspaceError(f"Git clone failed: {e.stderr}")
-        except subprocess.TimeoutExpired:
+        except GitTimeout:
             if os.path.exists(target_dir):
                 shutil.rmtree(target_dir, ignore_errors=True)
             raise WorkspaceError("Git clone timed out")
+        if rc != 0:
+            if os.path.exists(target_dir):
+                shutil.rmtree(target_dir, ignore_errors=True)
+            raise WorkspaceError(f"Git clone failed: {stderr.strip()}")
 
         logger.info(f"Initialized workspace {workspace_id} from {repo_url}")
 

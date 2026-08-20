@@ -9,17 +9,31 @@ from mikoshi.tools.toolset_handler import ToolSetHandler, tool
 class FakeHandler(ToolSetHandler):
     server_name = "fake"
 
-    @tool(description="echoes input", parameters={"type": "object", "properties": {"msg": {"type": "string"}}})
+    @tool(
+        description="echoes input",
+        parameters={"type": "object", "properties": {"msg": {"type": "string"}}},
+    )
     def echo(self, msg: str) -> str:
         return msg
 
-    @tool(description="async greet", parameters={"type": "object", "properties": {"name": {"type": "string"}}})
+    @tool(
+        description="async greet",
+        parameters={"type": "object", "properties": {"name": {"type": "string"}}},
+    )
     async def greet(self, name: str) -> str:
         return f"hello {name}"
 
     @tool(description="uses context", parameters={"type": "object", "properties": {}})
     def with_ctx(self, context: ToolCallContext) -> str:
         return context.chat_id
+
+    @tool(description="always raises", parameters={"type": "object", "properties": {}})
+    def boom(self) -> str:
+        raise ValueError("kaboom")
+
+    @tool(description="async raise", parameters={"type": "object", "properties": {}})
+    async def aboom(self) -> str:
+        raise TypeError("async kaboom")
 
     def plain_method(self):
         return "not a tool"
@@ -48,14 +62,17 @@ class TestInitialize:
         await handler.initialize()
         tools = await handler.list_tools()
         names = {t.name for t in tools}
-        assert names == {"echo", "greet", "with_ctx"}
+        assert names == {"echo", "greet", "with_ctx", "boom", "aboom"}
 
 
 class TestCallTool:
     @pytest.mark.asyncio
     async def test_calls_tool(self, initialized):
         assert await initialized.call_tool("echo", {"msg": "hi"}, _ctx()) == "hi"
-        assert await initialized.call_tool("greet", {"name": "world"}, _ctx()) == "hello world"
+        assert (
+            await initialized.call_tool("greet", {"name": "world"}, _ctx())
+            == "hello world"
+        )
 
     @pytest.mark.asyncio
     async def test_context_injection(self, initialized):
@@ -67,6 +84,37 @@ class TestCallTool:
     async def test_unknown_tool_raises(self, initialized):
         with pytest.raises(ValueError, match="not found"):
             await initialized.call_tool("nonexistent", {}, _ctx())
+
+
+class TestToolExceptionHandling:
+    @pytest.mark.asyncio
+    async def test_sync_tool_exception_becomes_error_result(self, initialized):
+        result = await initialized.call_tool("boom", {}, _ctx())
+        assert "Error executing tool 'boom'" in result
+        assert "kaboom" in result
+
+    @pytest.mark.asyncio
+    async def test_async_tool_exception_becomes_error_result(self, initialized):
+        result = await initialized.call_tool("aboom", {}, _ctx())
+        assert "Error executing tool 'aboom'" in result
+        assert "async kaboom" in result
+
+    @pytest.mark.asyncio
+    async def test_bad_arguments_become_error_result(self, initialized):
+        # A model passing wrong/unexpected kwargs must not abort the turn.
+        result = await initialized.call_tool("echo", {"bogus": 1}, _ctx())
+        assert "Error executing tool 'echo'" in result
+
+    @pytest.mark.asyncio
+    async def test_tool_denied_error_still_raises(self, initialized):
+        from mikoshi.tools.approval import ToolDeniedError
+
+        def deny(**kwargs):
+            raise ToolDeniedError("srv__t")
+
+        initialized._tools["echo"].func = deny
+        with pytest.raises(ToolDeniedError):
+            await initialized.call_tool("echo", {}, _ctx())
 
 
 class TestCallOtherTool:

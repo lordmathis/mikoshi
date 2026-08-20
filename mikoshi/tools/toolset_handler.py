@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict
 
+from mikoshi.tools.approval import ToolDeniedError
 from mikoshi.tools.context import ToolCallContext
 
 if TYPE_CHECKING:
@@ -81,10 +82,19 @@ class ToolSetHandler(ABC):
         if "context" in sig.parameters:
             kwargs["context"] = context
 
-        if inspect.iscoroutinefunction(tool_def.func):
-            result = await tool_def.func(**kwargs)
-        else:
-            result = tool_def.func(**kwargs)
+        try:
+            if inspect.iscoroutinefunction(tool_def.func):
+                result = await tool_def.func(**kwargs)
+            else:
+                result = tool_def.func(**kwargs)
+        except ToolDeniedError:
+            # Denials are control flow — the agent handles them specially.
+            raise
+        except Exception as e:
+            # A failing tool must not abort the whole turn: return a
+            # model-readable error so the model can correct itself.
+            logger.exception(f"[{self.server_name}] Tool '{tool_name}' raised")
+            return f"Error executing tool '{tool_name}': {e}"
 
         logger.debug(
             f"[{self.server_name}] Tool '{tool_name}' returned: type={type(result)}, value={result}"

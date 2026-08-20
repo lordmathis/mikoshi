@@ -221,6 +221,16 @@ class TestApprovalFailureAndRaces:
     @pytest.mark.asyncio
     async def test_approve_failure_propagates_instead_of_hanging(self, db):
         tm = _make_manager(toolset=_FailingToolset())
+        # Tool-func exceptions are converted to error results by
+        # ToolSetHandler.call_tool; simulate a handler-level failure (the
+        # kind that still raises, e.g. MCP transport errors).
+        handler = tm._server_map["failing"]
+
+        async def _raise(tool_name, arguments, context):
+            raise RuntimeError("kaboom")
+
+        handler.call_tool = _raise
+
         task = asyncio.create_task(tm.call_tool("failing__boom", {}, _ctx()))
         await asyncio.sleep(0)
         aid = tm.list_pending_approvals("c1")[0]["id"]

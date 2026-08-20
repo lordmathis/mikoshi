@@ -34,11 +34,13 @@ class TestResolveAgentParams:
 
     def test_config_values_override_defaults(self):
         m = _manager()
-        result = m._resolve_agent_params({
-            "system_prompt": "custom",
-            "tool_servers": ["mcp"],
-            "model_params": {"temperature": 0.7, "max_tokens": 100},
-        })
+        result = m._resolve_agent_params(
+            {
+                "system_prompt": "custom",
+                "tool_servers": ["mcp"],
+                "model_params": {"temperature": 0.7, "max_tokens": 100},
+            }
+        )
         assert result["system_prompt"] == "custom"
         assert result["tool_servers"] == ["mcp"]
         assert result["temperature"] == 0.7
@@ -46,7 +48,11 @@ class TestResolveAgentParams:
 
     def test_defaults_used_when_config_empty(self):
         m = _manager()
-        defaults = {"system_prompt": "default", "temperature": 0.5, "max_iterations": 10}
+        defaults = {
+            "system_prompt": "default",
+            "temperature": 0.5,
+            "max_iterations": 10,
+        }
         result = m._resolve_agent_params({}, defaults)
         assert result["system_prompt"] == "default"
         assert result["temperature"] == 0.5
@@ -61,6 +67,7 @@ class TestResolveAgentParams:
         )
         assert result["system_prompt"] == "override"
         assert result["max_iterations"] == 3
+
 
 class TestResolveTitleParams:
     def test_no_title_config(self):
@@ -104,7 +111,9 @@ class TestHydrate:
         m = self._setup_manager()
         mock_provider = MagicMock()
         m.provider_registry.get_provider.return_value = mock_provider
-        with patch.object(m, "_construct_agent", return_value=MagicMock()) as mock_construct:
+        with patch.object(
+            m, "_construct_agent", return_value=MagicMock()
+        ) as mock_construct:
             agent = m._hydrate("c1", {"model": "openai:gpt-4"})
             mock_construct.assert_called_once()
             call_kwargs = mock_construct.call_args
@@ -129,7 +138,9 @@ class TestHydrate:
         mock_cls.max_iterations = None
         m.agent_registry.get_agent_class.return_value = mock_cls
         m.provider_registry.get_provider.return_value = MagicMock()
-        with patch.object(m, "_construct_agent", return_value=MagicMock()) as mock_construct:
+        with patch.object(
+            m, "_construct_agent", return_value=MagicMock()
+        ) as mock_construct:
             m._hydrate("c1", {"model": "my-agent"})
             call_kwargs = mock_construct.call_args
             assert call_kwargs[0][0] is mock_cls
@@ -168,9 +179,71 @@ class TestHydrate:
         m.db.get_workspace.return_value = MagicMock(connector="github")
         m.provider_registry.get_provider.return_value = MagicMock()
         from mikoshi.agents.workspace import WorkspaceAgent
-        with patch.object(m, "_construct_agent", return_value=MagicMock()) as mock_construct:
+
+        with patch.object(
+            m, "_construct_agent", return_value=MagicMock()
+        ) as mock_construct:
             m._hydrate("c1", {"model": "openai:gpt-4"})
             assert mock_construct.call_args[0][0] is WorkspaceAgent
+
+
+class TestCreate:
+    def _setup_manager(self):
+        m = _manager()
+        m.db.get_chat.return_value = MagicMock(workspace_id=None)
+        m.provider_registry.get_provider.return_value = MagicMock()
+        return m
+
+    def test_missing_model_raises_and_caches_nothing(self):
+        m = self._setup_manager()
+        # A default agent exists, so _hydrate would succeed — validation
+        # must fire first and leave _agents untouched.
+        m.agent_registry.get_default_agent_name.return_value = "default-agent"
+        with pytest.raises(ValueError, match="Model is required"):
+            m.create("c1", {"model": None})
+        assert m._agents == {}
+
+    def test_hydrate_failure_raises_and_caches_nothing(self):
+        m = self._setup_manager()
+        m.provider_registry.get_provider.return_value = None
+        with pytest.raises(ValueError, match="Provider.*not found"):
+            m.create("c1", {"model": "bad:model"})
+        assert m._agents == {}
+
+    def test_missing_chat_raises(self):
+        m = _manager()
+        m.db.get_chat.return_value = None
+        with pytest.raises(ValueError, match="not found"):
+            m.create("c1", {"model": "openai:gpt-4"})
+
+    def test_duplicate_agent_raises(self):
+        m = self._setup_manager()
+        m._agents["c1"] = MagicMock()
+        with pytest.raises(ValueError, match="already exists"):
+            m.create("c1", {"model": "openai:gpt-4"})
+
+    def test_success_caches_and_persists_config(self):
+        m = self._setup_manager()
+        agent = MagicMock()
+        with patch.object(m, "_hydrate", return_value=agent):
+            result = m.create(
+                "c1",
+                {
+                    "model": "openai:gpt-4",
+                    "system_prompt": "sys",
+                    "tool_servers": ["mcp"],
+                    "model_params": {"temperature": 0.5},
+                },
+            )
+        assert result is agent
+        assert m._agents["c1"] is agent
+        m.db.save_chat_config.assert_called_once_with(
+            chat_id="c1",
+            model="openai:gpt-4",
+            system_prompt="sys",
+            tool_servers=["mcp"],
+            model_params={"temperature": 0.5},
+        )
 
 
 class TestAgentRegistryDefault:
@@ -182,12 +255,14 @@ class TestAgentRegistryDefault:
     def test_no_default(self):
         class NonDefault:
             default = False
+
         r = self._make_registry({"a": NonDefault})
         assert r.get_default_agent_name() is None
 
     def test_picks_default(self):
         class DefaultAgent:
             default = True
+
         r = self._make_registry({"my-agent": DefaultAgent})
         assert r.get_default_agent_name() == "my-agent"
 

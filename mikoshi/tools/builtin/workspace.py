@@ -5,9 +5,8 @@ import logging
 import mimetypes
 import os
 import re
-import subprocess
 
-from mikoshi.git import GitService, auth_header_value
+from mikoshi.git import GitService, GitTimeout, run_git
 from mikoshi.tools.context import ToolCallContext
 from mikoshi.tools.edit_utils import EditError, apply_edits
 from mikoshi.tools.toolset_handler import ToolSetHandler, tool
@@ -22,10 +21,9 @@ GREP_MATCH_LIMIT = 100
 FIND_RESULT_LIMIT = 100
 GREP_LINE_TRUNCATE = 500
 
+
 def _workspace_result(summary: str, paths: list[str] | None = None) -> str:
-    return json.dumps(
-        {"__workspace": True, "summary": summary, "paths": paths or []}
-    )
+    return json.dumps({"__workspace": True, "summary": summary, "paths": paths or []})
 
 
 IMAGE_EXTENSIONS = {
@@ -54,18 +52,15 @@ def _resolve_path(root: str, path: str) -> str:
     return full
 
 
-def _run_git(cwd: str, args: list[str], timeout: int = 30) -> str:
-    result = subprocess.run(
-        ["git"] + args,
-        capture_output=True,
-        text=True,
-        cwd=cwd,
-        timeout=timeout,
-    )
-    if result.returncode != 0:
-        return f"Error (exit {result.returncode}): {result.stderr.strip()}"
-    output = result.stdout.strip()
-    return output if output else result.stderr.strip() or "(no output)"
+async def _run_git(cwd: str, args: list[str], timeout: int = 30) -> str:
+    try:
+        rc, stdout, stderr = await run_git(args, cwd=cwd, timeout=timeout)
+    except GitTimeout as e:
+        return f"Error: {e}"
+    if rc != 0:
+        return f"Error (exit {rc}): {stderr.strip()}"
+    output = stdout.strip()
+    return output if output else stderr.strip() or "(no output)"
 
 
 def _has_git_repo(root: str) -> bool:
@@ -106,9 +101,7 @@ def _truncate_output(
     return result
 
 
-def _collect_files(
-    search_root: str, glob_pattern: str | None = None
-) -> list[str]:
+def _collect_files(search_root: str, glob_pattern: str | None = None) -> list[str]:
     files = []
     for dirpath, dirnames, filenames in os.walk(search_root):
         if ".git" in dirnames:
@@ -251,7 +244,9 @@ class WorkspaceTools(ToolSetHandler):
                 os.makedirs(parent, exist_ok=True)
             with open(full_path, "w", encoding="utf-8") as f:
                 f.write(content)
-            line_count = content.count("\n") + (1 if content and not content.endswith("\n") else 0)
+            line_count = content.count("\n") + (
+                1 if content and not content.endswith("\n") else 0
+            )
             return _workspace_result(
                 f"Wrote {len(content)} bytes ({line_count} lines) to {path}",
                 paths=[path],
@@ -446,9 +441,7 @@ class WorkspaceTools(ToolSetHandler):
                         if len(ln) > GREP_LINE_TRUNCATE:
                             ln = ln[:GREP_LINE_TRUNCATE] + "..."
                         marker = ">" if j == mi else " "
-                        block_parts.append(
-                            f"{marker}{rel_path}:{j + 1}:{ln}"
-                        )
+                        block_parts.append(f"{marker}{rel_path}:{j + 1}:{ln}")
                     results.append("\n".join(block_parts))
                 else:
                     ln = file_lines[mi].rstrip("\n")
@@ -609,7 +602,7 @@ class WorkspaceTools(ToolSetHandler):
         root = _require_workspace(context)
         return GitService(root, context.workspace.workspace_id)
 
-    def _get_auth_git_args(self, context: ToolCallContext) -> list[str]:
+    async def _get_auth_git_args(self, context: ToolCallContext) -> list[str]:
         if not context.workspace:
             return []
         ws = context.workspace
@@ -619,17 +612,8 @@ class WorkspaceTools(ToolSetHandler):
         if not token:
             return []
 
-        root = _resolve_root(context)
-        url_result = subprocess.run(
-            ["git", "remote", "get-url", "origin"],
-            capture_output=True,
-            text=True,
-            cwd=root,
-        )
-        if not url_result.stdout.strip().startswith("https://"):
-            return []
-
-        return ["-c", f"http.extraHeader={auth_header_value(token)}"]
+        svc = self._get_git_service(context)
+        return await svc.https_auth_args(token)
 
     @tool(
         description="Show the git status of the workspace.",
@@ -638,11 +622,11 @@ class WorkspaceTools(ToolSetHandler):
             "properties": {},
         },
     )
-    def git_status(self, context: ToolCallContext) -> str:
+    async def git_status(self, context: ToolCallContext) -> str:
         root = _require_workspace(context)
         if not _has_git_repo(root):
             return "No git repository in this workspace."
-        return _run_git(root, ["status", "--porcelain"])
+        return await _run_git(root, ["status", "--porcelain"])
 
     @tool(
         description="Show the unstaged diff of the workspace.",
@@ -651,11 +635,11 @@ class WorkspaceTools(ToolSetHandler):
             "properties": {},
         },
     )
-    def git_diff(self, context: ToolCallContext) -> str:
+    async def git_diff(self, context: ToolCallContext) -> str:
         root = _require_workspace(context)
         if not _has_git_repo(root):
             return "No git repository in this workspace."
-        return _run_git(root, ["diff"])
+        return await _run_git(root, ["diff"])
 
     @tool(
         description="Stage all changes and commit with a message.",
@@ -670,7 +654,7 @@ class WorkspaceTools(ToolSetHandler):
             "required": ["message"],
         },
     )
-    def git_commit(self, message: str, context: ToolCallContext) -> str:
+    async def git_commit(self, message: str, context: ToolCallContext) -> str:
         if not context.workspace:
             return "Error: No workspace linked to this chat."
         root = _resolve_root(context)
@@ -678,11 +662,11 @@ class WorkspaceTools(ToolSetHandler):
             return "No git repository in this workspace."
         svc = self._get_git_service(context)
         ws = context.workspace
-        result = svc.commit(message, ws.git_user_name, ws.git_user_email)
+        result = await svc.commit(message, ws.git_user_name, ws.git_user_email)
         if not result.success:
             return f"Error committing: {result.output}"
 
-        hash_ok, commit_hash = svc._run_git(["rev-parse", "HEAD"])
+        hash_ok, commit_hash = await svc._run_git(["rev-parse", "HEAD"])
         return f"Committed as {commit_hash}" if hash_ok else result.output
 
     @tool(
@@ -692,13 +676,13 @@ class WorkspaceTools(ToolSetHandler):
             "properties": {},
         },
     )
-    def git_pull(self, context: ToolCallContext) -> str:
+    async def git_pull(self, context: ToolCallContext) -> str:
         root = _require_workspace(context)
         if not _has_git_repo(root):
             return "No git repository in this workspace."
         svc = self._get_git_service(context)
-        auth_args = self._get_auth_git_args(context)
-        result = svc.pull(auth_args)
+        auth_args = await self._get_auth_git_args(context)
+        result = await svc.pull(auth_args)
         if not result.success:
             return result.output
         return _workspace_result(result.output)
@@ -710,11 +694,11 @@ class WorkspaceTools(ToolSetHandler):
             "properties": {},
         },
     )
-    def git_push(self, context: ToolCallContext) -> str:
+    async def git_push(self, context: ToolCallContext) -> str:
         root = _require_workspace(context)
         if not _has_git_repo(root):
             return "No git repository in this workspace."
         svc = self._get_git_service(context)
-        auth_args = self._get_auth_git_args(context)
-        result = svc.push(auth_args)
+        auth_args = await self._get_auth_git_args(context)
+        result = await svc.push(auth_args)
         return result.output

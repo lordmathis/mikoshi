@@ -1,10 +1,10 @@
 import os
-import subprocess
 from unittest.mock import patch
 
 import pytest
 
 from mikoshi.config import ConnectorsConfig, ConnectorType
+from mikoshi.git import GitTimeout
 from mikoshi.workspace import (
     PathTraversalError,
     WorkspaceError,
@@ -106,60 +106,63 @@ class TestWorkspaceOps:
         ws.delete_workspace_files("doomed")
         assert not os.path.exists(root)
 
-    def test_initialize_workspace_success(self, ws):
-        with patch("mikoshi.workspace.subprocess.run") as mock_run:
-            mock_run.return_value = subprocess.CompletedProcess([], 0)
-            ws.initialize_workspace("new-ws", "https://example.com/repo.git")
+    @pytest.mark.asyncio
+    async def test_initialize_workspace_success(self, ws):
+        with patch("mikoshi.workspace.run_git") as mock_run:
+            mock_run.return_value = (0, "", "")
+            await ws.initialize_workspace("new-ws", "https://example.com/repo.git")
             mock_run.assert_called_once()
             args = mock_run.call_args[0][0]
-            assert args[0] == "git"
-            assert "clone" in args
+            assert args[0] == "clone"
+            assert "https://example.com/repo.git" in args
 
-    def test_initialize_workspace_already_exists(self, ws):
+    @pytest.mark.asyncio
+    async def test_initialize_workspace_already_exists(self, ws):
         _create_workspace(ws, "existing")
         with pytest.raises(WorkspaceError, match="already exists"):
-            ws.initialize_workspace("existing", "https://example.com/repo.git")
+            await ws.initialize_workspace("existing", "https://example.com/repo.git")
 
-    def test_initialize_workspace_clone_failure(self, ws):
-        with patch("mikoshi.workspace.subprocess.run") as mock_run:
-            mock_run.side_effect = subprocess.CalledProcessError(
-                128, "git", stderr="fatal: not found"
-            )
+    @pytest.mark.asyncio
+    async def test_initialize_workspace_clone_failure(self, ws):
+        with patch("mikoshi.workspace.run_git") as mock_run:
+            mock_run.return_value = (128, "", "fatal: not found\n")
             with pytest.raises(WorkspaceError, match="Git clone failed"):
-                ws.initialize_workspace("fail-ws", "https://bad.url")
+                await ws.initialize_workspace("fail-ws", "https://bad.url")
 
-    def test_initialize_workspace_timeout(self, ws):
-        with patch("mikoshi.workspace.subprocess.run") as mock_run:
-            mock_run.side_effect = subprocess.TimeoutExpired("git", 300)
+    @pytest.mark.asyncio
+    async def test_initialize_workspace_timeout(self, ws):
+        with patch("mikoshi.workspace.run_git") as mock_run:
+            mock_run.side_effect = GitTimeout("git clone timed out")
             with pytest.raises(WorkspaceError, match="timed out"):
-                ws.initialize_workspace("slow-ws", "https://slow.url")
+                await ws.initialize_workspace("slow-ws", "https://slow.url")
 
-    def test_initialize_workspace_with_connector_token(self, ws):
+    @pytest.mark.asyncio
+    async def test_initialize_workspace_with_connector_token(self, ws):
         cfg = ConnectorsConfig(type=ConnectorType.GITHUB, token="secret-token")
-        ws_with_conn = WorkspaceService(
-            ws._data_dir, {"github": cfg}
-        )
-        with patch("mikoshi.workspace.subprocess.run") as mock_run:
-            mock_run.return_value = subprocess.CompletedProcess([], 0)
-            ws_with_conn.initialize_workspace(
+        ws_with_conn = WorkspaceService(ws._data_dir, {"github": cfg})
+        with patch("mikoshi.workspace.run_git") as mock_run:
+            mock_run.return_value = (0, "", "")
+            await ws_with_conn.initialize_workspace(
                 "conn-ws", "https://github.com/org/repo.git", "github"
             )
             args = mock_run.call_args[0][0]
             assert "-c" in args
             assert "Authorization: Basic" in " ".join(args)
 
-    def test_initialize_workspace_connector_no_token(self, ws):
-        with patch("mikoshi.workspace.subprocess.run") as mock_run:
-            mock_run.return_value = subprocess.CompletedProcess([], 0)
-            ws.initialize_workspace(
+    @pytest.mark.asyncio
+    async def test_initialize_workspace_connector_no_token(self, ws):
+        with patch("mikoshi.workspace.run_git") as mock_run:
+            mock_run.return_value = (0, "", "")
+            await ws.initialize_workspace(
                 "no-token-ws", "https://example.com/repo.git", "unknown-connector"
             )
             args = mock_run.call_args[0][0]
             assert "-c" not in args
 
-    def test_initialize_workspace_no_repo_url_skips_clone(self, ws):
-        with patch("mikoshi.workspace.subprocess.run") as mock_run:
-            ws.initialize_workspace("empty-ws", None)
+    @pytest.mark.asyncio
+    async def test_initialize_workspace_no_repo_url_skips_clone(self, ws):
+        with patch("mikoshi.workspace.run_git") as mock_run:
+            await ws.initialize_workspace("empty-ws", None)
             mock_run.assert_not_called()
         root = os.path.join(ws._workspaces_dir, "empty-ws")
         assert os.path.isdir(root)

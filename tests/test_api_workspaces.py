@@ -1,12 +1,11 @@
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from mikoshi.config import AppConfig
 from mikoshi.connectors.client_base import FileNode
 from mikoshi.git import GitResult, GitStatus
 from mikoshi.routes.workspaces import router as workspaces_router
@@ -26,7 +25,7 @@ class _StubWorkspaceService:
         self._fail_init = fail_init
         self._files = {}
 
-    def initialize_workspace(self, workspace_id, repo_url, connector_name=None):
+    async def initialize_workspace(self, workspace_id, repo_url, connector_name=None):
         if self._fail_init:
             raise WorkspaceError("clone failed")
 
@@ -74,7 +73,9 @@ async def client(db, app_config):
     app.state.workspace_service = _StubWorkspaceService()
     app.state.agent_manager = _StubAgentManager()
     app.state.app_config = app_config
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as c:
         yield c
 
 
@@ -106,8 +107,12 @@ class TestCreateWorkspace:
         app.state.workspace_service = _StubWorkspaceService(fail_init=True)
         app.state.agent_manager = _StubAgentManager()
         app.state.app_config = app_config
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            resp = await client.post("/api/workspaces", json=_create_workspace_payload())
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            resp = await client.post(
+                "/api/workspaces", json=_create_workspace_payload()
+            )
             assert resp.status_code == 400
             assert db.list_workspaces() == []
 
@@ -268,7 +273,7 @@ class TestGitEndpoints:
         ws = db.create_workspace(name="ws", repo_url="https://x.com/repo")
         mock_status = GitStatus(branch="main", staged=1, unstaged=0, untracked=2)
         with patch("mikoshi.routes.workspaces.GitService") as MockGit:
-            MockGit.return_value.status.return_value = mock_status
+            MockGit.return_value.status = AsyncMock(return_value=mock_status)
             resp = await client.get(f"/api/workspaces/{ws.id}/git/status")
         assert resp.status_code == 200
         data = resp.json()
@@ -281,7 +286,7 @@ class TestGitEndpoints:
         ws = db.create_workspace(name="ws", repo_url="https://x.com/repo")
         mock_result = GitResult(success=True, output="committed")
         with patch("mikoshi.routes.workspaces.GitService") as MockGit:
-            MockGit.return_value.commit.return_value = mock_result
+            MockGit.return_value.commit = AsyncMock(return_value=mock_result)
             resp = await client.post(
                 f"/api/workspaces/{ws.id}/git/commit",
                 json={"message": "initial"},
@@ -299,7 +304,7 @@ class TestGitEndpoints:
         ws = db.create_workspace(name="ws", repo_url="https://x.com/repo")
         mock_result = GitResult(success=True, output="already up to date")
         with patch("mikoshi.routes.workspaces.GitService") as MockGit:
-            MockGit.return_value.pull.return_value = mock_result
+            MockGit.return_value.pull = AsyncMock(return_value=mock_result)
             resp = await client.post(f"/api/workspaces/{ws.id}/git/pull")
         assert resp.status_code == 200
         assert resp.json()["success"] is True
@@ -310,10 +315,32 @@ class TestGitEndpoints:
         ws = db.create_workspace(name="ws", repo_url="https://x.com/repo")
         mock_result = GitResult(success=False, output="rejected")
         with patch("mikoshi.routes.workspaces.GitService") as MockGit:
-            MockGit.return_value.push.return_value = mock_result
+            MockGit.return_value.push = AsyncMock(return_value=mock_result)
             resp = await client.post(f"/api/workspaces/{ws.id}/git/push")
         assert resp.status_code == 200
         assert resp.json()["success"] is False
+
+    @pytest.mark.asyncio
+    async def test_git_pull_builds_https_auth_args(self, client, db):
+        ws = db.create_workspace(
+            name="ws", repo_url="https://x.com/repo", connector="github"
+        )
+        svc = client._transport.app.state.workspace_service
+        svc._tokens = {"github": "tok"}
+        svc._resolve_connector_token = lambda name: svc._tokens.get(name)
+        mock_result = GitResult(success=True, output="ok")
+        with patch("mikoshi.routes.workspaces.GitService") as MockGit:
+            MockGit.return_value.https_auth_args = AsyncMock(
+                return_value=["-c", "http.extraHeader=Authorization: Basic dA=="]
+            )
+            MockGit.return_value.pull = AsyncMock(return_value=mock_result)
+            resp = await client.post(f"/api/workspaces/{ws.id}/git/pull")
+            MockGit.return_value.https_auth_args.assert_awaited_once_with("tok")
+            MockGit.return_value.pull.assert_awaited_once_with(
+                ["-c", "http.extraHeader=Authorization: Basic dA=="]
+            )
+        assert resp.status_code == 200
+        assert resp.json()["success"] is True
 
     @pytest.mark.asyncio
     async def test_git_not_found_workspace(self, client):

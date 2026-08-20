@@ -1,7 +1,7 @@
+import asyncio
 import base64
 import logging
 import os
-import subprocess
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
@@ -17,6 +17,38 @@ def auth_header_value(token: str) -> str:
     raw = f"x-access-token:{token}".encode("utf-8")
     encoded = base64.b64encode(raw).decode("ascii")
     return f"Authorization: Basic {encoded}"
+
+
+class GitTimeout(Exception):
+    """git subprocess exceeded its timeout and was killed."""
+
+
+async def run_git(
+    args: list[str],
+    cwd: str | None = None,
+    env: dict | None = None,
+    timeout: float = 30,
+) -> tuple[int, str, str]:
+    """Run git asynchronously. Returns (returncode, stdout, stderr)."""
+    proc = await asyncio.create_subprocess_exec(
+        "git",
+        *args,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=cwd,
+        env=env,
+    )
+    try:
+        stdout_b, stderr_b = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.wait()
+        raise GitTimeout(f"git {args[0]} timed out after {timeout}s")
+    return (
+        proc.returncode or 0,
+        stdout_b.decode(errors="replace"),
+        stderr_b.decode(errors="replace"),
+    )
 
 
 @dataclass
@@ -38,28 +70,35 @@ class GitService:
         self._dir = workspace_dir
         self._workspace_id = workspace_id
 
-    def _run_git(
+    async def _run_git(
         self, args: list[str], timeout: int = 30, env: dict | None = None
     ) -> tuple[bool, str]:
-        result = subprocess.run(
-            ["git"] + args,
-            capture_output=True,
-            text=True,
-            cwd=self._dir,
-            timeout=timeout,
-            env=env,
-        )
-        if result.returncode != 0:
-            return False, result.stderr.strip() or f"exit code {result.returncode}"
-        output = result.stdout.strip()
-        return True, output if output else result.stderr.strip() or "(no output)"
+        try:
+            rc, stdout, stderr = await run_git(
+                args, cwd=self._dir, env=env, timeout=timeout
+            )
+        except GitTimeout as e:
+            return False, str(e)
+        if rc != 0:
+            return False, stderr.strip() or f"exit code {rc}"
+        output = stdout.strip()
+        return True, output if output else stderr.strip() or "(no output)"
 
-    def status(self) -> GitStatus:
-        ok, output = self._run_git(["status", "--porcelain"])
+    async def https_auth_args(self, token: str | None) -> list[str]:
+        """Git -c args for HTTPS token auth, if the origin remote is https."""
+        if not token:
+            return []
+        ok, url = await self._run_git(["remote", "get-url", "origin"], timeout=10)
+        if ok and url.startswith("https://"):
+            return ["-c", f"http.extraHeader={auth_header_value(token)}"]
+        return []
+
+    async def status(self) -> GitStatus:
+        ok, output = await self._run_git(["status", "--porcelain"])
         if not ok:
             return GitStatus(branch="(unknown)", staged=0, unstaged=0, untracked=0)
 
-        branch_ok, branch = self._run_git(["rev-parse", "--abbrev-ref", "HEAD"])
+        branch_ok, branch = await self._run_git(["rev-parse", "--abbrev-ref", "HEAD"])
         if not branch_ok:
             branch = "(unknown)"
 
@@ -79,15 +118,17 @@ class GitService:
                 if y in ("M", "D"):
                     unstaged += 1
 
-        return GitStatus(branch=branch, staged=staged, unstaged=unstaged, untracked=untracked)
+        return GitStatus(
+            branch=branch, staged=staged, unstaged=unstaged, untracked=untracked
+        )
 
-    def commit(
+    async def commit(
         self,
         message: str,
         git_user_name: str = "Mikoshi Agent",
         git_user_email: str = "agent@mikoshi",
     ) -> GitResult:
-        ok, output = self._run_git(["add", "-A"])
+        ok, output = await self._run_git(["add", "-A"])
         if not ok:
             return GitResult(False, f"Error staging files: {output}")
 
@@ -97,26 +138,15 @@ class GitService:
         env["GIT_COMMITTER_NAME"] = git_user_name
         env["GIT_COMMITTER_EMAIL"] = git_user_email
 
-        result = subprocess.run(
-            ["git", "commit", "-m", message],
-            capture_output=True,
-            text=True,
-            cwd=self._dir,
-            env=env,
-            timeout=30,
-        )
-        if result.returncode != 0:
-            return GitResult(False, result.stderr.strip() or "nothing to commit")
-
-        out = result.stdout.strip()
-        return GitResult(True, out if out else result.stderr.strip() or "committed")
-
-    def pull(self, auth_args: list[str] | None = None) -> GitResult:
-        args = (auth_args or []) + ["pull"]
-        ok, output = self._run_git(args, timeout=120)
+        ok, output = await self._run_git(["commit", "-m", message], env=env)
         return GitResult(ok, output)
 
-    def push(self, auth_args: list[str] | None = None) -> GitResult:
+    async def pull(self, auth_args: list[str] | None = None) -> GitResult:
+        args = (auth_args or []) + ["pull"]
+        ok, output = await self._run_git(args, timeout=120)
+        return GitResult(ok, output)
+
+    async def push(self, auth_args: list[str] | None = None) -> GitResult:
         args = (auth_args or []) + ["push"]
-        ok, output = self._run_git(args, timeout=120)
+        ok, output = await self._run_git(args, timeout=120)
         return GitResult(ok, output)
