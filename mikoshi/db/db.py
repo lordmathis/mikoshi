@@ -5,7 +5,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Dict, List, Optional
 
-from sqlalchemy import create_engine, func, select, text
+from sqlalchemy import create_engine, event, func, select, text
 from sqlalchemy.orm import sessionmaker
 
 from mikoshi.db.migrations import run_migrations
@@ -27,9 +27,17 @@ class Database:
         )
         self.SessionLocal = sessionmaker(bind=self.engine)
 
-        # Enable foreign keys and WAL mode
+        # PRAGMA foreign_keys is a per-connection setting, so it must be
+        # applied to every pooled connection, not just the first one.
+        @event.listens_for(self.engine, "connect")
+        def _set_sqlite_pragma(dbapi_connection, connection_record):
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA foreign_keys = ON")
+            cursor.close()
+
+        # WAL mode is persistent (stored in the database file), so setting
+        # it once at startup is sufficient.
         with self.engine.connect() as conn:
-            conn.execute(text("PRAGMA foreign_keys = ON"))
             conn.execute(text("PRAGMA journal_mode = WAL"))
             conn.commit()
 
@@ -227,6 +235,10 @@ class Database:
             result = session.execute(stmt)
             return result.scalars().first()
 
+    def get_message(self, message_id: str) -> Optional[Message]:
+        with self.SessionLocal() as session:
+            return session.get(Message, message_id)
+
     def delete_message(self, message_id: str) -> bool:
         """Delete a message"""
         with self.SessionLocal() as session:
@@ -246,9 +258,8 @@ class Database:
     def delete_messages_after(self, chat_id: str, min_sequence: int) -> None:
         """Delete all messages with sequence >= min_sequence in a single transaction."""
         with self.SessionLocal() as session:
-            stmt = (
-                select(Message)
-                .where(Message.chat_id == chat_id, Message.sequence >= min_sequence)
+            stmt = select(Message).where(
+                Message.chat_id == chat_id, Message.sequence >= min_sequence
             )
             messages = session.execute(stmt).scalars().all()
             for msg in messages:

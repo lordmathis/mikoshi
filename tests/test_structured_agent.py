@@ -30,18 +30,25 @@ def _make_structured_agent(db, chat_id):
 
 class TestParseFinalResponse:
     def test_clean_json(self):
-        msg, state = _parse(json.dumps({
-            "reply": "Done!",
-            "new_state": {"count": 1},
-        }))
+        msg, state = _parse(
+            json.dumps(
+                {
+                    "reply": "Done!",
+                    "new_state": {"count": 1},
+                }
+            )
+        )
         assert msg == "Done!"
         assert state == {"count": 1}
 
-    @pytest.mark.parametrize("fence", [
-        "```json\n{payload}\n```",
-        "```\n{payload}\n```",
-        "  ```\n  {payload}  \n  ```  ",
-    ])
+    @pytest.mark.parametrize(
+        "fence",
+        [
+            "```json\n{payload}\n```",
+            "```\n{payload}\n```",
+            "  ```\n  {payload}  \n  ```  ",
+        ],
+    )
     def test_json_in_code_block(self, fence):
         payload = json.dumps({"reply": "ok", "new_state": {}})
         msg, state = _parse(fence.format(payload=payload))
@@ -50,7 +57,7 @@ class TestParseFinalResponse:
 
     def test_json_embedded_in_prose(self):
         obj = {"reply": "hello", "new_state": {"k": "v"}}
-        raw = f'Some text before {json.dumps(obj)} and after'
+        raw = f"Some text before {json.dumps(obj)} and after"
         msg, state = _parse(raw)
         assert msg == "hello"
         assert state == {"k": "v"}
@@ -126,12 +133,63 @@ class TestProcessFinalResponse:
         )
 
         queue = asyncio.Queue()
-        result = await agent._process_final_response(
-            {}, {"content": content}, queue
-        )
+        result = await agent._process_final_response({}, {"content": content}, queue)
 
         state = db.get_chat_state(chat.id)
         assert state["status"] == "active"
         assert state["date"] == "2026-01-01"
         assert len(state["exercises"][0]["sets"]) == 2
         assert result["reply"] == "logged set 2"
+
+
+class _ApprovalStubToolManager:
+    """Simulates an approval-gated tool: fires the callback, then returns."""
+
+    async def call_tool(self, name, args, ctx):
+        if ctx.on_approval_requested:
+            await ctx.on_approval_requested("aid-1", name, args)
+        return "tool result"
+
+
+class TestApprovalResultStreaming:
+    @pytest.mark.asyncio
+    async def test_approved_result_replaces_placeholder_and_streams(self, db):
+        chat = db.create_chat()
+        agent = StructuredAgent(
+            chat_id=chat.id,
+            db=db,
+            provider=_FakeProvider(),
+            tool_manager=_ApprovalStubToolManager(),
+            model_id="m",
+            data_dir="/tmp",
+        )
+        queue = asyncio.Queue()
+        messages = []
+        tool_calls = [
+            {"id": "call_1", "function": {"name": "danger__risky", "arguments": "{}"}}
+        ]
+
+        await agent._execute_tool_calls(tool_calls, messages, queue)
+
+        events = []
+        while not queue.empty():
+            events.append(queue.get_nowait())
+        kinds = [e.type for e in events]
+        assert kinds == ["message", "tool_approval_request", "message"]
+
+        placeholder, _, final = events
+        assert placeholder.data["content"].startswith("Awaiting approval")
+        assert final.data["id"] == placeholder.data["id"]
+        assert final.data["role"] == "tool"
+        assert final.data["content"] == "tool result"
+
+        history = db.get_chat_history(chat.id)
+        assert history[-1].role == "tool"
+        assert history[-1].content == "tool result"
+        assert history[-1].status == "completed"
+
+        assert messages[-1] == {
+            "role": "tool",
+            "tool_call_id": "call_1",
+            "content": "tool result",
+        }

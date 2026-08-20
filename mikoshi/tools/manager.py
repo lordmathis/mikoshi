@@ -35,6 +35,20 @@ BUILTIN_TOOLS: list[tuple[type[ToolSetHandler], Optional[str]]] = [
 ]
 
 
+def normalize_tool(tool: Any) -> Dict[str, Any]:
+    """Normalize a tool object from any handler type into a plain dict.
+
+    ToolSetHandler tools expose ``parameters`` (JSON Schema); MCP ``Tool``
+    objects expose ``inputSchema``.
+    """
+    schema = getattr(tool, "inputSchema", None) or getattr(tool, "parameters", None)
+    return {
+        "name": getattr(tool, "name", "unknown"),
+        "description": getattr(tool, "description", "") or "",
+        "parameters": schema or {},
+    }
+
+
 def _parse_tool_name(call_name: str) -> tuple[str, str]:
     try:
         server_name, tool_name = call_name.split("__", 1)
@@ -74,9 +88,7 @@ class ToolManager:
             )
             self._mcp_handlers[server_name] = mcp_handler
 
-        self._toolset_handlers: Dict[
-            str, ToolSetHandler
-        ] = {}
+        self._toolset_handlers: Dict[str, ToolSetHandler] = {}
 
     def _discover_toolset_plugins(self) -> Dict[str, type]:
         return discover_plugins(
@@ -137,7 +149,9 @@ class ToolManager:
         for toolset_cls, cfg_key in BUILTIN_TOOLS:
             try:
                 tool_cfg = getattr(self._app_config, cfg_key, None) if cfg_key else None
-                instance = toolset_cls(tool_cfg) if tool_cfg is not None else toolset_cls()
+                instance = (
+                    toolset_cls(tool_cfg) if tool_cfg is not None else toolset_cls()
+                )
                 instance.set_tool_manager(self)
 
                 await instance.initialize()
@@ -164,9 +178,7 @@ class ToolManager:
         context: ToolCallContext,
     ) -> Any:
         """Route tool calls to the appropriate handler"""
-        logger.info(
-            "call_tool START name=%s chat_id=%s", call_name, context.chat_id
-        )
+        logger.info("call_tool START name=%s chat_id=%s", call_name, context.chat_id)
         server_name, tool_name = _parse_tool_name(call_name)
 
         handler = self._server_map.get(server_name)
@@ -231,8 +243,14 @@ class ToolManager:
                 approval_id,
             )
 
-        result = await future
-        self._pending_approvals.pop(approval_id, None)
+        try:
+            result = await future
+        except asyncio.CancelledError:
+            if self._db is not None:
+                self._db.update_approval_status(approval_id, "cancelled")
+            raise
+        finally:
+            self._pending_approvals.pop(approval_id, None)
 
         if result == "denied":
             raise ToolDeniedError(call_name)
@@ -254,7 +272,9 @@ class ToolManager:
         try:
             server_name, tool_name = _parse_tool_name(call_name)
         except ValueError:
-            logger.warning(f"Invalid tool name format: '{call_name}'. Expected 'server__tool'")
+            logger.warning(
+                f"Invalid tool name format: '{call_name}'. Expected 'server__tool'"
+            )
             return None
 
         # Only ToolSetHandlers have tool definitions with require_approval
@@ -277,24 +297,35 @@ class ToolManager:
         Returns:
             The tool execution result
         """
-        approval = self._pending_approvals.get(approval_id)
+        # Claim the approval atomically: a second approve/deny of the same id
+        # must not execute the tool twice.
+        approval = self._pending_approvals.pop(approval_id, None)
         if approval is None:
-            raise ValueError(f"Approval {approval_id} not found")
+            raise ValueError(f"Approval {approval_id} not found or already resolved")
 
-        if scope == "always":
-            self.allow(approval.chat_id, approval.tool_name)
+        try:
+            if scope == "always":
+                self.allow(approval.chat_id, approval.tool_name)
 
-        if self._db is not None:
-            self._db.update_approval_status(approval_id, "approved")
+            if self._db is not None:
+                self._db.update_approval_status(approval_id, "approved")
 
-        server_name, tool_name = _parse_tool_name(approval.tool_name)
-        handler = self._server_map.get(server_name)
-        if handler is None:
-            raise ValueError(f"Tool server not found for {approval.tool_name}")
-        result = await handler.call_tool(
-            tool_name, approval.arguments, approval.context
-        )
-        approval.future.set_result(result)
+            server_name, tool_name = _parse_tool_name(approval.tool_name)
+            handler = self._server_map.get(server_name)
+            if handler is None:
+                raise ValueError(f"Tool server not found for {approval.tool_name}")
+
+            result = await handler.call_tool(
+                tool_name, approval.arguments, approval.context
+            )
+        except Exception as e:
+            # Never leave the awaiting agent unresolved: it would hang forever.
+            if not approval.future.done():
+                approval.future.set_exception(e)
+            raise
+
+        if not approval.future.done():
+            approval.future.set_result(result)
         return result
 
     async def deny_tool(self, approval_id: str) -> None:
@@ -303,14 +334,15 @@ class ToolManager:
         Args:
             approval_id: The id of the approval to deny
         """
-        approval = self._pending_approvals.get(approval_id)
+        approval = self._pending_approvals.pop(approval_id, None)
         if approval is None:
-            raise ValueError(f"Approval {approval_id} not found")
+            raise ValueError(f"Approval {approval_id} not found or already resolved")
 
         if self._db is not None:
             self._db.update_approval_status(approval_id, "denied")
 
-        approval.future.set_result("denied")
+        if not approval.future.done():
+            approval.future.set_result("denied")
 
     def list_pending_approvals(self, chat_id: str) -> List[dict]:
         """List pending approvals for a chat

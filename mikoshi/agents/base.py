@@ -23,7 +23,7 @@ from mikoshi.providers.provider import Provider
 from mikoshi.skills.registry import SkillRegistry
 from mikoshi.tools.approval import ToolDeniedError
 from mikoshi.tools.context import ToolCallContext, WorkspaceContext
-from mikoshi.tools.manager import ToolManager
+from mikoshi.tools.manager import ToolManager, normalize_tool
 from mikoshi.workspace import WorkspaceService
 
 logger = logging.getLogger(__name__)
@@ -127,10 +127,9 @@ class BaseAgent(ABC):
                     SpanAttributes.INPUT_VALUE,
                     json.dumps(tool_args, default=str),
                 )
-                span.set_attribute(
-                    SpanAttributes.INPUT_MIME_TYPE, "application/json"
-                )
+                span.set_attribute(SpanAttributes.INPUT_MIME_TYPE, "application/json")
                 if not parse_failed:
+
                     async def _on_approval_requested(
                         approval_id: str,
                         _tool_name: str,
@@ -199,6 +198,14 @@ class BaseAgent(ABC):
                 msg_id = approval_msg_id[0]
                 self.db.update_message_content(msg_id, result_str)
                 self.db.update_message_status(msg_id, "completed")
+                # Stream the updated message so the client replaces the
+                # "Awaiting approval…" placeholder without a refetch.
+                updated = self.db.get_message(msg_id)
+                if updated is not None:
+                    await self._emit(
+                        queue,
+                        StreamEvent(type="message", data=self._format_message(updated)),
+                    )
             else:
                 msg = await self._save_message(
                     "tool", result_str, tool_call_id=tool_call["id"]
@@ -300,7 +307,9 @@ class BaseAgent(ABC):
                         content = m.get("content")
                         if isinstance(content, str) and len(content) > 500:
                             content = content[:500] + "... [truncated]"
-                        logger.debug("  messages[%d] role=%s content=%s", i, role, content)
+                        logger.debug(
+                            "  messages[%d] role=%s content=%s", i, role, content
+                        )
 
                     if tools:
                         tool_names = [t["function"]["name"] for t in tools]
@@ -357,7 +366,8 @@ class BaseAgent(ABC):
 
                     msg = await self._save_message("assistant", response)
                     await self._emit(
-                        queue, StreamEvent(type="message", data=self._format_message(msg))
+                        queue,
+                        StreamEvent(type="message", data=self._format_message(msg)),
                     )
 
                     messages.append(
@@ -375,7 +385,9 @@ class BaseAgent(ABC):
                 logger.error(
                     "chat_id=%s agent loop error: %s", self.chat_id, e, exc_info=True
                 )
-                await self._emit(queue, StreamEvent(type="error", data={"message": str(e)}))
+                await self._emit(
+                    queue, StreamEvent(type="error", data={"message": str(e)})
+                )
                 await self._emit(queue, STREAM_DONE)
 
     async def chat(
@@ -568,14 +580,14 @@ class BaseAgent(ABC):
                 )
                 continue
             for tool in tools:
-                parameters = tool.parameters if hasattr(tool, "parameters") else {}
+                t = normalize_tool(tool)
                 api_tools.append(
                     {
                         "type": "function",
                         "function": {
-                            "name": f"{tool_server}__{tool.name}",
-                            "description": tool.description,
-                            "parameters": parameters,
+                            "name": f"{tool_server}__{t['name']}",
+                            "description": t["description"],
+                            "parameters": t["parameters"],
                         },
                     }
                 )

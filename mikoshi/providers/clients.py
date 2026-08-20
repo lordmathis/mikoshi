@@ -1,6 +1,7 @@
 """Base class and implementations for different LLM API clients."""
 
 import json
+import time
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Sequence
 
@@ -41,9 +42,7 @@ class LLMClient(ABC):
         """
         return []
 
-    async def create_embedding(
-        self, model: str, input: str
-    ) -> Optional[List[float]]:
+    async def create_embedding(self, model: str, input: str) -> Optional[List[float]]:
         """Create an embedding vector for the input text.
 
         Args:
@@ -102,9 +101,7 @@ class OpenAIClient(LLMClient):
         response = await self.client.chat.completions.create(**api_params)
         return response.model_dump()
 
-    async def create_embedding(
-        self, model: str, input: str
-    ) -> Optional[List[float]]:
+    async def create_embedding(self, model: str, input: str) -> Optional[List[float]]:
         """Create an embedding vector using the OpenAI-compatible embeddings API."""
         with start_embedding_span(model, input):
             response = await self.client.embeddings.create(model=model, input=input)
@@ -163,14 +160,29 @@ class AnthropicClient(LLMClient):
                 continue
 
             if role == "tool":
-                anthropic_messages.append({
-                    "role": "user",
-                    "content": [{
-                        "type": "tool_result",
-                        "tool_use_id": msg.get("tool_call_id"),
-                        "content": msg.get("content", ""),
-                    }],
-                })
+                # Anthropic expects all tool results of a turn grouped into a
+                # single user message.
+                tool_result = {
+                    "type": "tool_result",
+                    "tool_use_id": msg.get("tool_call_id"),
+                    "content": msg.get("content", ""),
+                }
+                last = anthropic_messages[-1] if anthropic_messages else None
+                if (
+                    last is not None
+                    and last.get("role") == "user"
+                    and isinstance(last.get("content"), list)
+                    and last["content"]
+                    and last["content"][0].get("type") == "tool_result"
+                ):
+                    last["content"].append(tool_result)
+                else:
+                    anthropic_messages.append(
+                        {
+                            "role": "user",
+                            "content": [tool_result],
+                        }
+                    )
             elif role == "assistant":
                 tool_calls = msg.get("tool_calls")
                 if tool_calls:
@@ -185,19 +197,62 @@ class AnthropicClient(LLMClient):
                                 args = json.loads(args)
                             except json.JSONDecodeError:
                                 args = {}
-                        content_parts.append({
-                            "type": "tool_use",
-                            "id": tc["id"],
-                            "name": tc["function"]["name"],
-                            "input": args,
-                        })
-                    anthropic_messages.append({"role": "assistant", "content": content_parts})
+                        content_parts.append(
+                            {
+                                "type": "tool_use",
+                                "id": tc["id"],
+                                "name": tc["function"]["name"],
+                                "input": args,
+                            }
+                        )
+                    anthropic_messages.append(
+                        {"role": "assistant", "content": content_parts}
+                    )
                 else:
-                    anthropic_messages.append({"role": "assistant", "content": msg.get("content", "")})
+                    anthropic_messages.append(
+                        {"role": "assistant", "content": msg.get("content", "")}
+                    )
             elif role == "user":
-                anthropic_messages.append({"role": "user", "content": msg.get("content", "")})
+                anthropic_messages.append(
+                    {
+                        "role": "user",
+                        "content": self._convert_user_content(msg.get("content", "")),
+                    }
+                )
 
         return system_prompt, anthropic_messages
+
+    @staticmethod
+    def _convert_user_content(content: Any) -> Any:
+        """Convert OpenAI-style user content to Anthropic's format.
+
+        Text parts pass through unchanged; ``image_url`` parts become
+        Anthropic ``image`` blocks (base64 data URLs or remote URLs).
+        """
+        if not isinstance(content, list):
+            return content
+        parts = []
+        for part in content:
+            if isinstance(part, dict) and part.get("type") == "image_url":
+                url = part.get("image_url", {}).get("url", "")
+                converted = AnthropicClient._convert_image_url(url)
+                if converted is not None:
+                    parts.append(converted)
+                    continue
+            parts.append(part)
+        return parts
+
+    @staticmethod
+    def _convert_image_url(url: str) -> Optional[Dict[str, Any]]:
+        if url.startswith("data:") and ";base64," in url:
+            media_type, _, data = url[len("data:") :].partition(";base64,")
+            return {
+                "type": "image",
+                "source": {"type": "base64", "media_type": media_type, "data": data},
+            }
+        if url.startswith(("http://", "https://")):
+            return {"type": "image", "source": {"type": "url", "url": url}}
+        return None
 
     @staticmethod
     def _convert_tools(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -205,12 +260,23 @@ class AnthropicClient(LLMClient):
         for tool in tools:
             if tool.get("type") == "function":
                 func = tool.get("function", {})
-                result.append({
-                    "name": func.get("name"),
-                    "description": func.get("description"),
-                    "input_schema": func.get("parameters", {}),
-                })
+                result.append(
+                    {
+                        "name": func.get("name"),
+                        "description": func.get("description"),
+                        "input_schema": func.get("parameters", {}),
+                    }
+                )
         return result
+
+    _FINISH_REASON_MAP = {
+        "tool_use": "tool_calls",
+        "end_turn": "stop",
+        "stop_sequence": "stop",
+        "pause_turn": "stop",
+        "refusal": "content_filter",
+        "max_tokens": "length",
+    }
 
     def _convert_response_to_openai(self, response: Any) -> Dict[str, Any]:
         content_parts = []
@@ -220,16 +286,18 @@ class AnthropicClient(LLMClient):
             if block.type == "text":
                 content_parts.append(block.text)
             elif block.type == "tool_use":
-                tool_calls.append({
-                    "id": block.id,
-                    "type": "function",
-                    "function": {
-                        "name": block.name,
-                        "arguments": json.dumps(block.input)
-                        if isinstance(block.input, dict)
-                        else block.input,
-                    },
-                })
+                tool_calls.append(
+                    {
+                        "id": block.id,
+                        "type": "function",
+                        "function": {
+                            "name": block.name,
+                            "arguments": json.dumps(block.input)
+                            if isinstance(block.input, dict)
+                            else block.input,
+                        },
+                    }
+                )
 
         content = "\n".join(content_parts) if content_parts else None
 
@@ -244,15 +312,15 @@ class AnthropicClient(LLMClient):
         return {
             "id": response.id,
             "object": "chat.completion",
-            "created": int(response.model_dump().get("created_at", 0))
-            if hasattr(response, "created_at")
-            else 0,
+            "created": int(time.time()),
             "model": response.model,
             "choices": [
                 {
                     "index": 0,
                     "message": message,
-                    "finish_reason": response.stop_reason,
+                    "finish_reason": self._FINISH_REASON_MAP.get(
+                        response.stop_reason, response.stop_reason
+                    ),
                 }
             ],
             "usage": {

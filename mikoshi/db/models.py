@@ -13,6 +13,10 @@ from sqlalchemy import (
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
+def utcnow() -> datetime:
+    return datetime.now(UTC)
+
+
 class Base(DeclarativeBase):
     pass
 
@@ -24,9 +28,9 @@ class Workspace(Base):
     repo_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     local_path: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     connector: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(UTC))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.now(UTC), onupdate=datetime.now(UTC)
+        DateTime, default=utcnow, onupdate=utcnow
     )
 
 
@@ -48,9 +52,9 @@ class Chat(Base):
         ForeignKey("workspaces.id", ondelete="SET NULL"), nullable=True
     )
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(UTC))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.now(UTC), onupdate=datetime.now(UTC)
+        DateTime, default=utcnow, onupdate=utcnow
     )
 
 
@@ -72,7 +76,7 @@ class Message(Base):
     status: Mapped[str] = mapped_column(
         String, default="completed"
     )  # completed, awaiting_tool_approval, tool_approval_denied
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(UTC))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     __table_args__ = (
         UniqueConstraint("chat_id", "sequence", name="uq_chat_sequence"),
@@ -88,9 +92,7 @@ class File(Base):
     content_type: Mapped[str] = mapped_column(String)
     source: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String, default="pending")
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(UTC)
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     __table_args__ = (Index("idx_file_status", "status"),)
 
@@ -102,7 +104,7 @@ class ChatState(Base):
     )
     state_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.now(UTC), onupdate=datetime.now(UTC)
+        DateTime, default=utcnow, onupdate=utcnow
     )
 
 
@@ -115,8 +117,8 @@ class PendingToolApproval(Base):
     arguments: Mapped[str] = mapped_column(Text)  # JSON
     status: Mapped[str] = mapped_column(
         String, default="pending"
-    )  # pending, approved, denied
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(UTC))
+    )  # pending, approved, denied, cancelled
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     __table_args__ = (
         Index("idx_chat_approvals", "chat_id"),

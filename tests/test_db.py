@@ -1,8 +1,13 @@
 import json
+import os
+import time
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
+from mikoshi.db.db import Database
 from mikoshi.db.models import (
     Chat,
     ChatState,
@@ -222,9 +227,7 @@ class TestBranch:
         assert len(history) == 2
         assert history[0].content == "A"
         assert history[1].content == "B"
-        for orig, copy in zip(
-            db.get_chat_history(chat.id)[:2], history
-        ):
+        for orig, copy in zip(db.get_chat_history(chat.id)[:2], history):
             assert copy.role == orig.role
             assert copy.sequence == orig.sequence
 
@@ -260,7 +263,6 @@ class TestBranch:
         m1 = db.save_message(chat1.id, "user", "hi")
         m2 = db.save_message(chat2.id, "user", "yo")
         assert db.branch_chat(chat1.id, m2.id) is None
-
 
 
 class TestFileLifecycle:
@@ -329,9 +331,7 @@ class TestFileLifecycle:
 class TestApprovalWorkflow:
     def test_create_pending_approval(self, db):
         chat = db.create_chat()
-        aid = db.create_pending_approval(
-            chat.id, None, "run_code", '{"cmd": "ls"}'
-        )
+        aid = db.create_pending_approval(chat.id, None, "run_code", '{"cmd": "ls"}')
         assert aid
 
     def test_create_approval_custom_id(self, db):
@@ -357,9 +357,7 @@ class TestApprovalWorkflow:
 
     def test_get_approval_by_id(self, db):
         chat = db.create_chat()
-        aid = db.create_pending_approval(
-            chat.id, "msg-1", "run_code", '{"cmd": "ls"}'
-        )
+        aid = db.create_pending_approval(chat.id, "msg-1", "run_code", '{"cmd": "ls"}')
         approval = db.get_approval_by_id(aid)
         assert approval["tool_name"] == "run_code"
         assert approval["arguments"] == '{"cmd": "ls"}'
@@ -384,7 +382,9 @@ class TestWorkspaceCRUD:
         assert found.name == "proj"
 
     def test_create_workspace_with_connector(self, db):
-        ws = db.create_workspace("proj", "https://git.example.com/x", connector="forgejo")
+        ws = db.create_workspace(
+            "proj", "https://git.example.com/x", connector="forgejo"
+        )
         assert ws.connector == "forgejo"
 
     def test_list_workspaces(self, db):
@@ -412,6 +412,40 @@ class TestWorkspaceCRUD:
         found = db.get_workspace_by_chat(chat.id)
         assert found.id == ws.id
 
+
+class TestTimestamps:
+    def test_chat_created_at_is_per_row_not_constant(self, db):
+        c1 = db.create_chat()
+        time.sleep(0.01)
+        c2 = db.create_chat()
+        assert c2.created_at > c1.created_at
+
+    def test_message_created_at_is_per_row_not_constant(self, db):
+        chat = db.create_chat()
+        m1 = db.save_message(chat.id, "user", "a")
+        time.sleep(0.01)
+        m2 = db.save_message(chat.id, "user", "b")
+        assert m2.created_at > m1.created_at
+
+
+class TestForeignKeys:
+    def test_fk_enforced_on_fresh_pooled_connections(self, tmp_dir):
+        database = Database(os.path.join(tmp_dir, "fk.db"))
+        try:
+            # Dispose pooled connections so the next session opens a brand-new
+            # DBAPI connection — the case the old one-shot pragma missed.
+            database.engine.dispose()
+            with database.SessionLocal() as session:
+                with pytest.raises(IntegrityError):
+                    session.execute(
+                        text(
+                            "INSERT INTO messages (id, chat_id, sequence, role, content) "
+                            "VALUES ('m1', 'bogus-chat', 1, 'user', 'x')"
+                        )
+                    )
+                    session.commit()
+        finally:
+            database.close()
 
 
 class TestCascadeDeletes:
