@@ -10,6 +10,10 @@
 // - /api/tools/* - Tool servers and tools
 const API_BASE_URL = '/api';
 
+export function encodeFilePath(path: string): string {
+  return path.split('/').map(encodeURIComponent).join('/');
+}
+
 export interface Chat {
   id: string;
   title: string;
@@ -335,12 +339,13 @@ class ApiClient {
     }
   }
 
-  private async *streamPost(endpoint: string, body: Record<string, unknown>): AsyncGenerator<StreamEvent> {
+  private async *streamPost(endpoint: string, body: Record<string, unknown>, signal?: AbortSignal): AsyncGenerator<StreamEvent> {
     const url = `${this.baseURL}${endpoint}`;
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      signal,
     });
 
     await this.assertOk(response);
@@ -350,17 +355,18 @@ class ApiClient {
 
   async *streamMessage(
     chatId: string,
-    data: SendMessageRequest
+    data: SendMessageRequest,
+    signal?: AbortSignal
   ): AsyncGenerator<StreamEvent> {
-    yield* this.streamPost(`/chats/${chatId}/messages`, { ...data, stream: true });
+    yield* this.streamPost(`/chats/${chatId}/messages`, { ...data, stream: true }, signal);
   }
 
-  async *streamRetry(chatId: string): AsyncGenerator<StreamEvent> {
-    yield* this.streamPost(`/chats/${chatId}/retry`, { stream: true });
+  async *streamRetry(chatId: string, signal?: AbortSignal): AsyncGenerator<StreamEvent> {
+    yield* this.streamPost(`/chats/${chatId}/retry`, { stream: true }, signal);
   }
 
-  async *streamEdit(chatId: string, message: string): AsyncGenerator<StreamEvent> {
-    yield* this.streamPost(`/chats/${chatId}/edit`, { message, stream: true });
+  async *streamEdit(chatId: string, message: string, signal?: AbortSignal): AsyncGenerator<StreamEvent> {
+    yield* this.streamPost(`/chats/${chatId}/edit`, { message, stream: true }, signal);
   }
 
   // Configuration endpoints
@@ -511,7 +517,7 @@ class ApiClient {
   }
 
   async getWorkspaceFile(id: string, path: string): Promise<string> {
-    const url = `${this.baseURL}/workspaces/${id}/files/${path}`;
+    const url = `${this.baseURL}/workspaces/${id}/files/${encodeFilePath(path)}`;
     const response = await fetch(url);
 
     await this.assertOk(response);
@@ -520,27 +526,27 @@ class ApiClient {
   }
 
   async writeWorkspaceFile(id: string, path: string, content: string): Promise<{ success: boolean }> {
-    return this.request(`/workspaces/${id}/files/${path}`, {
+    return this.request(`/workspaces/${id}/files/${encodeFilePath(path)}`, {
       method: 'PUT',
       body: JSON.stringify({ content }),
     });
   }
 
   async createWorkspaceFile(id: string, path: string, content: string = ""): Promise<{ success: boolean }> {
-    return this.request(`/workspaces/${id}/files/${path}`, {
+    return this.request(`/workspaces/${id}/files/${encodeFilePath(path)}`, {
       method: 'POST',
       body: JSON.stringify({ content }),
     });
   }
 
   async deleteWorkspaceFile(id: string, path: string): Promise<{ success: boolean }> {
-    return this.request(`/workspaces/${id}/files/${path}`, {
+    return this.request(`/workspaces/${id}/files/${encodeFilePath(path)}`, {
       method: 'DELETE',
     });
   }
 
   async renameWorkspaceFile(id: string, oldPath: string, newPath: string): Promise<{ success: boolean; new_path: string }> {
-    return this.request(`/workspaces/${id}/files/${oldPath}`, {
+    return this.request(`/workspaces/${id}/files/${encodeFilePath(oldPath)}`, {
       method: 'PATCH',
       body: JSON.stringify({ new_path: newPath }),
     });

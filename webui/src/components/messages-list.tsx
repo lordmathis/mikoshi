@@ -9,6 +9,7 @@ interface MessagesListProps {
   messages: Message[];
   isLoading: boolean;
   isSending: boolean;
+  loadError?: string | null;
   currentConversationId: string | undefined;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
   pendingApprovals?: Record<string, PendingApproval>;
@@ -23,6 +24,7 @@ export const MessagesList = memo(function MessagesList({
   messages,
   isLoading,
   isSending,
+  loadError,
   currentConversationId,
   messagesEndRef,
   pendingApprovals,
@@ -48,6 +50,13 @@ export const MessagesList = memo(function MessagesList({
           <div className="flex items-center justify-center py-12">
             <div className="cp-label text-muted-foreground uppercase tracking-widest">
               Loading data...
+            </div>
+          </div>
+        ) : loadError ? (
+          <div className="flex items-center justify-center gap-2 py-12">
+            <AlertTriangle className="h-4 w-4 text-[var(--color-cp-red)]" />
+            <div className="cp-label text-[var(--color-cp-red)]">
+              {loadError}
             </div>
           </div>
         ) : messages.length === 0 ? (

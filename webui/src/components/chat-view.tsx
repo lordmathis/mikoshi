@@ -241,6 +241,7 @@ export function ChatView() {
               messages={messages.messages}
               isLoading={messages.isLoading}
               isSending={messages.isSending}
+              loadError={messages.loadError}
               currentConversationId={currentConversationId}
               messagesEndRef={messagesEndRef}
               pendingApprovals={messages.pendingApprovals}

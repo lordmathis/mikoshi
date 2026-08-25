@@ -33,6 +33,28 @@ export function AddConnectorDialog({
   onFilesAdded,
   editingEntry,
 }: AddConnectorDialogProps) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+        {/* Mounted only while the dialog is open, so hook state is
+            initialized from editingEntry fresh on every open */}
+        <ConnectorDialogBody
+          chatId={chatId}
+          onOpenChange={onOpenChange}
+          onFilesAdded={onFilesAdded}
+          editingEntry={editingEntry}
+        />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ConnectorDialogBody({
+  chatId,
+  onOpenChange,
+  onFilesAdded,
+  editingEntry,
+}: Omit<AddConnectorDialogProps, "open">) {
   const pathSelection = usePathSelection(
     editingEntry?.paths || [],
     editingEntry?.excludePaths || []
@@ -57,10 +79,10 @@ export function AddConnectorDialog({
   };
 
   useEffect(() => {
-    if (open && connectorData.inputMode === "select" && connectorData.resources.length === 0 && connectorData.selectedConnector) {
+    if (connectorData.inputMode === "select" && connectorData.resources.length === 0 && connectorData.selectedConnector) {
       connectorData.loadResources();
     }
-  }, [open, connectorData.inputMode, connectorData.selectedConnector, connectorData.resources.length]);
+  }, [connectorData.inputMode, connectorData.selectedConnector, connectorData.resources.length]);
 
   const includedCount = Array.from(pathSelection.selectedPaths).filter(p => !p.startsWith("!")).length;
 
@@ -90,14 +112,13 @@ export function AddConnectorDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="uppercase tracking-[0.15em] text-sm text-primary">Add Connector Files</DialogTitle>
-          <DialogDescription className="cp-label">
-            Select files from a repository to add to your conversation
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <DialogHeader>
+        <DialogTitle className="uppercase tracking-[0.15em] text-sm text-primary">Add Connector Files</DialogTitle>
+        <DialogDescription className="cp-label">
+          Select files from a repository to add to your conversation
+        </DialogDescription>
+      </DialogHeader>
 
         <div className="flex-1 flex flex-col gap-4 overflow-hidden">
           <ConnectorSelector
@@ -191,7 +212,6 @@ export function AddConnectorDialog({
             )}
           </Button>
         </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    </>
   );
 }

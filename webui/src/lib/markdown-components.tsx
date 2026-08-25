@@ -66,16 +66,12 @@ export const markdownComponents = {
   hr: ({ ...props }: any) => (
     <hr className="my-6 border-border" {...props} />
   ),
-  code: ({ inline, className, children, ...props }: any) => {
+  code: ({ className, children, ...props }: any) => {
     if (isMermaid(className)) {
       return <Mermaid chart={String(children).replace(/\n$/, "")} />;
     }
-    return inline ? (
+    return (
       <code className="bg-primary/[0.08] px-1.5 py-0.5 text-xs text-primary/90 break-words" {...props}>
-        {children}
-      </code>
-    ) : (
-      <code className={className} {...props}>
         {children}
       </code>
     );
@@ -84,6 +80,15 @@ export const markdownComponents = {
     const child: any = Array.isArray(children) ? children[0] : children;
     if (child?.props && isMermaid(child.props.className)) {
       return <>{children}</>;
+    }
+    if (child?.props) {
+      // Re-render the fenced code block directly (bypassing the `code`
+      // override above, which only styles inline code)
+      return (
+        <pre className="overflow-x-auto mb-4 text-sm" {...props}>
+          <code className={child.props.className}>{child.props.children}</code>
+        </pre>
+      );
     }
     return <pre className="overflow-x-auto mb-4 text-sm" {...props}>{children}</pre>;
   },

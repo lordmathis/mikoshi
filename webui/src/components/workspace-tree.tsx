@@ -513,7 +513,11 @@ export function WorkspaceTree({ tree, activeFilePath, onFileClick, workspaceId, 
   );
 }
 
-function mergeChildren(root: FileNode, targetPath: string, children: FileNode[]): FileNode {
+function isDescendantPath(targetPath: string, path: string): boolean {
+  return targetPath === path || targetPath.startsWith(path + "/");
+}
+
+export function mergeChildren(root: FileNode, targetPath: string, children: FileNode[]): FileNode {
   if (root.path === targetPath) {
     return { ...root, children };
   }
@@ -521,7 +525,7 @@ function mergeChildren(root: FileNode, targetPath: string, children: FileNode[])
     return {
       ...root,
       children: root.children.map((child) =>
-        targetPath.startsWith(child.path)
+        isDescendantPath(targetPath, child.path)
           ? mergeChildren(child, targetPath, children)
           : child
       ),

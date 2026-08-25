@@ -3,7 +3,6 @@ import { renderHook, act } from "@testing-library/react";
 import { useChatInput } from "../use-chat-input";
 import type { Message, FileResource } from "../../lib/api";
 
-const noop = () => Promise.resolve();
 const noFiles: FileResource[] = [];
 const emptyMessages: Message[] = [];
 

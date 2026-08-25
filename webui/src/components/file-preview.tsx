@@ -7,6 +7,7 @@ import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
 import { remarkWikiLinks, resolveTarget } from "../lib/remark-wiki-links";
 import { markdownComponents, REMARK_PLUGINS, REHYPE_PLUGINS } from "../lib/markdown-components";
+import { encodeFilePath } from "../lib/api";
 
 interface FilePreviewProps {
   filePath: string | null;
@@ -173,7 +174,7 @@ export function FilePreview({ filePath, fileContent, isLoading, onClose, workspa
       if (!src) return null;
       if (!src.startsWith("http") && !src.startsWith("data:")) {
         const dir = filePath?.includes("/") ? filePath.substring(0, filePath.lastIndexOf("/") + 1) : "";
-        src = `/api/workspaces/${workspaceId}/files/${dir}${src}`;
+        src = `/api/workspaces/${workspaceId}/files/${encodeFilePath(dir + src)}`;
       }
       return <img src={src} alt={alt} className="max-w-full h-auto rounded" />;
     },
@@ -182,7 +183,7 @@ export function FilePreview({ filePath, fileContent, isLoading, onClose, workspa
         const target = decodeURIComponent(href.replace("wiki-image://", ""));
         const resolved = workspaceId ? resolveTarget(target, fileIndex) : null;
         if (resolved) {
-          return <img src={`/api/workspaces/${workspaceId}/files/${resolved}`} alt={target} className="max-w-full h-auto rounded" />;
+          return <img src={`/api/workspaces/${workspaceId}/files/${encodeFilePath(resolved)}`} alt={target} className="max-w-full h-auto rounded" />;
         }
         return (
           <span

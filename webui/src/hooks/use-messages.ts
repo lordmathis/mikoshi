@@ -14,6 +14,10 @@ function tryParseWorkspaceChange(
   return null;
 }
 
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === "AbortError";
+}
+
 export function useMessages(
   chatId: string | undefined,
   onWorkspaceChange?: (paths: string[]) => void
@@ -22,10 +26,13 @@ export function useMessages(
   const [pendingApprovals, setPendingApprovals] = useState<Record<string, PendingApproval>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [loadedChatId, setLoadedChatId] = useState<string | undefined>(undefined);
   const streamAbortRef = useRef<AbortController | null>(null);
   const pendingApprovalsRef = useRef<Record<string, PendingApproval>>({});
   pendingApprovalsRef.current = pendingApprovals;
+  const chatIdRef = useRef(chatId);
+  chatIdRef.current = chatId;
   const [chatSettings, setChatSettings] = useState<ChatSettings>({
     baseModel: "",
     systemPrompt: "",
@@ -53,8 +60,8 @@ export function useMessages(
     if (!chatId) return;
     try {
       const chatData = await api.getChat(chatId);
+      if (chatIdRef.current !== chatId) return;
       setMessages(chatData.messages);
-      setLoadedChatId(chatId);
       setChatSettings({
         baseModel: chatData.model || "",
         systemPrompt: chatData.system_prompt || "",
@@ -64,19 +71,31 @@ export function useMessages(
         },
       });
       const { approvals } = await api.listApprovals(chatId);
+      if (chatIdRef.current !== chatId) return;
       const map: Record<string, PendingApproval> = {};
       for (const a of approvals) {
         if (a.message_id) map[a.message_id] = a;
       }
       setPendingApprovals(map);
+      setLoadError(null);
     } catch (error) {
       console.error("Failed to reload messages:", error);
+      if (chatIdRef.current !== chatId) return;
+      setMessages([]);
+      setPendingApprovals({});
+      setLoadError(error instanceof Error ? error.message : "Failed to load messages");
+    } finally {
+      if (chatIdRef.current === chatId) {
+        setLoadedChatId(chatId);
+      }
     }
   }, [chatId]);
 
-  const abortActiveStream = useCallback(() => {
+  const beginStream = useCallback(() => {
     streamAbortRef.current?.abort();
-    streamAbortRef.current = null;
+    const controller = new AbortController();
+    streamAbortRef.current = controller;
+    return controller;
   }, []);
 
   const handleEvent = useCallback(
@@ -136,17 +155,19 @@ export function useMessages(
     if (!chatId) {
       setMessages([]);
       setPendingApprovals({});
+      setLoadError(null);
       setLoadedChatId(undefined);
       loadDefaultSettings();
       return;
     }
-    const abortController = new AbortController();
-    streamAbortRef.current = abortController;
+    const abortController = beginStream();
     const fetchInitial = async () => {
       setIsLoading(true);
       await reloadMessages();
       setIsLoading(false);
+      if (chatIdRef.current !== chatId || abortController.signal.aborted) return;
       const { active } = await api.getStreamStatus(chatId);
+      if (chatIdRef.current !== chatId || abortController.signal.aborted) return;
       if (!active) return;
       setIsSending(true);
       try {
@@ -154,7 +175,7 @@ export function useMessages(
           handleEvent(event);
         }
       } catch (e) {
-        if (e instanceof DOMException && e.name === "AbortError") return;
+        if (isAbortError(e)) return;
         console.error("[Messages] stream reconnect error:", e);
       } finally {
         setIsSending(false);
@@ -165,12 +186,12 @@ export function useMessages(
     };
     fetchInitial();
     return () => abortController.abort();
-  }, [chatId, reloadMessages, loadDefaultSettings, handleEvent]);
+  }, [chatId, reloadMessages, loadDefaultSettings, handleEvent, beginStream]);
 
   const send = useCallback(async (text: string, files: FileResource[]) => {
     if (!chatId) return;
 
-    abortActiveStream();
+    const controller = beginStream();
 
     const tempId = `temp-${Date.now()}`;
     const optimisticMessage: Message = {
@@ -195,47 +216,64 @@ export function useMessages(
       for await (const event of api.streamMessage(chatId, {
         message: text,
         file_ids: files.map((f) => f.id),
-      })) {
+      }, controller.signal)) {
+        if (chatIdRef.current !== chatId) return;
         handleEvent(event);
       }
       console.debug('[Messages] send() COMPLETE — stream ended normally');
     } catch (error) {
+      if (isAbortError(error) || chatIdRef.current !== chatId) return;
       console.error('[Messages] send() ERROR:', error);
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
       throw error;
     } finally {
       console.debug('[Messages] send() finally — setting isSending=false');
       setIsSending(false);
+      if (streamAbortRef.current === controller) {
+        streamAbortRef.current = null;
+      }
     }
-  }, [chatId, messages.length, abortActiveStream, handleEvent]);
+  }, [chatId, messages.length, beginStream, handleEvent]);
 
   const retry = useCallback(async () => {
     if (!chatId) return;
-    abortActiveStream();
+    const controller = beginStream();
     try {
       setIsSending(true);
       await reloadMessages();
-      for await (const event of api.streamRetry(chatId)) {
+      for await (const event of api.streamRetry(chatId, controller.signal)) {
+        if (chatIdRef.current !== chatId) return;
         handleEvent(event);
       }
+    } catch (error) {
+      if (!isAbortError(error) && chatIdRef.current === chatId) throw error;
     } finally {
       setIsSending(false);
+      if (streamAbortRef.current === controller) {
+        streamAbortRef.current = null;
+      }
     }
-  }, [chatId, abortActiveStream, reloadMessages, handleEvent]);
+  }, [chatId, beginStream, reloadMessages, handleEvent]);
 
   const edit = useCallback(async (text: string) => {
     if (!chatId) return;
-    abortActiveStream();
+    const controller = beginStream();
     try {
       setIsSending(true);
       await reloadMessages();
-      for await (const event of api.streamEdit(chatId, text)) {
+      for await (const event of api.streamEdit(chatId, text, controller.signal)) {
+        if (chatIdRef.current !== chatId) return;
         handleEvent(event);
       }
+    } catch (error) {
+      if (!isAbortError(error) && chatIdRef.current === chatId) throw error;
     } finally {
       setIsSending(false);
+      if (streamAbortRef.current === controller) {
+        streamAbortRef.current = null;
+      }
     }
-  }, [chatId, abortActiveStream, reloadMessages, handleEvent]);
+  }, [chatId, beginStream, reloadMessages, handleEvent]);
 
   const resolveApproval = useCallback(
     (messageId: string, content: string) => {
@@ -292,6 +330,7 @@ export function useMessages(
     messages: isStale ? [] : messages,
     isLoading: isLoading || isStale,
     isSending,
+    loadError: isStale ? null : loadError,
     chatSettings,
     setChatSettings,
     pendingApprovals: isStale ? {} : pendingApprovals,
