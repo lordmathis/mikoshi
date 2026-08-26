@@ -1,3 +1,4 @@
+import logging
 from typing import Any, Optional
 
 from anthropic import AsyncAnthropic
@@ -5,6 +6,8 @@ from openai import AsyncOpenAI
 
 from mikoshi.config import ProviderConfig, ProviderType
 from mikoshi.providers.clients import AnthropicClient, LLMClient, OpenAIClient
+
+logger = logging.getLogger(__name__)
 
 
 class Provider:
@@ -36,9 +39,11 @@ class Provider:
     async def get_model_ids(self) -> list[str] | None:
         """Query the /models endpoint to get available model IDs.
 
-        If model_filter is configured, fetches and filters models from the API.
-        If model_ids is configured, returns the static list.
-        Otherwise, fetches all models from the provider.
+        If model_filter is configured, fetches and filters models from the
+        API. Filter conditions match against the full model objects, so
+        nested fields like "pricing.prompt" work. If model_ids is
+        configured, returns the static list. Otherwise, fetches all models
+        from the provider.
 
         Returns:
             List of model IDs if successful, None if an error occurs
@@ -48,27 +53,23 @@ class Provider:
 
         try:
             llm_client = self.get_llm_client()
-            model_ids = await llm_client.get_models()
+            models = await llm_client.get_models()
 
-            if not model_ids:
+            if not models:
                 return self.config.model_ids
 
             if self.config.model_filter and self.config.model_filter.conditions:
-                filtered_ids = []
+                return [
+                    m["id"]
+                    for m in models
+                    if m.get("id")
+                    and self._matches_filter(m, self.config.model_filter.conditions)
+                ]
 
-                for model_id in model_ids:
-                    model_dict = {"id": model_id}
-                    if self._matches_filter(
-                        model_dict, self.config.model_filter.conditions
-                    ):
-                        filtered_ids.append(model_id)
-
-                return filtered_ids
-
-            return model_ids
+            return [m["id"] for m in models if m.get("id")]
 
         except Exception as e:
-            print(f"Error fetching models from {self._name}: {e}")
+            logger.warning("Error fetching models from %s: %s", self._name, e)
             return self.config.model_ids
 
     def _matches_filter(self, model_dict: dict, conditions: list) -> bool:

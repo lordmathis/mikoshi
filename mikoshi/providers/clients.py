@@ -1,11 +1,38 @@
 """Base class and implementations for different LLM API clients."""
 
 import json
+import logging
 import time
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Sequence
 
 from mikoshi.observability import start_embedding_span
+
+logger = logging.getLogger(__name__)
+
+
+def coerce_tool_arguments(raw: Any) -> Dict[str, Any]:
+    """Coerce persisted tool-call arguments to the dict providers require.
+
+    Arguments are persisted as the model emitted them; when output was
+    truncated mid-JSON the stored string is invalid and replaying it to a
+    provider would hard-fail the request. Degrade to `{}` — loudly — since
+    the matching tool result already recorded a recoverable error for the
+    model.
+    """
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            parsed = None
+        if isinstance(parsed, dict):
+            return parsed
+    logger.warning(
+        "Replacing malformed tool-call arguments with {}: %.200s", raw
+    )
+    return {}
 
 
 class LLMClient(ABC):
@@ -34,11 +61,14 @@ class LLMClient(ABC):
         """
         pass
 
-    async def get_models(self) -> List[str]:
-        """Fetch available model IDs.
+    async def get_models(self) -> List[Dict[str, Any]]:
+        """Fetch available models as raw provider model objects.
+
+        Full objects (not just ids) so callers can filter on nested fields
+        such as ``pricing.prompt`` (e.g. OpenRouter-style /models payloads).
 
         Returns:
-            List of model ID strings, or empty list if not supported.
+            List of model dictionaries, or empty list if not supported.
         """
         return []
 
@@ -66,14 +96,10 @@ class OpenAIClient(LLMClient):
         """
         self.client = client
 
-    async def get_models(self) -> List[str]:
-        """Fetch available model IDs using the async client.
-
-        Returns:
-            List of model ID strings
-        """
+    async def get_models(self) -> List[Dict[str, Any]]:
+        """Fetch available models using the async client."""
         response = await self.client.models.list()
-        return [model.id for model in response.data]
+        return [model.model_dump() for model in response.data]
 
     async def chat_completion(
         self,
@@ -191,18 +217,14 @@ class AnthropicClient(LLMClient):
                     if text:
                         content_parts.append({"type": "text", "text": text})
                     for tc in tool_calls:
-                        args = tc["function"]["arguments"]
-                        if isinstance(args, str):
-                            try:
-                                args = json.loads(args)
-                            except json.JSONDecodeError:
-                                args = {}
                         content_parts.append(
                             {
                                 "type": "tool_use",
                                 "id": tc["id"],
                                 "name": tc["function"]["name"],
-                                "input": args,
+                                "input": coerce_tool_arguments(
+                                    tc["function"]["arguments"]
+                                ),
                             }
                         )
                     anthropic_messages.append(

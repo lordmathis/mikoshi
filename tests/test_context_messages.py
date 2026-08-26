@@ -5,6 +5,7 @@ import pytest
 from mikoshi.agents.context.messages import (
     extract_assistant_content,
     extract_text_content,
+    format_history,
     parse_content,
 )
 
@@ -142,3 +143,42 @@ class TestExtractAssistantContent:
         assert len(tool_calls) == 2
         assert tool_calls[0]["name"] == "read"
         assert tool_calls[1]["name"] == "write"
+
+
+class TestFormatHistory:
+    def test_truncated_tool_arguments_sanitized_on_replay(self, db):
+        # A truncated tool call is persisted with its raw (invalid JSON)
+        # arguments; replaying that string to a provider would hard-fail
+        # the request, so it must be replaced with {}.
+        chat = db.create_chat()
+        db.save_message(
+            chat.id,
+            "assistant",
+            "thinking",
+            tool_calls=json.dumps(
+                [{"id": "call_1", "name": "write", "arguments": '{"path": "fo'}]
+            ),
+        )
+        db.save_message(chat.id, "tool", "Error: malformed arguments", tool_call_id="call_1")
+
+        messages = format_history(db, chat.id)
+
+        assert messages[0]["tool_calls"][0]["function"]["arguments"] == "{}"
+
+    def test_valid_tool_arguments_roundtrip(self, db):
+        chat = db.create_chat()
+        db.save_message(
+            chat.id,
+            "assistant",
+            "thinking",
+            tool_calls=json.dumps(
+                [{"id": "call_1", "name": "write", "arguments": {"path": "ok.txt"}}]
+            ),
+        )
+
+        messages = format_history(db, chat.id)
+
+        assert (
+            messages[0]["tool_calls"][0]["function"]["arguments"]
+            == '{"path": "ok.txt"}'
+        )

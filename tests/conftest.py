@@ -2,9 +2,12 @@ import os
 import tempfile
 
 import pytest
+from unittest.mock import MagicMock
 
 from mikoshi.config import AppConfig
 from mikoshi.db import Database
+from mikoshi.tools.manager import ToolManager
+from mikoshi.tools.toolset_handler import ToolSetHandler
 
 
 class FakeSkill:
@@ -33,6 +36,22 @@ class FakeRegistry:
         if self._default_skill is not None:
             return self._default_skill
         return None
+
+
+async def make_tool_manager(
+    toolset: ToolSetHandler, db: Database | None = None
+) -> ToolManager:
+    """Build a ToolManager with a single registered toolset.
+
+    Uses the real constructor and the real ``initialize()`` registration
+    path; only the handler registration itself is manual (ToolManager has
+    no public single-handler API).
+    """
+    tm = ToolManager(AppConfig(), MagicMock(), db=db)
+    await toolset.initialize()
+    tm._toolset_handlers[toolset.server_name] = toolset
+    tm._server_map[toolset.server_name] = toolset
+    return tm
 
 
 @pytest.fixture

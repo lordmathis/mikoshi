@@ -1,5 +1,4 @@
 import asyncio
-import inspect
 
 import pytest
 from unittest.mock import MagicMock
@@ -7,8 +6,8 @@ from unittest.mock import MagicMock
 from mikoshi.db.db import Database
 from mikoshi.tools.approval import ToolDeniedError
 from mikoshi.tools.context import ToolCallContext
-from mikoshi.tools.manager import ToolManager
-from mikoshi.tools.toolset_handler import ToolDefinition, ToolSetHandler, tool
+from mikoshi.tools.toolset_handler import ToolSetHandler, tool
+from tests.conftest import make_tool_manager
 
 
 class _DangerousToolset(ToolSetHandler):
@@ -41,42 +40,10 @@ def _ctx(**overrides):
     return ToolCallContext(**defaults)
 
 
-def _sync_init(handler: ToolSetHandler) -> None:
-    """Populate handler._tools without an event loop (for use inside async tests)."""
-    for _, method in inspect.getmembers(handler, predicate=inspect.ismethod):
-        if not hasattr(method, "_tool_definition"):
-            continue
-        td = method._tool_definition
-        handler._tools[td.name] = ToolDefinition(
-            name=td.name,
-            description=td.description,
-            parameters=td.parameters,
-            func=method,
-            require_approval=td.require_approval,
-        )
-
-
-def _make_manager(
-    db: Database | None = None, toolset: ToolSetHandler | None = None
-) -> ToolManager:
-    tm = ToolManager.__new__(ToolManager)
-    tm._server_map = {}
-    tm._toolset_handlers = {}
-    tm._pending_approvals = {}
-    tm._chat_allowlist = {}
-    tm._db = db
-
-    handler = toolset or _DangerousToolset()
-    _sync_init(handler)
-    tm._toolset_handlers[handler.server_name] = handler
-    tm._server_map[handler.server_name] = handler
-    return tm
-
-
 class TestCallToolApproval:
     @pytest.mark.asyncio
     async def test_approve_runs_tool(self, db):
-        tm = _make_manager()
+        tm = await make_tool_manager(_DangerousToolset())
         task = asyncio.create_task(tm.call_tool("danger__risky", {"x": 1}, _ctx()))
         await asyncio.sleep(0)
         approvals = tm.list_pending_approvals("c1")
@@ -90,7 +57,7 @@ class TestCallToolApproval:
 
     @pytest.mark.asyncio
     async def test_deny_raises_tool_denied(self, db):
-        tm = _make_manager()
+        tm = await make_tool_manager(_DangerousToolset())
         task = asyncio.create_task(tm.call_tool("danger__risky", {"x": 2}, _ctx()))
         await asyncio.sleep(0)
         aid = tm.list_pending_approvals("c1")[0]["id"]
@@ -102,7 +69,7 @@ class TestCallToolApproval:
 
     @pytest.mark.asyncio
     async def test_allowlist_skips_prompt(self, db):
-        tm = _make_manager()
+        tm = await make_tool_manager(_DangerousToolset())
         tm.allow("c1", "danger__risky")
 
         result = await tm.call_tool("danger__risky", {"x": 5}, _ctx())
@@ -111,7 +78,7 @@ class TestCallToolApproval:
 
     @pytest.mark.asyncio
     async def test_allowlist_is_chat_scoped(self, db):
-        tm = _make_manager()
+        tm = await make_tool_manager(_DangerousToolset())
         tm.allow("c1", "danger__risky")
 
         task = asyncio.create_task(
@@ -125,7 +92,7 @@ class TestCallToolApproval:
 
     @pytest.mark.asyncio
     async def test_approve_always_adds_to_allowlist(self, db):
-        tm = _make_manager()
+        tm = await make_tool_manager(_DangerousToolset())
         task = asyncio.create_task(tm.call_tool("danger__risky", {"x": 7}, _ctx()))
         await asyncio.sleep(0)
         aid = tm.list_pending_approvals("c1")[0]["id"]
@@ -136,7 +103,7 @@ class TestCallToolApproval:
 
     @pytest.mark.asyncio
     async def test_callback_invoked_and_message_id_stored(self, db):
-        tm = _make_manager()
+        tm = await make_tool_manager(_DangerousToolset())
         seen = {}
 
         async def on_requested(approval_id, tool_name, arguments):
@@ -163,7 +130,7 @@ class TestCallToolApproval:
 
     @pytest.mark.asyncio
     async def test_persists_approval_to_db(self, db):
-        tm = _make_manager(db)
+        tm = await make_tool_manager(_DangerousToolset(), db)
         chat = db.create_chat()
 
         task = asyncio.create_task(
@@ -182,7 +149,7 @@ class TestCallToolApproval:
 
     @pytest.mark.asyncio
     async def test_deny_updates_db_status(self, db):
-        tm = _make_manager(db)
+        tm = await make_tool_manager(_DangerousToolset(), db)
         chat = db.create_chat()
 
         task = asyncio.create_task(
@@ -198,7 +165,7 @@ class TestCallToolApproval:
 
     @pytest.mark.asyncio
     async def test_list_pending_filters_by_chat(self, db):
-        tm = _make_manager()
+        tm = await make_tool_manager(_DangerousToolset())
         task1 = asyncio.create_task(
             tm.call_tool("danger__risky", {"x": 1}, _ctx(chat_id="c1"))
         )
@@ -220,7 +187,7 @@ class TestCallToolApproval:
 class TestApprovalFailureAndRaces:
     @pytest.mark.asyncio
     async def test_approve_failure_propagates_instead_of_hanging(self, db):
-        tm = _make_manager(toolset=_FailingToolset())
+        tm = await make_tool_manager(_FailingToolset())
         # Tool-func exceptions are converted to error results by
         # ToolSetHandler.call_tool; simulate a handler-level failure (the
         # kind that still raises, e.g. MCP transport errors).
@@ -243,7 +210,7 @@ class TestApprovalFailureAndRaces:
 
     @pytest.mark.asyncio
     async def test_double_approve_rejected(self, db):
-        tm = _make_manager()
+        tm = await make_tool_manager(_DangerousToolset())
         task = asyncio.create_task(tm.call_tool("danger__risky", {"x": 1}, _ctx()))
         await asyncio.sleep(0)
         aid = tm.list_pending_approvals("c1")[0]["id"]
@@ -255,7 +222,7 @@ class TestApprovalFailureAndRaces:
 
     @pytest.mark.asyncio
     async def test_deny_after_approve_rejected(self, db):
-        tm = _make_manager()
+        tm = await make_tool_manager(_DangerousToolset())
         task = asyncio.create_task(tm.call_tool("danger__risky", {"x": 1}, _ctx()))
         await asyncio.sleep(0)
         aid = tm.list_pending_approvals("c1")[0]["id"]
@@ -267,7 +234,7 @@ class TestApprovalFailureAndRaces:
 
     @pytest.mark.asyncio
     async def test_cancelled_agent_cleans_up_pending(self, db):
-        tm = _make_manager()
+        tm = await make_tool_manager(_DangerousToolset())
         task = asyncio.create_task(tm.call_tool("danger__risky", {"x": 1}, _ctx()))
         await asyncio.sleep(0)
         assert len(tm.list_pending_approvals("c1")) == 1
@@ -279,7 +246,7 @@ class TestApprovalFailureAndRaces:
 
     @pytest.mark.asyncio
     async def test_cancelled_agent_marks_db_row_cancelled(self, db):
-        tm = _make_manager(db)
+        tm = await make_tool_manager(_DangerousToolset(), db)
         chat = db.create_chat()
         task = asyncio.create_task(
             tm.call_tool("danger__risky", {"x": 1}, _ctx(chat_id=chat.id))

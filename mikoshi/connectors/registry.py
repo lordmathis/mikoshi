@@ -53,3 +53,12 @@ class ConnectorRegistry:
 
     def list_connectors(self) -> Dict[str, ConnectorClient]:
         return self._connectors.copy()
+
+    async def close(self) -> None:
+        """Close every connector client's underlying resources."""
+        for name, connector in self._connectors.items():
+            try:
+                await connector.close()
+            except Exception as e:
+                logger.error(f"Error closing connector {name}: {e}")
+        self._connectors.clear()

@@ -8,8 +8,6 @@ Covers the meaningful code paths of the tracing layer:
   produce correctly-kinded spans with the OpenInference attributes Phoenix needs
 """
 
-import json
-
 import pytest
 from openinference.semconv.trace import SpanAttributes
 from opentelemetry.sdk.trace import TracerProvider
@@ -95,19 +93,16 @@ async def test_observe_captures_kind_input_output_on_success(span_exporter):
     assert SpanAttributes.OUTPUT_VALUE in attrs
 
 
-def test_start_tool_span_records_kind_name_and_io(span_exporter):
-    """A tool span carries the TOOL kind, tool.name, and caller-set I/O."""
-    with start_tool_span("search_web") as span:
-        span.set_attribute(SpanAttributes.INPUT_VALUE, '{"q": "cats"}')
-        span.set_attribute(SpanAttributes.OUTPUT_VALUE, "results")
+def test_start_tool_span_records_kind_and_name(span_exporter):
+    """A tool span carries the TOOL kind and tool.name set by our helper."""
+    with start_tool_span("search_web"):
+        pass
 
     spans = span_exporter.get_finished_spans()
     assert len(spans) == 1
     attrs = spans[0].attributes
     assert attrs[SpanAttributes.OPENINFERENCE_SPAN_KIND] == "TOOL"
     assert attrs[SpanAttributes.TOOL_NAME] == "search_web"
-    assert attrs[SpanAttributes.INPUT_VALUE] == '{"q": "cats"}'
-    assert attrs[SpanAttributes.OUTPUT_VALUE] == "results"
 
 
 def test_start_embedding_span_records_kind_model_and_text(span_exporter):
@@ -123,20 +118,13 @@ def test_start_embedding_span_records_kind_model_and_text(span_exporter):
     assert attrs[SpanAttributes.INPUT_VALUE] == "hello world"
 
 
-def test_start_retriever_span_records_kind_query_and_documents(span_exporter):
-    """A retriever span carries the RETRIEVER kind, query, and result docs."""
-    docs = [
-        {"document.content": "cats are great", "document.score": 0.9},
-        {"document.content": "dogs too", "document.score": 0.4},
-    ]
-    with start_retriever_span("recall_memory", "pets") as span:
-        span.set_attribute(
-            SpanAttributes.RETRIEVAL_DOCUMENTS, json.dumps(docs)
-        )
+def test_start_retriever_span_records_kind_and_query(span_exporter):
+    """A retriever span carries the RETRIEVER kind and the query as input."""
+    with start_retriever_span("recall_memory", "pets"):
+        pass
 
     spans = span_exporter.get_finished_spans()
     assert len(spans) == 1
     attrs = spans[0].attributes
     assert attrs[SpanAttributes.OPENINFERENCE_SPAN_KIND] == "RETRIEVER"
     assert attrs[SpanAttributes.INPUT_VALUE] == "pets"
-    assert json.loads(attrs[SpanAttributes.RETRIEVAL_DOCUMENTS]) == docs

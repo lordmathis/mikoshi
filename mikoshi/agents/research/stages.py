@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, Callable, List, Optional, Protocol
 from mikoshi.agents.research.helpers import (
     DEFAULT_CONTEXT_WINDOW,
     _FilteredQueue,
+    _batch_files,
     _batch_findings,
     _count_tokens,
     _find_findings_file,
@@ -59,6 +60,8 @@ class StageContext(Protocol):
     def read_file(self, path: str) -> str: ...
 
     def write_file(self, path: str, content: str) -> None: ...
+
+    def delete_file(self, path: str) -> None: ...
 
     def list_files(self) -> List[str]: ...
 
@@ -337,6 +340,21 @@ class Synthesizer:
             total_tokens,
             budget,
         )
+        # Batch files are collected by prefix below with no run marker, so
+        # leftovers from a previous synthesis run in this workspace (with
+        # more batches) would contaminate this report. Clear them first.
+        stale_batches = _batch_files(ctx.list_files())
+        if stale_batches:
+            logger.info(
+                "chat_id=%s removing %d stale synthesis batch file(s) from a "
+                "previous run: %s",
+                ctx.chat_id,
+                len(stale_batches),
+                stale_batches,
+            )
+            for path in stale_batches:
+                ctx.delete_file(path)
+
         batches = _batch_findings(items, budget)
         for i, batch in enumerate(batches, 1):
             batch_file = f"synthesis/batch_{i:02d}.md"
@@ -350,11 +368,7 @@ class Synthesizer:
                 phase="summarize",
             )
 
-        batch_paths = sorted(
-            p
-            for p in ctx.list_files()
-            if p.startswith("synthesis/batch_") and p.endswith(".md")
-        )
+        batch_paths = _batch_files(ctx.list_files())
         summary_items: List[Any] = []
         for path in batch_paths:
             content = ctx.read_file(path)

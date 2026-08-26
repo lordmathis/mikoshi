@@ -5,7 +5,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Dict, List, Optional
 
-from sqlalchemy import create_engine, event, func, select, text
+from sqlalchemy import create_engine, event, func, insert, select, text
 from sqlalchemy.orm import sessionmaker
 
 from mikoshi.db.migrations import run_migrations
@@ -29,10 +29,13 @@ class Database:
 
         # PRAGMA foreign_keys is a per-connection setting, so it must be
         # applied to every pooled connection, not just the first one.
+        # busy_timeout makes concurrent writers wait for the write lock
+        # instead of failing immediately with "database is locked".
         @event.listens_for(self.engine, "connect")
         def _set_sqlite_pragma(dbapi_connection, connection_record):
             cursor = dbapi_connection.cursor()
             cursor.execute("PRAGMA foreign_keys = ON")
+            cursor.execute("PRAGMA busy_timeout = 5000")
             cursor.close()
 
         # WAL mode is persistent (stored in the database file), so setting
@@ -68,24 +71,29 @@ class Database:
         file_ids: Optional[str] = None,
     ) -> Message:
         with self.SessionLocal() as session:
-            # Get next sequence number for this chat
-            stmt = select(func.coalesce(func.max(Message.sequence), 0) + 1).where(
-                Message.chat_id == chat_id
+            # The next sequence number is computed inside the INSERT
+            # statement itself: a separate SELECT-then-INSERT would let two
+            # concurrent writers read the same max(sequence) and collide on
+            # the (chat_id, sequence) unique constraint.
+            message_id = str(uuid.uuid4())
+            next_sequence = (
+                select(func.coalesce(func.max(Message.sequence), 0) + 1)
+                .where(Message.chat_id == chat_id)
+                .scalar_subquery()
             )
-            next_sequence = session.execute(stmt).scalar()
-
-            message = Message(
-                id=str(uuid.uuid4()),
-                chat_id=chat_id,
-                sequence=next_sequence,
-                role=role,
-                content=content,
-                reasoning_content=reasoning_content,
-                tool_calls=tool_calls,
-                tool_call_id=tool_call_id,
-                file_ids=file_ids,
+            session.execute(
+                insert(Message).values(
+                    id=message_id,
+                    chat_id=chat_id,
+                    sequence=next_sequence,
+                    role=role,
+                    content=content,
+                    reasoning_content=reasoning_content,
+                    tool_calls=tool_calls,
+                    tool_call_id=tool_call_id,
+                    file_ids=file_ids,
+                )
             )
-            session.add(message)
 
             # Update chat's updated_at
             chat = session.get(Chat, chat_id)
@@ -93,8 +101,7 @@ class Database:
                 chat.updated_at = datetime.now(UTC)
 
             session.commit()
-            session.refresh(message)
-            return message
+            return session.get(Message, message_id)
 
     def get_chat_history(self, chat_id: str) -> List[Message]:
         with self.SessionLocal() as session:

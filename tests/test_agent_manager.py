@@ -111,14 +111,11 @@ class TestHydrate:
         m = self._setup_manager()
         mock_provider = MagicMock()
         m.provider_registry.get_provider.return_value = mock_provider
-        with patch.object(
-            m, "_construct_agent", return_value=MagicMock()
-        ) as mock_construct:
-            agent = m._hydrate("c1", {"model": "openai:gpt-4"})
-            mock_construct.assert_called_once()
-            call_kwargs = mock_construct.call_args
-            assert call_kwargs[0][2] is mock_provider
-            assert call_kwargs[0][3] == "gpt-4"
+        with patch("mikoshi.agents.manager.ReActAgent") as mock_react:
+            m._hydrate("c1", {"model": "openai:gpt-4"})
+            kwargs = mock_react.call_args.kwargs
+            assert kwargs["provider"] is mock_provider
+            assert kwargs["model_id"] == "gpt-4"
 
     def test_inline_model_provider_not_found(self):
         m = self._setup_manager()
@@ -138,12 +135,11 @@ class TestHydrate:
         mock_cls.max_iterations = None
         m.agent_registry.get_agent_class.return_value = mock_cls
         m.provider_registry.get_provider.return_value = MagicMock()
-        with patch.object(
-            m, "_construct_agent", return_value=MagicMock()
-        ) as mock_construct:
-            m._hydrate("c1", {"model": "my-agent"})
-            call_kwargs = mock_construct.call_args
-            assert call_kwargs[0][0] is mock_cls
+        agent = m._hydrate("c1", {"model": "my-agent"})
+        assert agent is mock_cls.return_value
+        kwargs = mock_cls.call_args.kwargs
+        assert kwargs["system_prompt"] == "agent prompt"
+        assert kwargs["model_id"] == "gpt-4"
 
     def test_agent_not_found(self):
         m = self._setup_manager()
@@ -170,21 +166,20 @@ class TestHydrate:
         mock_cls.max_iterations = None
         m.agent_registry.get_agent_class.return_value = mock_cls
         m.provider_registry.get_provider.return_value = MagicMock()
-        with patch.object(m, "_construct_agent", return_value=MagicMock()):
-            m._hydrate("c1", {})
+        agent = m._hydrate("c1", {})
+        assert agent is mock_cls.return_value
 
     def test_workspace_inline_model_uses_workspace_agent(self):
         m = _manager()
         m.db.get_chat.return_value = MagicMock(workspace_id="ws-1")
         m.db.get_workspace.return_value = MagicMock(connector="github")
         m.provider_registry.get_provider.return_value = MagicMock()
-        from mikoshi.agents.workspace import WorkspaceAgent
 
-        with patch.object(
-            m, "_construct_agent", return_value=MagicMock()
-        ) as mock_construct:
+        with patch("mikoshi.agents.manager.WorkspaceAgent") as mock_ws:
             m._hydrate("c1", {"model": "openai:gpt-4"})
-            assert mock_construct.call_args[0][0] is WorkspaceAgent
+            kwargs = mock_ws.call_args.kwargs
+            assert kwargs["workspace_id"] == "ws-1"
+            assert kwargs["connector_name"] == "github"
 
 
 class TestCreate:

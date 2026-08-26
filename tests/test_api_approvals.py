@@ -1,5 +1,4 @@
 import asyncio
-import inspect
 
 import pytest
 import pytest_asyncio
@@ -8,8 +7,8 @@ from httpx import ASGITransport, AsyncClient
 
 from mikoshi.routes.approvals import router as approvals_router
 from mikoshi.tools.context import ToolCallContext
-from mikoshi.tools.manager import ToolManager
-from mikoshi.tools.toolset_handler import ToolDefinition, ToolSetHandler, tool
+from mikoshi.tools.toolset_handler import ToolSetHandler, tool
+from tests.conftest import make_tool_manager
 from unittest.mock import MagicMock
 
 
@@ -25,38 +24,11 @@ class _DangerousToolset(ToolSetHandler):
         return "ran"
 
 
-def _sync_init(handler):
-    for _, method in inspect.getmembers(handler, predicate=inspect.ismethod):
-        if hasattr(method, "_tool_definition"):
-            td = method._tool_definition
-            handler._tools[td.name] = ToolDefinition(
-                name=td.name,
-                description=td.description,
-                parameters=td.parameters,
-                func=method,
-                require_approval=td.require_approval,
-            )
-
-
-def _make_manager() -> ToolManager:
-    tm = ToolManager.__new__(ToolManager)
-    tm._server_map = {}
-    tm._toolset_handlers = {}
-    tm._pending_approvals = {}
-    tm._chat_allowlist = {}
-    tm._db = None
-    handler = _DangerousToolset()
-    _sync_init(handler)
-    tm._toolset_handlers[handler.server_name] = handler
-    tm._server_map[handler.server_name] = handler
-    return tm
-
-
 @pytest_asyncio.fixture
 async def client_and_manager():
     app = FastAPI()
     app.include_router(approvals_router, prefix="/api")
-    tm = _make_manager()
+    tm = await make_tool_manager(_DangerousToolset())
     app.state.tool_manager = tm
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"

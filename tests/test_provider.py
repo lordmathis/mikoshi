@@ -65,10 +65,13 @@ class TestMatchesFilter:
 
 
 class TestGetModelIds:
+    @patch("mikoshi.providers.provider.AsyncOpenAI")
+    @patch("mikoshi.providers.provider.OpenAIClient")
     @pytest.mark.asyncio
-    async def test_static_model_ids_no_api_call(self):
+    async def test_static_model_ids_no_api_call(self, mock_cls, mock_async):
         p = _provider(model_ids=["gpt-4", "gpt-3.5"])
         assert await p.get_model_ids() == ["gpt-4", "gpt-3.5"]
+        mock_async.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_api_with_filter(self):
@@ -81,17 +84,41 @@ class TestGetModelIds:
         p = _provider(model_filter=filt)
         mock_client = MagicMock()
         mock_client.get_models = AsyncMock(
-            return_value=["gpt-4", "gpt-4-preview", "claude-3", "gpt-3.5-turbo"]
+            return_value=[
+                {"id": "gpt-4"},
+                {"id": "gpt-4-preview"},
+                {"id": "claude-3"},
+                {"id": "gpt-3.5-turbo"},
+            ]
         )
         p._llm_client = mock_client
         result = await p.get_model_ids()
         assert result == ["gpt-4", "gpt-3.5-turbo"]
 
     @pytest.mark.asyncio
+    async def test_api_filter_matches_nested_fields(self):
+        filt = ModelFilter(
+            conditions=[FilterCondition(field="pricing.prompt", contains="0.03")]
+        )
+        p = _provider(model_filter=filt)
+        mock_client = MagicMock()
+        mock_client.get_models = AsyncMock(
+            return_value=[
+                {"id": "gpt-4", "pricing": {"prompt": "0.03"}},
+                {"id": "gpt-4-mini", "pricing": {"prompt": "0.001"}},
+                {"id": "claude-3"},
+            ]
+        )
+        p._llm_client = mock_client
+        assert await p.get_model_ids() == ["gpt-4"]
+
+    @pytest.mark.asyncio
     async def test_api_no_filter_returns_all(self):
         p = _provider()
         mock_client = MagicMock()
-        mock_client.get_models = AsyncMock(return_value=["gpt-4", "claude-3"])
+        mock_client.get_models = AsyncMock(
+            return_value=[{"id": "gpt-4"}, {"id": "claude-3"}]
+        )
         p._llm_client = mock_client
         assert await p.get_model_ids() == ["gpt-4", "claude-3"]
 
@@ -118,7 +145,9 @@ class TestGetModelIds:
         )
         p = _provider(model_ids=["static-gpt"], model_filter=filt)
         mock_client = MagicMock()
-        mock_client.get_models = AsyncMock(return_value=["gpt-4", "claude"])
+        mock_client.get_models = AsyncMock(
+            return_value=[{"id": "gpt-4"}, {"id": "claude"}]
+        )
         p._llm_client = mock_client
         assert await p.get_model_ids() == ["gpt-4"]
 
@@ -137,8 +166,10 @@ class TestGetLlmClient:
     @patch("mikoshi.providers.provider.AnthropicClient")
     def test_anthropic_branch(self, mock_cls, mock_async):
         p = _provider(provider_type=ProviderType.ANTHROPIC, api_key="ant-key")
-        p.get_llm_client()
+        client = p.get_llm_client()
         mock_async.assert_called_once_with(api_key="ant-key")
+        mock_cls.assert_called_once_with(mock_async.return_value)
+        assert client is mock_cls.return_value
 
     @patch("mikoshi.providers.provider.AsyncOpenAI")
     @patch("mikoshi.providers.provider.OpenAIClient")

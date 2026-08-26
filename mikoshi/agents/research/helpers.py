@@ -81,6 +81,14 @@ def _find_findings_file(files: List[str], task_idx: int) -> Optional[str]:
     return None
 
 
+def _batch_files(files: List[str]) -> List[str]:
+    """Synthesis batch-summary files (`synthesis/batch_*.md`) present on
+    disk, in run order."""
+    return sorted(
+        p for p in files if p.startswith("synthesis/batch_") and p.endswith(".md")
+    )
+
+
 def _parse_findings_files(plan: str, files: List[str]) -> List[str]:
     """Findings-file paths for completed tasks, in plan order.
 

@@ -19,6 +19,10 @@ class WorkspaceNotFoundError(WorkspaceError):
     pass
 
 
+class WorkspaceFileNotFoundError(WorkspaceError):
+    pass
+
+
 class PathTraversalError(WorkspaceError):
     pass
 
@@ -149,7 +153,7 @@ class WorkspaceService:
         full_path = os.path.realpath(os.path.join(root, path))
         self._validate_path(root, full_path)
         if not os.path.isfile(full_path):
-            raise WorkspaceError(f"File not found: {path}")
+            raise WorkspaceFileNotFoundError(f"File not found: {path}")
         return full_path
 
     def read_file(self, workspace_id: str, path: str) -> str:
@@ -185,7 +189,7 @@ class WorkspaceService:
         full_path = os.path.realpath(os.path.join(root, path))
         self._validate_path(root, full_path)
         if not os.path.isfile(full_path):
-            raise WorkspaceError(f"File not found: {path}")
+            raise WorkspaceFileNotFoundError(f"File not found: {path}")
         os.remove(full_path)
         _remove_empty_parents(full_path, root)
 
@@ -196,7 +200,7 @@ class WorkspaceService:
         self._validate_path(root, old_full)
         self._validate_path(root, new_full)
         if not os.path.isfile(old_full):
-            raise WorkspaceError(f"File not found: {old_path}")
+            raise WorkspaceFileNotFoundError(f"File not found: {old_path}")
         os.makedirs(os.path.dirname(new_full), exist_ok=True)
         os.rename(old_full, new_full)
         _remove_empty_parents(old_full, root)

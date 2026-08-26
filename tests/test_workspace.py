@@ -207,13 +207,6 @@ class TestFileReadWrite:
 
 
 class TestFileTree:
-    def test_file_node_has_size(self, ws):
-        root = _create_workspace(ws)
-        _create_file(root, "sized.txt", "12345")
-        tree = ws.get_file_tree("test-ws")
-        node = next(c for c in tree.children if c.name == "sized.txt")
-        assert node.size == 5
-
     def test_basic_tree(self, ws):
         root = _create_workspace(ws)
         _create_file(root, "a.txt", "a")

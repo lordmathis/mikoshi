@@ -7,6 +7,7 @@ from typing import Any, Dict, List
 from openai.types.chat import ChatCompletionMessageParam
 
 from mikoshi.db.db import Database
+from mikoshi.providers.clients import coerce_tool_arguments
 
 logger = logging.getLogger(__name__)
 
@@ -183,9 +184,12 @@ def format_history(db: Database, chat_id: str) -> List[ChatCompletionMessagePara
                         "type": "function",
                         "function": {
                             "name": tc["name"],
-                            "arguments": json.dumps(tc["arguments"])
-                            if isinstance(tc["arguments"], dict)
-                            else tc["arguments"],
+                            # Malformed/truncated arguments are replaced with
+                            # {} (with a warning) instead of being replayed
+                            # as invalid JSON, which providers reject.
+                            "arguments": json.dumps(
+                                coerce_tool_arguments(tc["arguments"])
+                            ),
                         },
                     }
                     for i, tc in enumerate(tool_calls_data)

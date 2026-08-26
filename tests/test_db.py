@@ -476,3 +476,40 @@ class TestCascadeDeletes:
         db.delete_chats_by_workspace(ws.id)
         assert db.get_chat(c1.id) is None
         assert db.get_chat(c2.id) is None
+
+
+class TestSaveMessageSequenceAllocation:
+    def test_interleaved_connections_get_unique_sequences(self, tmp_dir):
+        # Two Database instances over one file simulate two workers; the
+        # sequence must be allocated atomically per INSERT so neither
+        # connection observes a stale max(sequence).
+        path = os.path.join(tmp_dir, "seq.db")
+        db1 = Database(path)
+        db2 = Database(path)
+        try:
+            chat = db1.create_chat()
+            for i in range(5):
+                db1.save_message(chat.id, "user", f"a{i}")
+                db2.save_message(chat.id, "user", f"b{i}")
+            seqs = [m.sequence for m in db1.get_chat_history(chat.id)]
+            assert sorted(seqs) == list(range(1, 11))
+        finally:
+            db1.close()
+            db2.close()
+
+    def test_concurrent_threaded_saves_no_duplicates(self, tmp_dir):
+        from concurrent.futures import ThreadPoolExecutor
+
+        database = Database(os.path.join(tmp_dir, "seq.db"))
+        try:
+            chat = database.create_chat()
+
+            def save(i):
+                return database.save_message(chat.id, "user", f"m{i}").sequence
+
+            with ThreadPoolExecutor(max_workers=4) as ex:
+                seqs = list(ex.map(save, range(20)))
+
+            assert sorted(seqs) == list(range(1, 21))
+        finally:
+            database.close()

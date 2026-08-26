@@ -128,9 +128,13 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # Drain in-flight requests before shutting down
+    # Drain in-flight requests before shutting down. Bounded: SSE streams
+    # ping every 15s indefinitely, so an unbounded drain would hang
+    # shutdown forever while any stream client stays connected.
     in_flight: InFlightRequests = app.state.in_flight
-    await in_flight.drain()
+    drained = await in_flight.drain(timeout=30)
+    if not drained:
+        logger.warning("Proceeding with shutdown despite in-flight requests")
 
     # Cancel background tasks
     cleanup_task.cancel()
@@ -146,6 +150,11 @@ async def lifespan(app: FastAPI):
         await tool_manager.stop()
     except Exception as e:
         logger.error(f"Error during tool manager shutdown: {e}", exc_info=True)
+
+    try:
+        await connector_registry.close()
+    except Exception as e:
+        logger.error(f"Error during connector shutdown: {e}", exc_info=True)
 
     try:
         database.close()

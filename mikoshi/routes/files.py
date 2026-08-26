@@ -19,7 +19,7 @@ async def upload_files(request: Request, files: List[UploadFile]):
     result = []
 
     for upload in files:
-        filename = upload.filename or str(upload.filename)
+        filename = upload.filename or "unnamed"
         content = await upload.read()
         content_type = (
             upload.content_type

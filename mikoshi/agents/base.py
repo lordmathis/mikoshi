@@ -4,7 +4,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple
 
-from openai import APIConnectionError
+from openai import APIConnectionError, InternalServerError, RateLimitError
 
 from openai.types.chat import ChatCompletionMessageParam
 from opentelemetry.trace import get_current_span
@@ -24,9 +24,27 @@ from mikoshi.skills.registry import SkillRegistry
 from mikoshi.tools.approval import ToolDeniedError
 from mikoshi.tools.context import ToolCallContext, WorkspaceContext
 from mikoshi.tools.manager import ToolManager, normalize_tool
+from mikoshi.tasks import create_background_task
 from mikoshi.workspace import WorkspaceService
 
 logger = logging.getLogger(__name__)
+
+# Transient provider errors worth retrying with backoff: network failures,
+# rate limits (429), and server errors (5xx).
+_RETRYABLE_LLM_ERRORS = (APIConnectionError, RateLimitError, InternalServerError)
+
+
+def _retry_after_seconds(error: Exception) -> Optional[float]:
+    """Parse a numeric Retry-After header off a provider error, if present."""
+    response = getattr(error, "response", None)
+    header = response.headers.get("retry-after") if response is not None else None
+    if header is None:
+        return None
+    try:
+        return float(header)
+    except ValueError:
+        # HTTP-date format; the default backoff is close enough.
+        return None
 
 
 class BaseAgent(ABC):
@@ -389,6 +407,7 @@ class BaseAgent(ABC):
                     queue, StreamEvent(type="error", data={"message": str(e)})
                 )
                 await self._emit(queue, STREAM_DONE)
+                return {"error": str(e)}
 
     async def chat(
         self, message: str, queue: asyncio.Queue, file_ids: Optional[List[str]] = None
@@ -396,8 +415,11 @@ class BaseAgent(ABC):
         logger.info("chat_id=%s chat() START", self.chat_id)
         try:
             await self._save_message("user", message, file_ids=file_ids)
-            await self._loop(message, queue=queue)
-            await self._generate_title()
+            result = await self._loop(message, queue=queue)
+            # Failed turns already emitted an error event; don't title the
+            # chat off an error message.
+            if not (isinstance(result, dict) and result.get("error")):
+                await self._generate_title()
             logger.info("chat_id=%s chat() COMPLETE", self.chat_id)
         except Exception as e:
             logger.error(
@@ -612,13 +634,17 @@ class BaseAgent(ABC):
                     max_tokens=self.max_tokens,
                 )
                 return response
-            except APIConnectionError:
+            except _RETRYABLE_LLM_ERRORS as e:
                 if attempt == retries - 1:
                     raise
                 delay = 2.0 * (attempt + 1)
+                retry_after = _retry_after_seconds(e)
+                if retry_after is not None:
+                    delay = max(delay, retry_after)
                 logger.warning(
-                    "chat_id=%s LLM connection error, retry %d/%d in %.1fs",
+                    "chat_id=%s LLM %s, retry %d/%d in %.1fs",
                     self.chat_id,
+                    type(e).__name__,
                     attempt + 1,
                     retries,
                     delay,
@@ -628,7 +654,7 @@ class BaseAgent(ABC):
                     attributes={
                         "retry.attempt": attempt + 1,
                         "retry.delay_s": delay,
-                        "error.type": "APIConnectionError",
+                        "error.type": type(e).__name__,
                     },
                 )
                 await asyncio.sleep(delay)
@@ -647,4 +673,6 @@ class BaseAgent(ABC):
             ):
                 await generate_title(self.chat_id, self.db, client, model)
 
-        asyncio.create_task(_run())
+        # create_task only keeps a weak reference; route through the
+        # background-task helper so the title call can't be GC'd mid-run.
+        create_background_task(_run(), name=f"title-{self.chat_id}")

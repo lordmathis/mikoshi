@@ -11,20 +11,29 @@ from pydantic import BaseModel
 from mikoshi.agents.manager import AgentManager
 from mikoshi.agents.streaming import STREAM_DONE, StreamEvent
 from mikoshi.routes.schemas import serialize_chat
+from mikoshi.tasks import create_background_task
 
 logger = logging.getLogger(__name__)
 
 
 class StreamHub:
+    """Fan-out for one agent turn's SSE events.
+
+    Retains every event for the hub's lifetime and replays the full
+    history to each new subscriber, so a mid-run reconnect (GET
+    /chats/{id}/stream) receives everything emitted so far — not just what
+    accumulated while nobody was subscribed. Replay is idempotent on the
+    client: message events are upserted by id.
+    """
+
     def __init__(self):
         self._subscribers: list[asyncio.Queue] = []
-        self._pre_subscribe_buffer: list = []
+        self._history: list = []
 
     def subscribe(self) -> asyncio.Queue:
         q = asyncio.Queue()
-        for event in self._pre_subscribe_buffer:
+        for event in self._history:
             q.put_nowait(event)
-        self._pre_subscribe_buffer.clear()
         self._subscribers.append(q)
         return q
 
@@ -35,9 +44,7 @@ class StreamHub:
             pass
 
     async def put(self, event):
-        if not self._subscribers:
-            self._pre_subscribe_buffer.append(event)
-            return
+        self._history.append(event)
         for q in self._subscribers:
             await q.put(event)
 
@@ -98,12 +105,23 @@ def _run_agent_stream(chat_id: str, agent_manager: AgentManager, coro_factory):
 
     hub = StreamHub()
     _active_streams[chat_id] = hub
-    asyncio.create_task(_run_with_done_guard(coro_factory(agent, hub), hub, chat_id))
+    create_background_task(
+        _run_with_done_guard(coro_factory(agent, hub), hub, chat_id),
+        name=f"agent-stream-{chat_id}",
+    )
     return StreamingResponse(
         _subscribe_event_stream(hub, chat_id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+def _ensure_no_active_stream(chat_id: str):
+    """Reject chat mutations that would pull the rug from a running agent."""
+    if chat_id in _active_streams:
+        raise HTTPException(
+            status_code=409, detail="Agent is currently processing a message"
+        )
 
 
 def _collect_message_files(database, messages) -> dict:
@@ -203,6 +221,10 @@ async def delete_chat(request: Request, chat_id: str):
     if not chat:
         raise HTTPException(status_code=404, detail=f"Chat '{chat_id}' not found")
 
+    # Deleting the chat mid-stream would leave the agent running against
+    # dangling DB rows.
+    _ensure_no_active_stream(chat_id)
+
     agent_manager.remove(chat_id)
     database.delete_chat(chat_id)
     return {"success": True}
@@ -222,6 +244,9 @@ async def update_chat(request: Request, chat_id: str, body: UpdateChatRequest):
         update_kwargs["title"] = body.title
 
     if body.config:
+        # Recreating the agent mid-stream (new model/tool config) would
+        # mutate the chat underneath the running agent.
+        _ensure_no_active_stream(chat_id)
         try:
             agent_manager.remove(chat_id)
             agent_manager.create(chat_id=chat_id, config=body.config.model_dump())

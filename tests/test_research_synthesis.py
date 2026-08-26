@@ -1,13 +1,18 @@
+import asyncio
+
+import pytest
+
 from mikoshi.agents.research.helpers import (
     DEFAULT_CONTEXT_WINDOW,
     _batch_findings,
+    _batch_files,
     _find_findings_file,
     _format_material_block,
     _parse_findings_files,
-    _summarize_user_prompt,
     _synthesis_budget,
     _synthesis_user_prompt,
 )
+from mikoshi.agents.research.stages import Synthesizer
 
 
 class TestFindFindingsFile:
@@ -134,23 +139,114 @@ class TestBatchFindings:
         assert _batch_findings([], 20) == []
 
 
+class TestBatchFiles:
+    def test_matches_only_synthesis_batches_sorted(self):
+        files = [
+            "synthesis/batch_02.md",
+            "RESEARCH_PLAN.md",
+            "synthesis/batch_01.md",
+            "synthesis/other.md",
+            "findings/01-x.md",
+            "synthesis/batch_10.txt",
+        ]
+        assert _batch_files(files) == ["synthesis/batch_01.md", "synthesis/batch_02.md"]
+
+    def test_empty(self):
+        assert _batch_files([]) == []
+
+
 class TestPromptBuilders:
-    def test_synthesis_prompt_mentions_findings(self):
-        prompt = _synthesis_user_prompt("Q?", "BLOCK")
-        assert "Q?" in prompt
-        assert "research findings" in prompt
-        assert "BLOCK" in prompt
-
-    def test_synthesis_prompt_from_summaries(self):
-        prompt = _synthesis_user_prompt("Q?", "BLOCK", from_summaries=True)
-        assert "batch summaries" in prompt
-
-    def test_summarize_prompt(self):
-        prompt = _summarize_user_prompt("Q?", "BLOCK")
-        assert "Q?" in prompt
-        assert "batch of research findings" in prompt
-        assert "BLOCK" in prompt
+    def test_synthesis_prompt_source_wording_by_flag(self):
+        default = _synthesis_user_prompt("Q?", "BLOCK")
+        summaries = _synthesis_user_prompt("Q?", "BLOCK", from_summaries=True)
+        assert "research findings" in default
+        assert "batch summaries" not in default
+        assert "batch summaries" in summaries
 
     def test_format_material_block(self):
         block = _format_material_block([("a.md", "CONTENT", 5)])
         assert block == "=== a.md ===\nCONTENT"
+
+
+class _FakeSynthCtx:
+    """Minimal StageContext double for exercising the Synthesizer."""
+
+    workspace_id = "ws-1"
+    chat_id = "chat-1"
+    tool_servers = []
+
+    def __init__(self, files, context_window):
+        self._files = dict(files)
+        self.context_window = context_window
+        self.deleted = []
+
+    def list_files(self):
+        return sorted(self._files)
+
+    def file_exists(self, path):
+        return path in self._files
+
+    def read_file(self, path):
+        return self._files.get(path, "")
+
+    def write_file(self, path, content):
+        self._files[path] = content
+
+    def delete_file(self, path):
+        self.deleted.append(path)
+        self._files.pop(path, None)
+
+    async def spawn(self, system_prompt, user_message, queue, *, tool_servers, phase=None):
+        from types import SimpleNamespace
+
+        return SimpleNamespace(last_response=f"out-{phase}")
+
+
+def _big_content(n_words):
+    return " ".join(f"word{i}" for i in range(n_words))
+
+
+class TestSynthesizerStaleBatchCleanup:
+    @pytest.mark.asyncio
+    async def test_stale_batches_from_previous_run_deleted(self):
+        # Small window forces the reduce path (budget < findings tokens).
+        ctx = _FakeSynthCtx(
+            {
+                "RESEARCH_PLAN.md": "## Tasks\n- [x] one\n- [x] two\n",
+                "findings/01-one.md": _big_content(2000),
+                "findings/02-two.md": _big_content(2000),
+                # Leftovers from a previous synthesis run with three batches.
+                "synthesis/batch_01.md": "stale 1",
+                "synthesis/batch_02.md": "stale 2",
+                "synthesis/batch_03.md": "stale 3",
+            },
+            context_window=4000,
+        )
+
+        await Synthesizer(ctx, "the question").apply(asyncio.Queue())
+
+        assert ctx.deleted == [
+            "synthesis/batch_01.md",
+            "synthesis/batch_02.md",
+            "synthesis/batch_03.md",
+        ]
+        assert "out-synthesize" in ctx._files["REPORT.md"]
+        # Fresh batches were written for this run only.
+        assert "stale" not in ctx._files.get("synthesis/batch_01.md", "")
+
+    @pytest.mark.asyncio
+    async def test_fast_path_leaves_existing_batches_alone(self):
+        ctx = _FakeSynthCtx(
+            {
+                "RESEARCH_PLAN.md": "## Tasks\n- [x] one\n",
+                "findings/01-one.md": "small findings",
+                "synthesis/batch_01.md": "pre-existing",
+            },
+            context_window=None,  # default window -> fast path
+        )
+
+        await Synthesizer(ctx, "the question").apply(asyncio.Queue())
+
+        assert ctx.deleted == []
+        assert ctx._files["synthesis/batch_01.md"] == "pre-existing"
+        assert "out-synthesize" in ctx._files["REPORT.md"]

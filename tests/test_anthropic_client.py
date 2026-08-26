@@ -1,10 +1,27 @@
 from types import SimpleNamespace
 
-from mikoshi.providers.clients import AnthropicClient
+from mikoshi.providers.clients import AnthropicClient, coerce_tool_arguments
 
 
 def _client() -> AnthropicClient:
     return AnthropicClient(None)
+
+
+class TestCoerceToolArguments:
+    def test_dict_passthrough(self):
+        assert coerce_tool_arguments({"a": 1}) == {"a": 1}
+
+    def test_valid_json_string_parsed(self):
+        assert coerce_tool_arguments('{"a": 1}') == {"a": 1}
+
+    def test_truncated_json_string_degrades_to_empty(self):
+        assert coerce_tool_arguments('{"path": "fo') == {}
+
+    def test_non_object_json_degrades_to_empty(self):
+        assert coerce_tool_arguments("[1, 2]") == {}
+
+    def test_none_degrades_to_empty(self):
+        assert coerce_tool_arguments(None) == {}
 
 
 class TestConvertMessages:
@@ -60,6 +77,24 @@ class TestConvertMessages:
         ]
         assert msgs[1]["content"][0]["tool_use_id"] == "t1"
         assert msgs[4]["content"][0]["tool_use_id"] == "t2"
+
+    def test_truncated_tool_arguments_degrade_to_empty_input(self):
+        messages = [
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "t1",
+                        "function": {"name": "a", "arguments": '{"path": "fo'},
+                    }
+                ],
+            },
+        ]
+
+        _, msgs = _client()._convert_messages(messages)
+
+        assert msgs[0]["content"][0]["input"] == {}
 
     def test_system_messages_extracted_and_joined(self):
         messages = [

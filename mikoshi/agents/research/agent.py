@@ -22,7 +22,9 @@ from mikoshi.agents.research.stages import (
 )
 from mikoshi.agents.streaming import STREAM_DONE, StreamEvent
 from mikoshi.observability import observe
+from mikoshi.tasks import create_background_task
 from mikoshi.tools.builtin.workspace import _workspace_result
+from mikoshi.workspace import WorkspaceError, WorkspaceFileNotFoundError
 from phoenix.otel import using_attributes
 
 logger = logging.getLogger(__name__)
@@ -200,7 +202,16 @@ class ResearchAgent(BaseAgent):
             return ""
         try:
             return self._workspace_service.read_file(self.workspace_id, path)
-        except Exception:
+        except WorkspaceFileNotFoundError:
+            # A missing file is a normal outcome ("no plan yet").
+            return ""
+        except Exception as e:
+            # Anything else (IO hiccup, permissions) would otherwise look
+            # like a missing file and e.g. silently trigger a full replan,
+            # so make it visible.
+            logger.warning(
+                "chat_id=%s read_file(%s) failed: %s", self.chat_id, path, e
+            )
             return ""
 
     def file_exists(self, path: str) -> bool:
@@ -208,13 +219,30 @@ class ResearchAgent(BaseAgent):
             return False
         try:
             return path in self._workspace_service.list_files_flat(self.workspace_id)
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                "chat_id=%s file_exists(%s) failed: %s", self.chat_id, path, e
+            )
             return False
 
     def write_file(self, path: str, content: str) -> None:
         if not self.workspace_id or not self._workspace_service:
             return
         self._workspace_service.write_file(self.workspace_id, path, content)
+        self._emit_workspace_change(path)
+
+    def delete_file(self, path: str) -> None:
+        """Remove a file from the research workspace (best effort)."""
+        if not self.workspace_id or not self._workspace_service:
+            return
+        try:
+            self._workspace_service.delete_file(self.workspace_id, path)
+        except WorkspaceError as e:
+            # Already gone / nothing to clean up.
+            logger.debug(
+                "chat_id=%s delete_file(%s) skipped: %s", self.chat_id, path, e
+            )
+            return
         self._emit_workspace_change(path)
 
     def _emit_workspace_change(self, path: str) -> None:
@@ -228,10 +256,11 @@ class ResearchAgent(BaseAgent):
         msg = self.db.save_message(
             self.chat_id, "tool", _workspace_result(f"Wrote {path}", paths=[path])
         )
-        asyncio.create_task(
+        create_background_task(
             self._emit(
                 queue, StreamEvent(type="message", data=self._format_message(msg))
-            )
+            ),
+            name=f"workspace-change-{self.chat_id}",
         )
 
     def list_files(self) -> List[str]:
@@ -239,7 +268,8 @@ class ResearchAgent(BaseAgent):
             return []
         try:
             return self._workspace_service.list_files_flat(self.workspace_id)
-        except Exception:
+        except Exception as e:
+            logger.warning("chat_id=%s list_files() failed: %s", self.chat_id, e)
             return []
 
     def _reconcile_plan(self) -> None:

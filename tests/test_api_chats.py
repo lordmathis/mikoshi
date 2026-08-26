@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from mikoshi.agents.streaming import StreamEvent
-from mikoshi.routes.chats import router as chats_router
+from mikoshi.routes.chats import StreamHub, _active_streams, router as chats_router
 
 
 def _chat_config(**overrides):
@@ -79,6 +79,107 @@ def _parse_sse(text):
         if chunk.startswith("data: "):
             events.append(json.loads(chunk[6:]))
     return events
+
+
+class TestStreamHub:
+    @pytest.mark.asyncio
+    async def test_events_before_subscribe_replayed(self):
+        hub = StreamHub()
+        e1 = StreamEvent(type="message", data={"id": 1})
+        await hub.put(e1)
+
+        q = hub.subscribe()
+
+        assert q.get_nowait() is e1
+
+    @pytest.mark.asyncio
+    async def test_mid_run_reconnect_receives_full_history(self):
+        # The first subscriber detaches, a gap with no subscribers emits an
+        # event, then a new subscriber reconnects — it must see everything
+        # emitted so far, not just the gap.
+        hub = StreamHub()
+        e1 = StreamEvent(type="message", data={"id": 1})
+        e2 = StreamEvent(type="message", data={"id": 2})
+
+        q1 = hub.subscribe()
+        await hub.put(e1)
+        hub.unsubscribe(q1)
+        await hub.put(e2)
+
+        q2 = hub.subscribe()
+        assert [q2.get_nowait(), q2.get_nowait()] == [e1, e2]
+        assert q2.empty()
+
+    @pytest.mark.asyncio
+    async def test_second_subscriber_gets_history_plus_live_events(self):
+        hub = StreamHub()
+        e1 = StreamEvent(type="message", data={"id": 1})
+        e2 = StreamEvent(type="message", data={"id": 2})
+
+        q1 = hub.subscribe()
+        await hub.put(e1)
+        q2 = hub.subscribe()
+        await hub.put(e2)
+
+        assert [q1.get_nowait(), q1.get_nowait()] == [e1, e2]
+        assert [q2.get_nowait(), q2.get_nowait()] == [e1, e2]
+
+
+class TestMutationGuardDuringActiveStream:
+    """delete / config-PATCH must 409 while an agent is streaming."""
+
+    @pytest.mark.asyncio
+    async def test_delete_returns_409(self, client, db):
+        resp = await client.post("/api/chats", json={"config": _chat_config()})
+        chat_id = resp.json()["id"]
+
+        _active_streams[chat_id] = StreamHub()
+        try:
+            del_resp = await client.delete(f"/api/chats/{chat_id}")
+            assert del_resp.status_code == 409
+            assert db.get_chat(chat_id) is not None
+        finally:
+            _active_streams.pop(chat_id, None)
+
+    @pytest.mark.asyncio
+    async def test_patch_config_returns_409(self, client, db):
+        resp = await client.post("/api/chats", json={"config": _chat_config()})
+        chat_id = resp.json()["id"]
+
+        _active_streams[chat_id] = StreamHub()
+        try:
+            patched = await client.patch(
+                f"/api/chats/{chat_id}", json={"config": _chat_config()}
+            )
+            assert patched.status_code == 409
+        finally:
+            _active_streams.pop(chat_id, None)
+
+    @pytest.mark.asyncio
+    async def test_patch_title_allowed_during_stream(self, client, db):
+        resp = await client.post("/api/chats", json={"config": _chat_config()})
+        chat_id = resp.json()["id"]
+
+        _active_streams[chat_id] = StreamHub()
+        try:
+            patched = await client.patch(
+                f"/api/chats/{chat_id}", json={"title": "Renamed live"}
+            )
+            assert patched.status_code == 200
+            assert patched.json()["title"] == "Renamed live"
+        finally:
+            _active_streams.pop(chat_id, None)
+
+    @pytest.mark.asyncio
+    async def test_delete_allowed_after_stream_ends(self, client, db):
+        resp = await client.post("/api/chats", json={"config": _chat_config()})
+        chat_id = resp.json()["id"]
+
+        _active_streams[chat_id] = StreamHub()
+        _active_streams.pop(chat_id, None)
+
+        del_resp = await client.delete(f"/api/chats/{chat_id}")
+        assert del_resp.status_code == 200
 
 
 class TestCreateChat:
@@ -300,6 +401,8 @@ class TestSSEStreaming:
         resp = await client.post(f"/api/chats/{chat.id}/retry")
         assert resp.status_code == 200
         events = _parse_sse(resp.text)
+        types = [e["type"] for e in events]
+        assert "text" in types
         assert events[-1]["type"] == "done"
 
     @pytest.mark.asyncio
@@ -314,4 +417,6 @@ class TestSSEStreaming:
         )
         assert resp.status_code == 200
         events = _parse_sse(resp.text)
+        types = [e["type"] for e in events]
+        assert "text" in types
         assert events[-1]["type"] == "done"
