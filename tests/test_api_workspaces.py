@@ -61,7 +61,7 @@ class _StubWorkspaceService:
     def list_files_flat(self, workspace_id):
         return [path for ws, path in self._files if ws == workspace_id]
 
-    def _resolve_connector_token(self, connector_name):
+    def connector_token(self, connector_name):
         return None
 
 
@@ -321,24 +321,27 @@ class TestGitEndpoints:
         assert resp.json()["success"] is False
 
     @pytest.mark.asyncio
-    async def test_git_pull_builds_https_auth_args(self, client, db):
+    async def test_git_pull_builds_https_auth_env(self, client, db):
         ws = db.create_workspace(
             name="ws", repo_url="https://x.com/repo", connector="github"
         )
         svc = client._transport.app.state.workspace_service
         svc._tokens = {"github": "tok"}
-        svc._resolve_connector_token = lambda name: svc._tokens.get(name)
+        svc.connector_token = lambda name: svc._tokens.get(name)
         mock_result = GitResult(success=True, output="ok")
+        auth_env_vars = {
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": "http.extraHeader",
+            "GIT_CONFIG_VALUE_0": "Authorization: Basic dA==",
+        }
         with patch("mikoshi.routes.workspaces.GitService") as MockGit:
-            MockGit.return_value.https_auth_args = AsyncMock(
-                return_value=["-c", "http.extraHeader=Authorization: Basic dA=="]
+            MockGit.return_value.https_auth_env = AsyncMock(
+                return_value=auth_env_vars
             )
             MockGit.return_value.pull = AsyncMock(return_value=mock_result)
             resp = await client.post(f"/api/workspaces/{ws.id}/git/pull")
-            MockGit.return_value.https_auth_args.assert_awaited_once_with("tok")
-            MockGit.return_value.pull.assert_awaited_once_with(
-                ["-c", "http.extraHeader=Authorization: Basic dA=="]
-            )
+            MockGit.return_value.https_auth_env.assert_awaited_once_with("tok")
+            MockGit.return_value.pull.assert_awaited_once_with(auth_env_vars)
         assert resp.status_code == 200
         assert resp.json()["success"] is True
 

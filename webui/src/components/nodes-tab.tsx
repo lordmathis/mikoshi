@@ -1,5 +1,6 @@
 import { Plus } from "lucide-react";
 import { Button } from "./ui/button";
+import { EmptyState } from "./empty-state";
 import { SidebarItem } from "./sidebar-item";
 
 interface NodesTabProps {
@@ -41,9 +42,7 @@ export function NodesTab({
             Syncing...
           </div>
         ) : workspaces.length === 0 ? (
-          <div className="py-12 text-center cp-label opacity-20 italic">
-            No nodes found
-          </div>
+          <EmptyState>No nodes found</EmptyState>
         ) : (
           workspaces.map((ws) => {
             const isActive = activeWorkspaceId === ws.id;

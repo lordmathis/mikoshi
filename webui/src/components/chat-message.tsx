@@ -3,13 +3,15 @@ import { cn } from "../lib/utils";
 import ReactMarkdown from "react-markdown";
 import "highlight.js/styles/github-dark.css";
 import { useState, useRef, useEffect, memo } from "react";
-import { Button } from "./ui/button";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "./ui/tooltip";
+import { IconButtonTooltip } from "./icon-button-tooltip";
+import { Chip } from "./chip";
+import { CornerTriangle, MessageAvatar, Scanlines } from "./message-atoms";
 import { type Message } from "../lib/api";
 import { markdownComponents, REMARK_PLUGINS, REHYPE_PLUGINS } from "../lib/markdown-components";
 
@@ -96,26 +98,24 @@ export const ChatMessage = memo(function ChatMessage({ message, onBranch, onRetr
   })();
 
   const renderFileChip = (file: { id: string; filename: string }) => (
-    <div
+    <Chip
       key={file.id}
-      className="flex items-center gap-1.5 border border-border bg-primary/6 px-2 py-1 text-xs cp-cut-8"
-    >
-      <File className="h-3.5 w-3.5 text-primary/60" />
-      <span className="font-medium text-foreground/80">{file.filename}</span>
-    </div>
+      className="text-xs border-border bg-primary/6"
+      icon={<File className="h-3.5 w-3.5 text-primary/60" />}
+      label={file.filename}
+      labelClassName="font-medium text-foreground/80"
+    />
   );
 
   const renderSourceChip = (source: string, fileCount: number) => {
     const repo = source.includes(':') ? source.split(':').slice(1).join(':') : source;
     return (
-      <div
-        className="flex items-center gap-1.5 border border-cp-cyan/20 bg-cp-cyan/6 px-2 py-1 text-xs cp-cut-8"
-      >
-        <Link className="h-3.5 w-3.5 text-[var(--color-cp-cyan)]" />
-        <span className="font-medium text-[var(--color-cp-cyan)]">
-          {fileCount} file{fileCount !== 1 ? 's' : ''} from {repo}
-        </span>
-      </div>
+      <Chip
+        className="text-xs border-cp-cyan/20 bg-cp-cyan/6"
+        icon={<Link className="h-3.5 w-3.5 text-[var(--color-cp-cyan)]" />}
+        label={`${fileCount} file${fileCount !== 1 ? 's' : ''} from ${repo}`}
+        labelClassName="font-medium text-[var(--color-cp-cyan)]"
+      />
     );
   };
 
@@ -127,39 +127,23 @@ export const ChatMessage = memo(function ChatMessage({ message, onBranch, onRetr
       )}
     >
       {isUser ? (
-        <div
-          className="absolute top-0 right-0 w-[16px] h-[16px] opacity-40 cp-tri-bl"
-          style={{ background: 'var(--color-cp-yellow)' }}
-        />
+        <CornerTriangle position="bl" color="var(--color-cp-yellow)" />
       ) : (
-        <div
-          className="absolute top-0 left-0 w-[16px] h-[16px] opacity-40 cp-tri-tr"
-          style={{ background: 'var(--color-cp-red)' }}
-        />
+        <CornerTriangle position="tr" color="var(--color-cp-red)" />
       )}
 
-      {/* Scanlines */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          backgroundImage: `repeating-linear-gradient(0deg, transparent, transparent 3px, rgb(var(--cp-rgb-yellow) / 0.012) 3px, rgb(var(--cp-rgb-yellow) / 0.012) 4px)`,
-        }}
-      />
+      <Scanlines />
 
-      <div className="flex-shrink-0 relative z-10">
-        <div
-          className="flex h-8 w-8 items-center justify-center cp-cut-8"
-          style={{
-            background: isUser ? "rgb(var(--cp-rgb-yellow) / 0.15)" : "rgb(var(--cp-rgb-red) / 0.15)",
-          }}
-        >
-          {isUser ? (
+      <MessageAvatar
+        background={isUser ? "rgb(var(--cp-rgb-yellow) / 0.15)" : "rgb(var(--cp-rgb-red) / 0.15)"}
+        icon={
+          isUser ? (
             <User className="h-4 w-4 text-primary" />
           ) : (
             <Bot className="h-4 w-4 text-[var(--color-cp-red)]" />
-          )}
-        </div>
-      </div>
+          )
+        }
+      />
       <div className="flex-1 space-y-2 overflow-hidden relative z-10">
         <div className="flex items-center gap-2 flex-wrap">
           <p
@@ -301,113 +285,56 @@ export const ChatMessage = memo(function ChatMessage({ message, onBranch, onRetr
       {(onBranch || (onRetry && !isUser) || (onEdit && isUser && isLastUserMessage) || !isUser) && (
         <div className="absolute right-4 top-6 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
           {!isUser && (
-            <TooltipProvider delayDuration={300}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 w-8 p-0"
-                    onClick={handleCopy}
-                  >
-                    {copied ? (
-                      <Check className="h-4 w-4 text-green-500" />
-                    ) : (
-                      <Copy className="h-4 w-4" />
-                    )}
-                    <span className="sr-only">Copy</span>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="left">
-                  <p>{copied ? "Copied!" : "Copy"}</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <IconButtonTooltip
+              icon={
+                copied ? (
+                  <Check className="h-4 w-4 text-green-500" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )
+              }
+              label={copied ? "Copied!" : "Copy"}
+              srLabel="Copy"
+              onClick={handleCopy}
+            />
           )}
-          
+
           {!isUser && (
-            <TooltipProvider delayDuration={300}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 w-8 p-0"
-                    onClick={handleTTS}
-                    disabled={isSpeaking}
-                  >
-                    <Volume2 className={cn("h-4 w-4", isSpeaking && "animate-pulse")} />
-                    <span className="sr-only">Speak</span>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="left">
-                  <p>{isSpeaking ? "Speaking..." : "Speak"}</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <IconButtonTooltip
+              icon={<Volume2 className="h-4 w-4" />}
+              iconClassName={cn(isSpeaking && "animate-pulse")}
+              label={isSpeaking ? "Speaking..." : "Speak"}
+              srLabel="Speak"
+              onClick={handleTTS}
+              disabled={isSpeaking}
+            />
           )}
-          
+
           {onEdit && isUser && isLastUserMessage && (
-            <TooltipProvider delayDuration={300}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 w-8 p-0"
-                    onClick={onEdit}
-                  >
-                    <Edit2 className="h-4 w-4" />
-                    <span className="sr-only">Edit</span>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="left">
-                  <p>Edit</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <IconButtonTooltip
+              icon={<Edit2 className="h-4 w-4" />}
+              label="Edit"
+              srLabel="Edit"
+              onClick={onEdit}
+            />
           )}
-          
+
           {onRetry && !isUser && (
-            <TooltipProvider delayDuration={300}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 w-8 p-0"
-                    onClick={onRetry}
-                  >
-                    <RotateCw className="h-4 w-4" />
-                    <span className="sr-only">Retry</span>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="left">
-                  <p>Retry</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <IconButtonTooltip
+              icon={<RotateCw className="h-4 w-4" />}
+              label="Retry"
+              srLabel="Retry"
+              onClick={onRetry}
+            />
           )}
-          
+
           {onBranch && (
-            <TooltipProvider delayDuration={300}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 w-8 p-0"
-                    onClick={() => onBranch(message.id)}
-                  >
-                    <GitBranch className="h-4 w-4" />
-                    <span className="sr-only">Branch</span>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="left">
-                  <p>Branch</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <IconButtonTooltip
+              icon={<GitBranch className="h-4 w-4" />}
+              label="Branch"
+              srLabel="Branch"
+              onClick={() => onBranch(message.id)}
+            />
           )}
         </div>
       )}

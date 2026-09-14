@@ -1,9 +1,9 @@
-import json
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel
 
+from mikoshi.db.db import loads_json_field
 from mikoshi.db.models import Chat, File, Message
 
 
@@ -20,7 +20,7 @@ def serialize_message(
     msg: Message,
     files_by_id: Optional[Dict[str, File]] = None,
 ) -> Dict[str, Any]:
-    file_ids: List[str] = json.loads(msg.file_ids) if msg.file_ids else []
+    file_ids: List[str] = loads_json_field(msg.file_ids, [])
     files = []
     if files_by_id:
         for fid in file_ids:
@@ -39,7 +39,7 @@ def serialize_message(
         "role": msg.role,
         "content": msg.content,
         "reasoning_content": msg.reasoning_content,
-        "tool_calls": json.loads(msg.tool_calls) if msg.tool_calls else None,
+        "tool_calls": loads_json_field(msg.tool_calls, None),
         "tool_call_id": msg.tool_call_id,
         "sequence": msg.sequence,
         "created_at": format_timestamp(msg.created_at),
@@ -59,8 +59,8 @@ def serialize_chat(
         "updated_at": format_timestamp(chat.updated_at),
         "model": chat.model,
         "system_prompt": chat.system_prompt,
-        "tool_servers": json.loads(chat.tool_servers) if chat.tool_servers else None,
-        "model_params": json.loads(chat.model_params) if chat.model_params else None,
+        "tool_servers": loads_json_field(chat.tool_servers, None),
+        "model_params": loads_json_field(chat.model_params, None),
         "workspace_id": chat.workspace_id,
     }
     if messages is not None:

@@ -10,6 +10,7 @@ from mikoshi.agents.react import ReActAgent
 from mikoshi.agents.research.helpers import (
     _FilteredQueue,
     _find_findings_file,
+    _iter_plan_lines,
     _parse_pending_tasks,
     _parse_title,
 )
@@ -171,21 +172,10 @@ class ResearchAgent(BaseAgent):
                     e,
                     exc_info=True,
                 )
-                await self._emit(queue, StreamEvent(type="error", data={"message": str(e)}))
-                await self._emit(queue, STREAM_DONE)
+                await self._emit_error(queue, str(e))
             finally:
                 self._active_queue = None
             return {}
-
-    async def _emit_error(self, queue: asyncio.Queue, message: str) -> None:
-        """Surface a user-visible error and end the turn.
-
-        Soft failures (a stage producing no artifact) aren't exceptions, so
-        they bypass `_loop`'s except block; this gives them the same
-        error-event + done treatment hard exceptions get."""
-        logger.error("chat_id=%s %s", self.chat_id, message)
-        await self._emit(queue, StreamEvent(type="error", data={"message": message}))
-        await self._emit(queue, STREAM_DONE)
 
     # --- file-state ops (source of truth for control flow) ---
 
@@ -288,18 +278,12 @@ class ResearchAgent(BaseAgent):
 
         new_lines = []
         changed = False
-        idx = 0
-        for line in plan.split("\n"):
-            stripped = line.strip()
-            if stripped.startswith("- [ ]"):
-                idx += 1
-                if _find_findings_file(files, idx):
-                    new_lines.append(f"- [x] {stripped[5:].strip()}")
-                    changed = True
-                    continue
-            elif stripped.startswith("- [x]"):
-                idx += 1
-            new_lines.append(line)
+        for line, desc, checked, idx in _iter_plan_lines(plan):
+            if desc is not None and not checked and _find_findings_file(files, idx):
+                new_lines.append(f"- [x] {desc}")
+                changed = True
+            else:
+                new_lines.append(line)
 
         if changed:
             self.write_file(PLAN_FILENAME, "\n".join(new_lines))

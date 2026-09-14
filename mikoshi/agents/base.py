@@ -12,9 +12,12 @@ from openinference.semconv.trace import SpanAttributes
 from phoenix.otel import using_attributes
 
 from mikoshi.agents.context import format_history, generate_title, parse_mentions
-from mikoshi.agents.context.messages import extract_assistant_content
+from mikoshi.agents.context.messages import (
+    extract_assistant_content,
+    insert_system_message,
+)
 from mikoshi.agents.context.skills import apply_skill_context, build_skill_context
-from mikoshi.agents.streaming import STREAM_DONE, StreamEvent
+from mikoshi.agents.streaming import STREAM_DONE, StreamEvent, error_event
 from mikoshi.config import WorkspaceConfig
 from mikoshi.db.db import Database
 from mikoshi.db.models import Message
@@ -403,10 +406,7 @@ class BaseAgent(ABC):
                 logger.error(
                     "chat_id=%s agent loop error: %s", self.chat_id, e, exc_info=True
                 )
-                await self._emit(
-                    queue, StreamEvent(type="error", data={"message": str(e)})
-                )
-                await self._emit(queue, STREAM_DONE)
+                await self._emit_error(queue, str(e))
                 return {"error": str(e)}
 
     async def chat(
@@ -453,10 +453,7 @@ class BaseAgent(ABC):
         message = self._prepare_retry()
         if not message:
             logger.warning("chat_id=%s retry() no user message to retry", self.chat_id)
-            await queue.put(
-                StreamEvent(type="error", data={"message": "No user message to retry"})
-            )
-            await queue.put(STREAM_DONE)
+            await self._emit_error(queue, "No user message to retry")
             return
         logger.info("chat_id=%s retry() entering _loop...", self.chat_id)
         await self._loop(message, queue=queue)
@@ -475,10 +472,7 @@ class BaseAgent(ABC):
         last_user = self._prepare_edit()
         if not last_user:
             logger.warning("chat_id=%s edit() no user message to edit", self.chat_id)
-            await queue.put(
-                StreamEvent(type="error", data={"message": "No user message to edit"})
-            )
-            await queue.put(STREAM_DONE)
+            await self._emit_error(queue, "No user message to edit")
             return
 
         file_ids_str = getattr(last_user, "file_ids", None)
@@ -513,6 +507,16 @@ class BaseAgent(ABC):
     @staticmethod
     async def _emit(queue: asyncio.Queue, event: StreamEvent) -> None:
         await queue.put(event)
+
+    async def _emit_error(self, queue: asyncio.Queue, message: str) -> None:
+        """Surface a user-visible error and end the turn.
+
+        Soft failures (a stage producing no artifact) aren't exceptions, so
+        they bypass `_loop`'s except block; this gives them the same
+        error-event + done treatment hard exceptions get."""
+        logger.error("chat_id=%s %s", self.chat_id, message)
+        await self._emit(queue, error_event(message))
+        await self._emit(queue, STREAM_DONE)
 
     async def _save_message(
         self,
@@ -582,11 +586,10 @@ class BaseAgent(ABC):
 
         messages = format_history(self.db, self.chat_id)
 
-        # Persona must be inserted before skill context so the skill appends
-        # to the system message instead of claiming index 0 for itself.
+        # Persona goes first; skill context then appends to it (see
+        # apply_skill_context) instead of claiming index 0 for itself.
         if self.system_prompt:
-            if not messages or messages[0].get("role") != "system":
-                messages.insert(0, {"role": "system", "content": self.system_prompt})
+            insert_system_message(messages, self.system_prompt)
 
         messages = apply_skill_context(messages, skill_context)
 

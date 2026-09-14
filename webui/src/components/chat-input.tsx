@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { ChatSettingsDialog, type ChatSettings } from "./chat-settings-dialog";
+import { Chip } from "./chip";
 import { FileAttachments } from "./file-attachments";
 import { getToolLabel, formatModelLabel } from "../lib/formatters";
 import { useVoiceRecording } from "../hooks/use-voice-recording";
@@ -246,29 +247,26 @@ export function ChatInput({
         )}
         
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <div
-            className="flex items-center gap-1.5 border px-2 py-1 cp-cut-8"
+          <Chip
             style={{
               borderColor: "rgb(var(--cp-rgb-yellow) / 0.15)",
               background: "rgb(var(--cp-rgb-yellow) / 0.04)",
             }}
-          >
-            <Bot className="h-3.5 w-3.5 text-primary/60" />
-            <span className="cp-label" style={{ color: 'var(--color-cp-yellow)' }}>{formatModelLabel(chatSettings.baseModel)}</span>
-          </div>
+            icon={<Bot className="h-3.5 w-3.5 text-primary/60" />}
+            label={formatModelLabel(chatSettings.baseModel)}
+            labelClassName="cp-label"
+            labelStyle={{ color: 'var(--color-cp-yellow)' }}
+          />
           {chatSettings.enabledTools.length > 0 && (
-            <div
-              className="flex items-center gap-1.5 border px-2 py-1 cp-cut-8"
+            <Chip
               style={{
-              borderColor: "rgb(var(--cp-rgb-yellow) / 0.15)",
-              background: "rgb(var(--cp-rgb-yellow) / 0.04)",
-            }}
-            >
-              <Zap className="h-3.5 w-3.5 text-primary/60" />
-              <span className="cp-label text-muted-foreground">
-                {chatSettings.enabledTools.map((t) => getToolLabel(t)).join(", ")}
-              </span>
-            </div>
+                borderColor: "rgb(var(--cp-rgb-yellow) / 0.15)",
+                background: "rgb(var(--cp-rgb-yellow) / 0.04)",
+              }}
+              icon={<Zap className="h-3.5 w-3.5 text-primary/60" />}
+              label={chatSettings.enabledTools.map((t) => getToolLabel(t)).join(", ")}
+              labelClassName="cp-label text-muted-foreground"
+            />
           )}
         </div>
 

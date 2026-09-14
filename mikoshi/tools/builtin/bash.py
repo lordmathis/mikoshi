@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import os
 from typing import Any, Dict
 
 from mikoshi.tools.context import ToolCallContext
@@ -46,13 +45,7 @@ class BashTools(ToolSetHandler):
                     "command": command,
                 }
 
-            working_dir = os.path.realpath(
-                os.path.join(
-                    context.workspace.data_dir,
-                    "workspaces",
-                    context.workspace.workspace_id,
-                )
-            )
+            working_dir = context.workspace.root
 
             logger.info(f"Executing bash command in {working_dir}: {command}")
 

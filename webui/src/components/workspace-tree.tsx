@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Folder, File, ChevronRight, ChevronDown, Loader2, Pencil, Trash2, Plus, ArrowDownFromLine, ArrowUpFromLine, Check } from "lucide-react";
 import { api, type FileNode } from "../lib/api";
+import { EmptyState } from "./empty-state";
 import { useGit } from "../hooks/use-git";
 
 interface WorkspaceTreeProps {
@@ -377,11 +378,7 @@ export function WorkspaceTree({ tree, activeFilePath, onFileClick, workspaceId, 
     `p-1 rounded hover:bg-accent transition-colors [&:hover>svg]:text-accent-foreground ${flashBtn === id ? "cp-flash-success" : ""} ${shakeBtn === id ? "cp-shake-error" : ""}`;
 
   if (!localTree) {
-    return (
-      <div className="py-12 text-center cp-label opacity-20 italic">
-        No files loaded
-      </div>
-    );
+    return <EmptyState>No files loaded</EmptyState>;
   }
 
   return (

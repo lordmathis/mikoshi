@@ -73,15 +73,30 @@ class TestPathTraversal:
     def test_traversal_with_dotdot(self, ws):
         root = _create_workspace(ws)
         bad = os.path.realpath(os.path.join(root, "..", "..", "etc", "passwd"))
-        with pytest.raises(PathTraversalError, match="Path traversal"):
+        with pytest.raises(PathTraversalError, match="outside the workspace"):
             ws._validate_path(root, bad)
 
     def test_symlink_outside_workspace(self, ws):
         root = _create_workspace(ws)
         link = os.path.join(root, "evil_link")
         os.symlink("/etc/passwd", link)
-        with pytest.raises(PathTraversalError, match="Symlink points outside"):
+        with pytest.raises(PathTraversalError, match="outside the workspace"):
             ws._validate_path(root, link)
+
+    def test_sibling_with_shared_prefix_rejected(self, ws):
+        # `<root>evil` must not pass a plain startswith(root) check.
+        root = _create_workspace(ws)
+        sibling = root + "-evil"
+        os.makedirs(sibling)
+        try:
+            with pytest.raises(PathTraversalError):
+                ws._validate_path(root, sibling)
+        finally:
+            os.rmdir(sibling)
+
+    def test_root_itself_passes(self, ws):
+        root = _create_workspace(ws)
+        ws._validate_path(root, root)
 
     def test_valid_path_passes(self, ws):
         root = _create_workspace(ws)
@@ -145,9 +160,21 @@ class TestWorkspaceOps:
             await ws_with_conn.initialize_workspace(
                 "conn-ws", "https://github.com/org/repo.git", "github"
             )
-            args = mock_run.call_args[0][0]
-            assert "-c" in args
-            assert "Authorization: Basic" in " ".join(args)
+            args, kwargs = mock_run.call_args
+            assert args[0][0] == "clone"
+            assert kwargs["env"]["GIT_CONFIG_KEY_0"] == "http.extraHeader"
+            assert "Authorization: Basic" in kwargs["env"]["GIT_CONFIG_VALUE_0"]
+
+    @pytest.mark.asyncio
+    async def test_initialize_workspace_connector_ssh_url_no_auth_env(self, ws):
+        cfg = ConnectorsConfig(type=ConnectorType.GITHUB, token="secret-token")
+        ws_with_conn = WorkspaceService(ws._data_dir, {"github": cfg})
+        with patch("mikoshi.workspace.run_git") as mock_run:
+            mock_run.return_value = (0, "", "")
+            await ws_with_conn.initialize_workspace(
+                "ssh-ws", "git@github.com:org/repo.git", "github"
+            )
+            assert mock_run.call_args.kwargs.get("env") is None
 
     @pytest.mark.asyncio
     async def test_initialize_workspace_connector_no_token(self, ws):
@@ -156,8 +183,7 @@ class TestWorkspaceOps:
             await ws.initialize_workspace(
                 "no-token-ws", "https://example.com/repo.git", "unknown-connector"
             )
-            args = mock_run.call_args[0][0]
-            assert "-c" not in args
+            assert mock_run.call_args.kwargs.get("env") is None
 
     @pytest.mark.asyncio
     async def test_initialize_workspace_no_repo_url_skips_clone(self, ws):

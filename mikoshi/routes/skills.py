@@ -22,9 +22,9 @@ async def list_skills(request: Request) -> Dict[str, List[Dict]]:
         skill_registry = request.app.state.skill_registry
         skills = skill_registry.list_skills()
         return {"skills": skills}
-    except Exception as e:
-        logger.error(f"Error listing skills: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to list skills: {str(e)}")
+    except Exception:
+        logger.error("Error listing skills", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to list skills")
 
 
 @router.get("/skills/{skill_name}")
@@ -51,12 +51,12 @@ async def get_skill(skill_name: str, request: Request) -> Dict:
 
         return {
             "name": skill.name,
-            "path": str(skill.path),
             "exists": skill.exists,
+            "required_tool_servers": skill.get_required_tool_servers(),
             "content": content,
         }
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Error getting skill {skill_name}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to get skill: {str(e)}")
+    except Exception:
+        logger.error("Error getting skill %s", skill_name, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to get skill")

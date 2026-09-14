@@ -1,5 +1,5 @@
 import re
-from typing import List, Optional, Tuple
+from typing import Iterator, List, Optional, Tuple
 
 import tiktoken
 
@@ -40,18 +40,34 @@ def _synthesis_budget(context_window: int) -> int:
     return max(1024, context_window - reserve)
 
 
-def _parse_pending_tasks(plan: str) -> List[Tuple[str, int]]:
-    """Return [(description, 1-based index), ...] for unchecked tasks."""
-    tasks = []
+def _iter_plan_lines(plan: str) -> Iterator[Tuple[str, Optional[str], bool, int]]:
+    """Yield (raw_line, description, checked, task_index) for every line.
+
+    The single parser for all plan-checkbox logic. Non-task lines have
+    description None; both `[ ]` and `[x]` increment the index — findings
+    files are matched by it (findings/NN-*.md), so the two counts can never
+    drift apart.
+    """
     idx = 0
     for line in plan.split("\n"):
         stripped = line.strip()
         if stripped.startswith("- [ ]"):
             idx += 1
-            tasks.append((stripped[5:].strip(), idx))
+            yield line, stripped[5:].strip(), False, idx
         elif stripped.startswith("- [x]"):
             idx += 1
-    return tasks
+            yield line, stripped[5:].strip(), True, idx
+        else:
+            yield line, None, False, 0
+
+
+def _parse_pending_tasks(plan: str) -> List[Tuple[str, int]]:
+    """Return [(description, 1-based index), ...] for unchecked tasks."""
+    return [
+        (desc, idx)
+        for _, desc, checked, idx in _iter_plan_lines(plan)
+        if desc is not None and not checked
+    ]
 
 
 def _parse_title(plan: str) -> str:
@@ -95,23 +111,18 @@ def _parse_findings_files(plan: str, files: List[str]) -> List[str]:
     For each checked task, looks up the actual findings file on disk by task
     index prefix (`findings/NN-*.md`) — never derives a path from the task
     description, so a slightly different suffix chosen by the model doesn't
-    cause findings to be dropped from synthesis. Indexing mirrors
-    _reconcile_plan: both [ ] and [x] increment idx.
+    cause findings to be dropped from synthesis.
 
     Returns only paths that exist on disk; an unchecked task or a missing file
     contributes nothing.
     """
     paths: List[str] = []
-    idx = 0
-    for line in plan.split("\n"):
-        stripped = line.strip()
-        if stripped.startswith("- [ ]"):
-            idx += 1
-        elif stripped.startswith("- [x]"):
-            idx += 1
-            match = _find_findings_file(files, idx)
-            if match:
-                paths.append(match)
+    for _, desc, checked, idx in _iter_plan_lines(plan):
+        if desc is None or not checked:
+            continue
+        match = _find_findings_file(files, idx)
+        if match:
+            paths.append(match)
     return paths
 
 

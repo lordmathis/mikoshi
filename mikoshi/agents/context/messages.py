@@ -20,6 +20,22 @@ def parse_content(msg_content: str):
         return msg_content
 
 
+def insert_system_message(
+    messages: List[ChatCompletionMessageParam], content: str
+) -> List[ChatCompletionMessageParam]:
+    """Insert a system message directly after any leading system/developer
+    messages, so the persona always stays first and later context (tree,
+    AGENTS.md, …) can't claim index 0 for itself."""
+    insert_at = 0
+    for i, msg in enumerate(messages):
+        if msg.get("role") in ("system", "developer"):
+            insert_at = i + 1
+        else:
+            break
+    messages.insert(insert_at, {"role": "system", "content": content})
+    return messages
+
+
 def parse_tool_arguments(raw: Any):
     """Parse tool-call arguments JSON, returning the raw value on failure.
 

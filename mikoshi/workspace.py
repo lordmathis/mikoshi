@@ -4,9 +4,9 @@ import os
 import shutil
 from typing import List, Optional
 
-from mikoshi.config import ConnectorsConfig
+from mikoshi.config import ConnectorsConfig, resolve_connector_token
 from mikoshi.connectors.client_base import FileNode
-from mikoshi.git import GitTimeout, auth_header_value, run_git
+from mikoshi.git import GitTimeout, auth_env, run_git
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +37,15 @@ def _remove_empty_parents(path: str, stop_at: str):
         parent = os.path.dirname(parent)
 
 
+def walk_files(root: str):
+    """Yield absolute paths of all files under root, pruning .git dirs."""
+    for dirpath, dirnames, filenames in os.walk(root):
+        if ".git" in dirnames:
+            dirnames.remove(".git")
+        for filename in filenames:
+            yield os.path.join(dirpath, filename)
+
+
 class WorkspaceService:
     def __init__(self, data_dir: str, connectors_config: dict[str, ConnectorsConfig]):
         self._data_dir = data_dir
@@ -44,23 +53,21 @@ class WorkspaceService:
         self._workspaces_dir = os.path.join(data_dir, "workspaces")
         os.makedirs(self._workspaces_dir, exist_ok=True)
 
-    def _resolve_connector_token(self, connector_name: str) -> Optional[str]:
-        cfg = self._connectors_config.get(connector_name)
-        return cfg.token if cfg else None
+    def connector_token(self, connector_name: str) -> Optional[str]:
+        return resolve_connector_token(self._connectors_config, connector_name)
 
     def _workspace_root(self, workspace_id: str) -> str:
         return os.path.realpath(os.path.join(self._workspaces_dir, workspace_id))
 
     def _validate_path(self, workspace_root: str, resolved_path: str):
-        if os.path.realpath(resolved_path) != resolved_path:
-            if os.path.islink(resolved_path):
-                real = os.path.realpath(resolved_path)
-                if not real.startswith(workspace_root):
-                    raise PathTraversalError(
-                        f"Symlink points outside workspace: {resolved_path}"
-                    )
-        if not resolved_path.startswith(workspace_root):
-            raise PathTraversalError(f"Path traversal detected: {resolved_path}")
+        # Resolve again so a symlinked final component is caught even if
+        # the caller didn't realpath; idempotent for resolved inputs.
+        # The separator boundary matters so a sibling like `<root>evil`
+        # can't pass a plain prefix check.
+        real = os.path.realpath(resolved_path)
+        inside = real == workspace_root or real.startswith(workspace_root + os.sep)
+        if not inside:
+            raise PathTraversalError("Path is outside the workspace")
 
     async def initialize_workspace(
         self,
@@ -70,7 +77,7 @@ class WorkspaceService:
     ):
         target_dir = self._workspace_root(workspace_id)
         if os.path.exists(target_dir):
-            raise WorkspaceError(f"Workspace directory already exists: {target_dir}")
+            raise WorkspaceError("Workspace directory already exists")
 
         os.makedirs(target_dir, exist_ok=True)
 
@@ -78,15 +85,18 @@ class WorkspaceService:
             logger.info(f"Initialized empty workspace {workspace_id}")
             return
 
-        git_args = []
-        if connector_name:
-            token = self._resolve_connector_token(connector_name)
+        # Token auth only makes sense for the HTTPS transport; SSH ignores
+        # http.extraHeader, and we don't want to offer the token to arbitrary
+        # URL schemes anyway.
+        clone_env = None
+        if connector_name and repo_url.startswith("https://"):
+            token = self.connector_token(connector_name)
             if token:
-                git_args = ["-c", f"http.extraHeader={auth_header_value(token)}"]
+                clone_env = auth_env(token)
 
         try:
             rc, _, stderr = await run_git(
-                [*git_args, "clone", repo_url, target_dir], timeout=300
+                ["clone", repo_url, target_dir], env=clone_env, timeout=300
             )
         except GitTimeout:
             if os.path.exists(target_dir):
@@ -208,12 +218,6 @@ class WorkspaceService:
 
     def list_files_flat(self, workspace_id: str) -> List[str]:
         root = self.get_workspace_path(workspace_id)
-        files = []
-        for dirpath, dirnames, filenames in os.walk(root):
-            if ".git" in dirnames:
-                dirnames.remove(".git")
-            for filename in filenames:
-                full_path = os.path.join(dirpath, filename)
-                rel_path = os.path.relpath(full_path, root)
-                files.append(rel_path)
-        return sorted(files)
+        return sorted(
+            os.path.relpath(path, root) for path in walk_files(root)
+        )

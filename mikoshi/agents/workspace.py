@@ -3,6 +3,7 @@ from typing import List
 
 from openai.types.chat import ChatCompletionMessageParam
 
+from mikoshi.agents.context import insert_system_message
 from mikoshi.agents.plugin_base import AgentPluginBase
 from mikoshi.agents.react import ReActAgent
 
@@ -54,15 +55,9 @@ class WorkspaceAgent(ReActAgent):
                 files = self._workspace_service.list_files_flat(self.workspace_id)
                 tree_string = format_file_tree(files)
 
-                context_msg = {
-                    "role": "system",
-                    "content": f"Current Workspace Structure:\n{tree_string}",
-                }
-
-                if messages and messages[0].get("role") == "system":
-                    messages.insert(1, context_msg)
-                else:
-                    messages.insert(0, context_msg)
+                insert_system_message(
+                    messages, f"Current Workspace Structure:\n{tree_string}"
+                )
 
                 agents_md_path = next(
                     (f for f in files if f.lower() == "agents.md"), None
@@ -71,14 +66,9 @@ class WorkspaceAgent(ReActAgent):
                     agents_md = self._workspace_service.read_file(
                         self.workspace_id, agents_md_path
                     )
-                    agents_msg = {
-                        "role": "system",
-                        "content": f"AGENTS.md instructions:\n{agents_md}",
-                    }
-                    if messages and messages[0].get("role") == "system":
-                        messages.insert(1, agents_msg)
-                    else:
-                        messages.insert(0, agents_msg)
+                    insert_system_message(
+                        messages, f"AGENTS.md instructions:\n{agents_md}"
+                    )
             except Exception as e:
                 logger.warning(f"Failed to fetch workspace tree for context: {e}")
 

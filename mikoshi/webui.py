@@ -85,6 +85,8 @@ def setup_webui(app: FastAPI):
         )
         return
 
+    webui_dist = webui_dist.resolve()
+
     @app.get("/{full_path:path}")
     async def serve_static(full_path: str, request: Request):
         """Serve static files with compression support"""
@@ -92,7 +94,11 @@ def setup_webui(app: FastAPI):
             index_path = webui_dist / "index.html"
             return _serve_with_compression(index_path, request, "text/html")
 
-        file_path = webui_dist / full_path
+        # Starlette hands us percent-decoded dot-segments; resolve and
+        # contain before serving anything.
+        file_path = (webui_dist / full_path).resolve()
+        if not file_path.is_relative_to(webui_dist):
+            raise HTTPException(status_code=404, detail="File not found")
         if file_path.exists() and file_path.is_file():
             return _serve_with_compression(file_path, request)
 

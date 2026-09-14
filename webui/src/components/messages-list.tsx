@@ -2,6 +2,7 @@ import { Bot, AlertTriangle } from "lucide-react";
 import { ChatMessage } from "./chat-message";
 import { ToolMessage } from "./tool-message";
 import { ScrollArea } from "./ui/scroll-area";
+import { CornerTriangle, MessageAvatar } from "./message-atoms";
 import { useEffect, memo } from "react";
 import type { Message, PendingApproval } from "../lib/api";
 
@@ -116,43 +117,34 @@ export const MessagesList = memo(function MessagesList({
                     border: "1px solid rgb(var(--cp-rgb-red) / 0.2)",
                   }}
                 >
-                  <div
-                    className="absolute top-0 left-0 w-[16px] h-[16px] opacity-40 cp-tri-tr"
-                    style={{ background: 'var(--color-cp-red)' }}
+                  <CornerTriangle position="tr" color="var(--color-cp-red)" />
+                  <MessageAvatar
+                    background="rgb(var(--cp-rgb-red) / 0.15)"
+                    icon={<Bot className="h-5 w-5 text-[var(--color-cp-red)]" />}
                   />
-                  <div className="flex-shrink-0">
-                    <div
-                      className="flex h-8 w-8 items-center justify-center cp-cut-8"
-                      style={{
-                        background: "rgb(var(--cp-rgb-red) / 0.15)",
-                      }}
-                    >
-                      <Bot className="h-5 w-5 text-[var(--color-cp-red)]" />
-                    </div>
-                  </div>
                   <div className="flex-1 space-y-2 overflow-hidden">
                     <div className="flex items-center gap-2">
-                       <p className="cp-label font-bold" style={{ color: 'var(--color-cp-red)' }}>
-                        // DAEMON
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 cp-label text-muted-foreground">
-                      <div className="flex gap-1">
-                        <span className="animate-bounce text-foreground" style={{ animationDelay: "0ms" }}>
-                          &#9654;
-                        </span>
-                        <span className="animate-bounce text-foreground" style={{ animationDelay: "150ms" }}>
-                          &#9654;
-                        </span>
-                        <span className="animate-bounce text-foreground" style={{ animationDelay: "300ms" }}>
-                          &#9654;
-                        </span>
-                      </div>
-                      <span className="text-foreground">Breaching...</span>
-                    </div>
-                  </div>
-                </div>
-              )}
+                        <p className="cp-label font-bold" style={{ color: 'var(--color-cp-red)' }}>
+                         // DAEMON
+                       </p>
+                     </div>
+                     <div className="flex items-center gap-2 cp-label text-muted-foreground">
+                       <div className="flex gap-1">
+                         <span className="animate-bounce text-foreground" style={{ animationDelay: "0ms" }}>
+                           &#9654;
+                         </span>
+                         <span className="animate-bounce text-foreground" style={{ animationDelay: "150ms" }}>
+                           &#9654;
+                         </span>
+                         <span className="animate-bounce text-foreground" style={{ animationDelay: "300ms" }}>
+                           &#9654;
+                         </span>
+                       </div>
+                       <span className="text-foreground">Breaching...</span>
+                     </div>
+                   </div>
+                 </div>
+               )}
           </div>
         )}
         <div ref={messagesEndRef} />
@@ -167,18 +159,11 @@ function ErrorMessage({ message }: { message: Message }) {
       className="group relative flex gap-4 px-4 py-6 sm:px-6 bg-cp-surface4 overflow-hidden cp-cut-z-16"
       style={{ border: "1px solid rgb(var(--cp-rgb-red) / 0.4)" }}
     >
-      <div
-        className="absolute top-0 left-0 w-[16px] h-[16px] opacity-40 cp-tri-tr"
-        style={{ background: 'var(--color-cp-red)' }}
+      <CornerTriangle position="tr" color="var(--color-cp-red)" />
+      <MessageAvatar
+        background="rgb(var(--cp-rgb-red) / 0.15)"
+        icon={<AlertTriangle className="h-4 w-4 text-[var(--color-cp-red)]" />}
       />
-      <div className="flex-shrink-0 relative z-10">
-        <div
-          className="flex h-8 w-8 items-center justify-center cp-cut-8"
-          style={{ background: "rgb(var(--cp-rgb-red) / 0.15)" }}
-        >
-          <AlertTriangle className="h-4 w-4 text-[var(--color-cp-red)]" />
-        </div>
-      </div>
       <div className="flex-1 space-y-2 overflow-hidden relative z-10">
         <p
           className="font-bold leading-none"

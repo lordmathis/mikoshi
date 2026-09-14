@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass
 from typing import Awaitable, Callable, Optional
 
@@ -11,6 +12,13 @@ class WorkspaceContext:
     connector: str | None
     git_user_name: str
     git_user_email: str
+
+    @property
+    def root(self) -> str:
+        """Absolute path of the workspace directory on disk."""
+        return os.path.realpath(
+            os.path.join(self.data_dir, "workspaces", self.workspace_id)
+        )
 
 
 ApprovalCallback = Callable[[str, str, dict], Awaitable[Optional[str]]]

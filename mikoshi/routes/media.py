@@ -1,10 +1,14 @@
 import io
+import logging
 
 import httpx
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import Response
 
+from mikoshi.routes.upload_utils import read_upload_body
+
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.post("/media/transcribe")
@@ -23,11 +27,12 @@ async def transcribe_audio(request: Request, file: UploadFile = File(...)):
 
     # Read the audio file
     try:
-        audio_content = await file.read()
-    except Exception as e:
-        raise HTTPException(
-            status_code=400, detail=f"Failed to read audio file: {str(e)}"
-        )
+        audio_content = await read_upload_body(file)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Failed to read audio file")
+        raise HTTPException(status_code=400, detail="Failed to read audio file")
 
     # httpx accepts file-like objects directly; no temp file needed.
     files = {
@@ -66,10 +71,11 @@ async def transcribe_audio(request: Request, file: UploadFile = File(...)):
             raise HTTPException(
                 status_code=504, detail="Transcription service timeout"
             )
-        except httpx.RequestError as e:
+        except httpx.RequestError:
+            logger.exception("Failed to connect to transcription service")
             raise HTTPException(
                 status_code=502,
-                detail=f"Failed to connect to transcription service: {str(e)}",
+                detail="Failed to connect to transcription service",
             )
 
 
@@ -119,8 +125,9 @@ async def generate_speech(request: Request, body: dict):
 
         except httpx.TimeoutException:
             raise HTTPException(status_code=504, detail="TTS service timeout")
-        except httpx.RequestError as e:
+        except httpx.RequestError:
+            logger.exception("Failed to connect to TTS service")
             raise HTTPException(
                 status_code=502,
-                detail=f"Failed to connect to TTS service: {str(e)}",
+                detail="Failed to connect to TTS service",
             )

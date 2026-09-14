@@ -127,27 +127,17 @@ class GitHubClient(ConnectorClient):
             raise
 
     async def fetch_files(self, repo: str, paths: List[str]) -> Dict[str, str]:
-        try:
-            file_contents = {}
-
-            for path in paths:
-                url = f"{self.base_url}/repos/{repo}/contents/{path}"
-                response = await self.client.get(url)
-                response.raise_for_status()
-                content_data = response.json()
-
-                if "content" in content_data:
-                    encoded_content = content_data["content"]
-                    encoded_content = encoded_content.replace("\n", "")
-                    decoded_content = base64.b64decode(encoded_content).decode("utf-8")
-                    file_contents[path] = decoded_content
-                else:
-                    logger.warning(f"No content found for {path} in {repo}")
-
-            return file_contents
-        except Exception as e:
-            logger.error(f"Failed to fetch files from {repo}: {e}")
-            raise
+        file_contents = {}
+        for path in paths:
+            try:
+                content = await self.get_file_content(repo, path)
+            except ValueError:
+                # Missing content is a per-path outcome, not a failure of
+                # the whole batch.
+                logger.warning(f"No content found for {path} in {repo}")
+                continue
+            file_contents[path] = content.decode("utf-8")
+        return file_contents
 
     async def _resolve_commit_hash(self, repo: str, ref: str) -> str:
         commits_url = f"{self.base_url}/repos/{repo}/commits/{ref}"

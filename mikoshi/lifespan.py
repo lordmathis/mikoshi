@@ -1,7 +1,5 @@
 import asyncio
 import logging
-import os
-import shutil
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -12,6 +10,7 @@ from mikoshi.connectors.registry import ConnectorRegistry
 from mikoshi.db import Database
 from mikoshi.middleware import InFlightRequests
 from mikoshi.providers.registry import ProviderRegistry
+from mikoshi.routes.upload_utils import remove_upload_dir
 from mikoshi.skills import SkillRegistry
 from mikoshi.tools.manager import ToolManager
 from mikoshi.workspace import WorkspaceService
@@ -32,9 +31,7 @@ async def _orphan_file_cleanup_task(app: FastAPI):
                 deleted_ids = db.delete_orphan_files(retention_hours)
 
                 for file_id in deleted_ids:
-                    upload_dir = os.path.join("uploads", file_id)
-                    if os.path.exists(upload_dir):
-                        shutil.rmtree(upload_dir, ignore_errors=True)
+                    remove_upload_dir(app_config.uploads_dir, file_id)
 
                 if deleted_ids:
                     logger.info(f"Cleaned up {len(deleted_ids)} orphan files")

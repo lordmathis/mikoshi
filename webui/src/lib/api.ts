@@ -193,7 +193,6 @@ export interface DefaultChatConfig {
 
 export interface Skill {
   name: string;
-  path: string;
   exists: boolean;
 }
 

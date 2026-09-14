@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { Settings, ChevronDown, ChevronRight } from "lucide-react";
+import { Settings } from "lucide-react";
 import { Button } from "./ui/button";
+import { CollapsibleSection } from "./collapsible-section";
 import {
   Dialog,
   DialogContent,
@@ -292,64 +293,39 @@ export function ChatSettingsDialog({
           </div>
 
           {/* System Prompt - Collapsible */}
-          <div className="space-y-4">
-            <button
-              type="button"
-              onClick={() => setSystemPromptExpanded(!systemPromptExpanded)}
-              className="flex items-center gap-2 w-full text-left"
-            >
-              {systemPromptExpanded ? (
-                <ChevronDown className="h-4 w-4 text-primary" />
-              ) : (
-                <ChevronRight className="h-4 w-4 text-primary" />
-              )}
-              <Label className="text-xs uppercase tracking-[0.15em] text-primary cursor-pointer">
-                System Prompt
-              </Label>
-            </button>
-
-            {systemPromptExpanded && (
-              <div className="space-y-2">
-                <Textarea
-                  id="system-prompt"
-                  value={localSettings.systemPrompt}
-                  onChange={(e) =>
-                    setLocalSettings((prev) => ({
-                      ...prev,
-                      systemPrompt: e.target.value,
-                    }))
-                  }
-                  placeholder="Enter system prompt..."
-                  className="min-h-[120px] resize-none"
-                  rows={6}
-                />
-                <p className="text-xs text-muted-foreground">
-                  The system prompt sets the behavior and context for the AI
-                  assistant.
-                </p>
-              </div>
-            )}
-          </div>
+          <CollapsibleSection
+            title="System Prompt"
+            expanded={systemPromptExpanded}
+            onToggle={() => setSystemPromptExpanded(!systemPromptExpanded)}
+          >
+            <div className="space-y-2">
+              <Textarea
+                id="system-prompt"
+                value={localSettings.systemPrompt}
+                onChange={(e) =>
+                  setLocalSettings((prev) => ({
+                    ...prev,
+                    systemPrompt: e.target.value,
+                  }))
+                }
+                placeholder="Enter system prompt..."
+                className="min-h-[120px] resize-none"
+                rows={6}
+              />
+              <p className="text-xs text-muted-foreground">
+                The system prompt sets the behavior and context for the AI
+                assistant.
+              </p>
+            </div>
+          </CollapsibleSection>
 
           {/* Model Parameters Section - Collapsible */}
-          <div className="space-y-4">
-            <button
-              type="button"
-              onClick={() => setModelParamsExpanded(!modelParamsExpanded)}
-              className="flex items-center gap-2 w-full text-left"
-            >
-              {modelParamsExpanded ? (
-                <ChevronDown className="h-4 w-4 text-primary" />
-              ) : (
-                <ChevronRight className="h-4 w-4 text-primary" />
-              )}
-              <Label className="text-xs uppercase tracking-[0.15em] text-primary cursor-pointer">
-                Model Parameters
-              </Label>
-            </button>
-
-            {modelParamsExpanded && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <CollapsibleSection
+            title="Model Parameters"
+            expanded={modelParamsExpanded}
+            onToggle={() => setModelParamsExpanded(!modelParamsExpanded)}
+          >
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="max-iterations">Max Iterations</Label>
                   <Input
@@ -419,72 +395,60 @@ export function ChatSettingsDialog({
                     }}
                     placeholder="Default"
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Maximum response length
-                  </p>
-                </div>
+                   <p className="text-xs text-muted-foreground">
+                     Maximum response length
+                   </p>
+                 </div>
               </div>
-            )}
-          </div>
+          </CollapsibleSection>
 
           {/* Tools Section - Collapsible */}
-          <div className="space-y-4">
-            <button
-              type="button"
-              onClick={() => setToolsExpanded(!toolsExpanded)}
-              className="flex items-center gap-2 w-full text-left"
-            >
-              {toolsExpanded ? (
-                <ChevronDown className="h-4 w-4 text-primary" />
-              ) : (
-                <ChevronRight className="h-4 w-4 text-primary" />
-              )}
-              <Label className="text-xs uppercase tracking-[0.15em] text-primary cursor-pointer">
-                Tool Servers
-              </Label>
+          <CollapsibleSection
+            title="Tool Servers"
+            expanded={toolsExpanded}
+            onToggle={() => setToolsExpanded(!toolsExpanded)}
+            headerExtra={
               <span className="text-xs text-muted-foreground">
                 ({localSettings.enabledTools.length} enabled)
               </span>
-            </button>
-
-            {toolsExpanded && (
-              isLoadingTools ? (
-                <div className="rounded-lg border border-border p-4 text-center text-sm text-muted-foreground">
-                  Loading available tools...
-                </div>
-              ) : toolServers.length === 0 ? (
-                <div className="rounded-lg border border-border p-4 text-center text-sm text-muted-foreground">
-                  No tool servers available
-                </div>
-              ) : (
-                <div className="space-y-3 rounded-lg border border-border p-4">
-                  {toolServers.map((server) => (
-                    <div
-                      key={server.name}
-                      className="flex items-center justify-between space-x-4"
-                    >
-                      <div className="flex-1 space-y-0.5">
-                        <Label
-                          htmlFor={`tool-${server.name}`}
-                          className="cursor-pointer font-medium"
-                        >
-                          {server.name}
-                        </Label>
-                        <p className="text-sm text-muted-foreground">
-                          {server.tools.length} tool{server.tools.length !== 1 ? 's' : ''} available ({server.type})
-                        </p>
-                      </div>
-                      <Switch
-                        id={`tool-${server.name}`}
-                        checked={localSettings.enabledTools.includes(server.name)}
-                        onCheckedChange={() => toggleTool(server.name)}
-                      />
+            }
+          >
+            {isLoadingTools ? (
+              <div className="rounded-lg border border-border p-4 text-center text-sm text-muted-foreground">
+                Loading available tools...
+              </div>
+            ) : toolServers.length === 0 ? (
+              <div className="rounded-lg border border-border p-4 text-center text-sm text-muted-foreground">
+                No tool servers available
+              </div>
+            ) : (
+              <div className="space-y-3 rounded-lg border border-border p-4">
+                {toolServers.map((server) => (
+                  <div
+                    key={server.name}
+                    className="flex items-center justify-between space-x-4"
+                  >
+                    <div className="flex-1 space-y-0.5">
+                      <Label
+                        htmlFor={`tool-${server.name}`}
+                        className="cursor-pointer font-medium"
+                      >
+                        {server.name}
+                      </Label>
+                      <p className="text-sm text-muted-foreground">
+                        {server.tools.length} tool{server.tools.length !== 1 ? 's' : ''} available ({server.type})
+                      </p>
                     </div>
-                  ))}
-                </div>
-              )
+                    <Switch
+                      id={`tool-${server.name}`}
+                      checked={localSettings.enabledTools.includes(server.name)}
+                      onCheckedChange={() => toggleTool(server.name)}
+                    />
+                  </div>
+                ))}
+              </div>
             )}
-          </div>
+          </CollapsibleSection>
         </div>
 
         {/* Footer Actions */}

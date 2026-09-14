@@ -1,5 +1,6 @@
 import { Plus, X } from "lucide-react";
 import { Button } from "./ui/button";
+import { EmptyState } from "./empty-state";
 import { SidebarItem } from "./sidebar-item";
 import type { Conversation } from "./sidebar";
 
@@ -72,9 +73,9 @@ export function SessionsTab({
         {isLoading ? (
           <div className="py-12 text-center cp-label opacity-40 animate-pulse">Syncing...</div>
         ) : filtered.length === 0 ? (
-          <div className="py-12 text-center cp-label opacity-20 italic">
+          <EmptyState>
             {activeWorkspaceId ? "No sessions bound to this node" : "No sessions found"}
-          </div>
+          </EmptyState>
         ) : (
           filtered.map((conversation) => {
             const isActive = currentConversationId === conversation.id;

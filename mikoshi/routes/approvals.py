@@ -1,9 +1,12 @@
+import logging
+
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from mikoshi.tools.manager import ToolManager
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class ApproveBody(BaseModel):
@@ -41,8 +44,9 @@ async def approve_tool(request: Request, approval_id: str, body: ApproveBody):
         return {"status": "approved", "result": str(result)}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to approve tool: {str(e)}")
+    except Exception:
+        logger.exception("Failed to approve tool %s", approval_id)
+        raise HTTPException(status_code=500, detail="Failed to approve tool")
 
 
 @router.post("/approvals/{approval_id}/deny")
@@ -55,5 +59,6 @@ async def deny_tool(request: Request, approval_id: str):
         return {"status": "denied"}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to deny tool: {str(e)}")
+    except Exception:
+        logger.exception("Failed to deny tool %s", approval_id)
+        raise HTTPException(status_code=500, detail="Failed to deny tool")

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Loader2 } from "lucide-react";
 import { WorkspaceTree } from "./workspace-tree";
+import { EmptyState } from "./empty-state";
 import { api, type FileNode } from "../lib/api";
 
 interface DataTabProps {
@@ -51,11 +52,7 @@ export function DataTab({
   }, [activeWorkspaceId, isTreeValid, onTreeUpdate]);
 
   if (!activeWorkspaceId) {
-    return (
-      <div className="py-12 text-center cp-label opacity-20 italic">
-        Select a node to access data.
-      </div>
-    );
+    return <EmptyState>Select a node to access data.</EmptyState>;
   }
 
   if (isLoading || !isTreeValid) {

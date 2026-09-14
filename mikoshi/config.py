@@ -148,6 +148,15 @@ class AppConfig(BaseModel):
     tracing: Optional[TracingConfig] = None
 
 
+def resolve_connector_token(
+    configs: Dict[str, ConnectorsConfig], connector_name: str
+) -> Optional[str]:
+    """Look up a connector's token, None when the connector (or its token)
+    isn't configured."""
+    cfg = configs.get(connector_name)
+    return cfg.token if cfg else None
+
+
 def load_config(path: str) -> AppConfig:
     with open(path, "r") as f:
         content = os.path.expandvars(f.read())

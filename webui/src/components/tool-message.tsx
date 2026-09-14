@@ -5,6 +5,7 @@ import ReactMarkdown from "react-markdown";
 import "highlight.js/styles/github-dark.css";
 import type { Message, PendingApproval } from "../lib/api";
 import { cyanMarkdownComponents, REMARK_PLUGINS, REHYPE_PLUGINS } from "../lib/markdown-components";
+import { CornerTriangle, MessageAvatar, Scanlines } from "./message-atoms";
 
 interface ToolMessageProps {
   message: Message;
@@ -55,28 +56,14 @@ export const ToolMessage = memo(function ToolMessage({
     <div
       className="group relative flex gap-4 px-4 py-3 sm:px-6 border overflow-hidden bg-cp-surface4 cp-cut-x-14 cp-hover-tool"
     >
-      <div
-        className="absolute top-0 right-0 w-[14px] h-[14px] opacity-30 cp-tri-bl"
-        style={{ background: 'var(--color-cp-cyan)' }}
-      />
+      <CornerTriangle position="bl" color="var(--color-cp-cyan)" size={14} opacity={0.3} />
 
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          backgroundImage: `repeating-linear-gradient(0deg, transparent, transparent 3px, rgb(var(--cp-rgb-yellow) / 0.012) 3px, rgb(var(--cp-rgb-yellow) / 0.012) 4px)`,
-        }}
-      />
+      <Scanlines />
 
-      <div className="flex-shrink-0 relative z-10">
-        <div
-          className="flex h-8 w-8 items-center justify-center cp-cut-8"
-          style={{
-            background: "rgb(var(--cp-rgb-cyan) / 0.1)",
-          }}
-        >
-          <Wrench className="h-4 w-4 text-cp-cyan/70" />
-        </div>
-      </div>
+      <MessageAvatar
+        background="rgb(var(--cp-rgb-cyan) / 0.1)"
+        icon={<Wrench className="h-4 w-4 text-cp-cyan/70" />}
+      />
       <div className="flex-1 space-y-2 overflow-hidden relative z-10">
         <div className="flex items-center gap-2">
           <p

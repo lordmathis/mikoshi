@@ -2,7 +2,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from mikoshi.git import GitService, GitTimeout
+from mikoshi.git import GitService, GitTimeout, auth_env, run_git
 
 
 def _svc() -> GitService:
@@ -38,16 +38,36 @@ class TestRunGitMethod:
             assert await _svc()._run_git(["x"]) == (True, "note")
 
 
-class TestHttpsAuthArgs:
+class TestAuthEnv:
+    def test_token_not_in_argv(self):
+        env = auth_env("sekrit")
+        # The token (base64 of x-access-token:sekrit) must travel in env
+        # values, never in a command-line argument.
+        assert "GIT_CONFIG_COUNT" in env
+        assert env["GIT_CONFIG_KEY_0"] == "http.extraHeader"
+        assert "Authorization: Basic" in env["GIT_CONFIG_VALUE_0"]
+
     @pytest.mark.asyncio
-    async def test_https_origin_returns_auth_args(self):
+    async def test_run_git_overlays_env_and_keeps_path(self, tmp_path):
+        # Real subprocess: proves git honors GIT_CONFIG_* env vars and that
+        # the overlay doesn't strip PATH (git itself must stay invocable).
+        rc, stdout, _ = await run_git(
+            ["config", "--get", "http.extraHeader"],
+            cwd=str(tmp_path),
+            env=auth_env("tok"),
+        )
+        assert rc == 0
+        assert stdout.strip().startswith("Authorization: Basic")
+
+    @pytest.mark.asyncio
+    async def test_https_origin_returns_auth_env(self):
         with patch(
             "mikoshi.git.run_git",
             new=AsyncMock(return_value=(0, "https://github.com/o/r\n", "")),
         ):
-            args = await _svc().https_auth_args("tok")
-        assert args[0] == "-c"
-        assert "Authorization: Basic" in args[1]
+            env = await _svc().https_auth_env("tok")
+        assert env["GIT_CONFIG_KEY_0"] == "http.extraHeader"
+        assert "Authorization: Basic" in env["GIT_CONFIG_VALUE_0"]
 
     @pytest.mark.asyncio
     async def test_ssh_origin_returns_empty(self):
@@ -55,13 +75,28 @@ class TestHttpsAuthArgs:
             "mikoshi.git.run_git",
             new=AsyncMock(return_value=(0, "git@github.com:o/r.git\n", "")),
         ):
-            assert await _svc().https_auth_args("tok") == []
+            assert await _svc().https_auth_env("tok") == {}
 
     @pytest.mark.asyncio
     async def test_no_token_returns_empty_without_git_call(self):
         with patch("mikoshi.git.run_git", new=AsyncMock()) as mock_run:
-            assert await _svc().https_auth_args(None) == []
+            assert await _svc().https_auth_env(None) == {}
             mock_run.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_pull_passes_auth_env_through(self):
+        captured = {}
+
+        async def fake_run_git(args, cwd=None, env=None, timeout=30):
+            captured["args"] = args
+            captured["env"] = env
+            return 0, "ok", ""
+
+        with patch("mikoshi.git.run_git", side_effect=fake_run_git):
+            result = await _svc().pull({"GIT_CONFIG_COUNT": "1"})
+        assert result.success is True
+        assert captured["args"] == ["pull"]
+        assert captured["env"] == {"GIT_CONFIG_COUNT": "1"}
 
 
 class TestStatusParsing:

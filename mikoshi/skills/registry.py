@@ -79,10 +79,13 @@ class Skill:
             return []
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert skill to dictionary representation."""
+        """Convert skill to dictionary representation.
+
+        Deliberately excludes the on-disk path: it's a server-internal
+        detail that would leak filesystem layout to API clients.
+        """
         return {
             "name": self.name,
-            "path": str(self.path),
             "exists": self.exists,
             "required_tool_servers": self.get_required_tool_servers(),
         }

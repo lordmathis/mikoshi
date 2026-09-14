@@ -19,6 +19,20 @@ def auth_header_value(token: str) -> str:
     return f"Authorization: Basic {encoded}"
 
 
+def auth_env(token: str) -> dict[str, str]:
+    """Git config for HTTPS token auth, passed via the environment.
+
+    Equivalent to `git -c http.extraHeader=...`, but env vars are only
+    readable by the owning user, unlike `/proc/<pid>/cmdline` which is
+    world-readable.
+    """
+    return {
+        "GIT_CONFIG_COUNT": "1",
+        "GIT_CONFIG_KEY_0": "http.extraHeader",
+        "GIT_CONFIG_VALUE_0": auth_header_value(token),
+    }
+
+
 class GitTimeout(Exception):
     """git subprocess exceeded its timeout and was killed."""
 
@@ -29,7 +43,15 @@ async def run_git(
     env: dict | None = None,
     timeout: float = 30,
 ) -> tuple[int, str, str]:
-    """Run git asynchronously. Returns (returncode, stdout, stderr)."""
+    """Run git asynchronously. Returns (returncode, stdout, stderr).
+
+    ``env`` entries are overlaid on the current environment, not a
+    replacement for it.
+    """
+    if env:
+        full_env = os.environ.copy()
+        full_env.update(env)
+        env = full_env
     proc = await asyncio.create_subprocess_exec(
         "git",
         *args,
@@ -84,14 +106,14 @@ class GitService:
         output = stdout.strip()
         return True, output if output else stderr.strip() or "(no output)"
 
-    async def https_auth_args(self, token: str | None) -> list[str]:
-        """Git -c args for HTTPS token auth, if the origin remote is https."""
+    async def https_auth_env(self, token: str | None) -> dict[str, str]:
+        """Env vars for HTTPS token auth, if the origin remote is https."""
         if not token:
-            return []
+            return {}
         ok, url = await self._run_git(["remote", "get-url", "origin"], timeout=10)
         if ok and url.startswith("https://"):
-            return ["-c", f"http.extraHeader={auth_header_value(token)}"]
-        return []
+            return auth_env(token)
+        return {}
 
     async def status(self) -> GitStatus:
         ok, output = await self._run_git(["status", "--porcelain"])
@@ -132,21 +154,20 @@ class GitService:
         if not ok:
             return GitResult(False, f"Error staging files: {output}")
 
-        env = os.environ.copy()
-        env["GIT_AUTHOR_NAME"] = git_user_name
-        env["GIT_AUTHOR_EMAIL"] = git_user_email
-        env["GIT_COMMITTER_NAME"] = git_user_name
-        env["GIT_COMMITTER_EMAIL"] = git_user_email
+        env = {
+            "GIT_AUTHOR_NAME": git_user_name,
+            "GIT_AUTHOR_EMAIL": git_user_email,
+            "GIT_COMMITTER_NAME": git_user_name,
+            "GIT_COMMITTER_EMAIL": git_user_email,
+        }
 
         ok, output = await self._run_git(["commit", "-m", message], env=env)
         return GitResult(ok, output)
 
-    async def pull(self, auth_args: list[str] | None = None) -> GitResult:
-        args = (auth_args or []) + ["pull"]
-        ok, output = await self._run_git(args, timeout=120)
+    async def pull(self, auth_env_vars: dict[str, str] | None = None) -> GitResult:
+        ok, output = await self._run_git(["pull"], timeout=120, env=auth_env_vars)
         return GitResult(ok, output)
 
-    async def push(self, auth_args: list[str] | None = None) -> GitResult:
-        args = (auth_args or []) + ["push"]
-        ok, output = await self._run_git(args, timeout=120)
+    async def push(self, auth_env_vars: dict[str, str] | None = None) -> GitResult:
+        ok, output = await self._run_git(["push"], timeout=120, env=auth_env_vars)
         return GitResult(ok, output)

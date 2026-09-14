@@ -5,7 +5,7 @@ import uuid
 from contextlib import AsyncExitStack
 from typing import Any, Dict, List, Optional
 
-from mikoshi.config import AppConfig
+from mikoshi.config import AppConfig, resolve_connector_token
 from mikoshi.db.db import Database
 from mikoshi.plugins import discover_plugins
 from mikoshi.providers import Provider, ProviderRegistry
@@ -99,8 +99,7 @@ class ToolManager:
         return get_persistent_storage(self._data_dir, tool_server_name)
 
     def get_connector_token(self, connector_name: str) -> str | None:
-        cfg = self._connectors_config.get(connector_name)
-        return cfg.token if cfg else None
+        return resolve_connector_token(self._connectors_config, connector_name)
 
     def get_provider(self, name: str) -> Provider | None:
         return self._provider_registry.get_provider(name)

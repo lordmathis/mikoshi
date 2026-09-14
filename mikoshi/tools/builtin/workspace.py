@@ -10,6 +10,7 @@ from mikoshi.git import GitService, GitTimeout, run_git
 from mikoshi.tools.context import ToolCallContext
 from mikoshi.tools.edit_utils import EditError, apply_edits
 from mikoshi.tools.toolset_handler import ToolSetHandler, tool
+from mikoshi.workspace import walk_files
 
 logger = logging.getLogger(__name__)
 
@@ -41,14 +42,15 @@ IMAGE_EXTENSIONS = {
 
 
 def _resolve_root(context: ToolCallContext) -> str:
-    ws = context.workspace
-    return os.path.realpath(os.path.join(ws.data_dir, "workspaces", ws.workspace_id))
+    return context.workspace.root
 
 
 def _resolve_path(root: str, path: str) -> str:
     full = os.path.realpath(os.path.join(root, path))
-    if not full.startswith(root):
-        raise ValueError("Path traversal detected")
+    # Separator boundary: a plain startswith(root) would also accept
+    # sibling dirs like `<root>evil`.
+    if full != root and not full.startswith(root + os.sep):
+        raise ValueError("Path is outside the workspace")
     return full
 
 
@@ -103,18 +105,14 @@ def _truncate_output(
 
 def _collect_files(search_root: str, glob_pattern: str | None = None) -> list[str]:
     files = []
-    for dirpath, dirnames, filenames in os.walk(search_root):
-        if ".git" in dirnames:
-            dirnames.remove(".git")
-        for filename in filenames:
-            full_path = os.path.join(dirpath, filename)
-            if glob_pattern:
-                rel = os.path.relpath(full_path, search_root)
-                if not fnmatch.fnmatch(rel, glob_pattern) and not fnmatch.fnmatch(
-                    filename, glob_pattern
-                ):
-                    continue
-            files.append(full_path)
+    for full_path in walk_files(search_root):
+        if glob_pattern:
+            rel = os.path.relpath(full_path, search_root)
+            if not fnmatch.fnmatch(rel, glob_pattern) and not fnmatch.fnmatch(
+                os.path.basename(full_path), glob_pattern
+            ):
+                continue
+        files.append(full_path)
     return files
 
 
@@ -602,18 +600,18 @@ class WorkspaceTools(ToolSetHandler):
         root = _require_workspace(context)
         return GitService(root, context.workspace.workspace_id)
 
-    async def _get_auth_git_args(self, context: ToolCallContext) -> list[str]:
+    async def _get_auth_env(self, context: ToolCallContext) -> dict[str, str]:
         if not context.workspace:
-            return []
+            return {}
         ws = context.workspace
         token = None
         if ws.connector and self._tool_manager:
             token = self._tool_manager.get_connector_token(ws.connector)
         if not token:
-            return []
+            return {}
 
         svc = self._get_git_service(context)
-        return await svc.https_auth_args(token)
+        return await svc.https_auth_env(token)
 
     @tool(
         description="Show the git status of the workspace.",
@@ -681,8 +679,8 @@ class WorkspaceTools(ToolSetHandler):
         if not _has_git_repo(root):
             return "No git repository in this workspace."
         svc = self._get_git_service(context)
-        auth_args = await self._get_auth_git_args(context)
-        result = await svc.pull(auth_args)
+        auth_env_vars = await self._get_auth_env(context)
+        result = await svc.pull(auth_env_vars)
         if not result.success:
             return result.output
         return _workspace_result(result.output)
@@ -699,6 +697,6 @@ class WorkspaceTools(ToolSetHandler):
         if not _has_git_repo(root):
             return "No git repository in this workspace."
         svc = self._get_git_service(context)
-        auth_args = await self._get_auth_git_args(context)
-        result = await svc.push(auth_args)
+        auth_env_vars = await self._get_auth_env(context)
+        result = await svc.push(auth_env_vars)
         return result.output

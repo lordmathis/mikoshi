@@ -20,6 +20,23 @@ from mikoshi.db.models import (
 )
 
 
+def loads_json_field(raw: Optional[str], default):
+    """Parse a JSON column, falling back to `default` when NULL/empty."""
+    return json.loads(raw) if raw else default
+
+
+def _serialize_approval(a: PendingToolApproval) -> Dict:
+    return {
+        "id": a.id,
+        "chat_id": a.chat_id,
+        "message_id": a.message_id,
+        "tool_name": a.tool_name,
+        "arguments": a.arguments,
+        "status": a.status,
+        "created_at": a.created_at,
+    }
+
+
 class Database:
     def __init__(self, db_path: str):
         self.engine = create_engine(
@@ -197,12 +214,8 @@ class Database:
             return {
                 "model": chat.model,
                 "system_prompt": chat.system_prompt,
-                "tool_servers": json.loads(chat.tool_servers)
-                if chat.tool_servers
-                else [],
-                "model_params": json.loads(chat.model_params)
-                if chat.model_params
-                else None,
+                "tool_servers": loads_json_field(chat.tool_servers, []),
+                "model_params": loads_json_field(chat.model_params, None),
             }
 
     def get_chat_state(self, chat_id: str) -> Dict:
@@ -434,18 +447,7 @@ class Database:
             )
             result = session.execute(stmt)
             approvals = result.scalars().all()
-            return [
-                {
-                    "id": a.id,
-                    "chat_id": a.chat_id,
-                    "message_id": a.message_id,
-                    "tool_name": a.tool_name,
-                    "arguments": a.arguments,
-                    "status": a.status,
-                    "created_at": a.created_at,
-                }
-                for a in approvals
-            ]
+            return [_serialize_approval(a) for a in approvals]
 
     def get_approval_by_id(self, approval_id: str) -> Optional[Dict]:
         """Get a single approval record by ID"""
@@ -453,15 +455,7 @@ class Database:
             approval = session.get(PendingToolApproval, approval_id)
             if not approval:
                 return None
-            return {
-                "id": approval.id,
-                "chat_id": approval.chat_id,
-                "message_id": approval.message_id,
-                "tool_name": approval.tool_name,
-                "arguments": approval.arguments,
-                "status": approval.status,
-                "created_at": approval.created_at,
-            }
+            return _serialize_approval(approval)
 
     def update_approval_status(self, approval_id: str, status: str):
         """Update approval status to 'approved' or 'denied'"""

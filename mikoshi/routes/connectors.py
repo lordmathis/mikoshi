@@ -13,7 +13,7 @@ router = APIRouter(prefix="/connectors")
 logger = logging.getLogger(__name__)
 
 
-class EstimateTokensRequest(BaseModel):
+class RepoPathsRequest(BaseModel):
     repo: str
     paths: List[str]
     exclude_paths: Optional[List[str]] = None
@@ -22,12 +22,6 @@ class EstimateTokensRequest(BaseModel):
 class Connector(BaseModel):
     name: str
     type: str
-
-
-class FilesRequest(BaseModel):
-    repo: str
-    paths: List[str]
-    exclude_paths: Optional[List[str]] = None
 
 
 def _get_connector(request: Request, name: str):
@@ -79,10 +73,9 @@ async def list_repositories(request: Request, connector: str):
     try:
         repos = await client.list_repositories()
         return {"repositories": repos}
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to list repositories: {str(e)}"
-        )
+    except Exception:
+        logger.exception("Failed to list repositories for connector %s", connector)
+        raise HTTPException(status_code=500, detail="Failed to list repositories")
 
 
 @router.get("/tree")
@@ -100,13 +93,16 @@ async def browse_tree(request: Request, connector: str, repo: str, path: str = "
     try:
         tree = await client.browse_tree(repo, path)
         return tree.model_dump()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to browse tree: {str(e)}")
+    except Exception:
+        logger.exception(
+            "Failed to browse tree %s:%s via connector %s", repo, path, connector
+        )
+        raise HTTPException(status_code=500, detail="Failed to browse tree")
 
 
 @router.post("/estimate")
 async def estimate_tokens(
-    request: Request, connector: str, body: EstimateTokensRequest
+    request: Request, connector: str, body: RepoPathsRequest
 ):
     """
     Estimate token count for files from a repository.
@@ -142,15 +138,15 @@ async def estimate_tokens(
         estimate = await client.estimate_tokens(body.repo, all_file_paths)
         logger.info(f"Token estimate: {estimate.total_tokens}")
         return estimate.model_dump()
-    except Exception as e:
-        logger.error(f"Failed to estimate tokens: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to estimate tokens: {str(e)}"
-        )
+    except Exception:
+        logger.exception("Failed to estimate tokens for repo %s", body.repo)
+        raise HTTPException(status_code=500, detail="Failed to estimate tokens")
 
 
 @router.post("/files", response_model=List[FileResponse])
-async def fetch_repository_files(request: Request, connector: str, body: FilesRequest):
+async def fetch_repository_files(
+    request: Request, connector: str, body: RepoPathsRequest
+):
     """Fetch files from repository server-side, store to disk, and return their metadata."""
     client = _get_connector(request, connector)
 
@@ -158,13 +154,12 @@ async def fetch_repository_files(request: Request, connector: str, body: FilesRe
         file_paths = await _expand_paths_to_files(
             client, body.repo, body.paths, body.exclude_paths or []
         )
-    except Exception as e:
-        logger.error(f"Failed to expand repository paths: {e}")
-        raise HTTPException(
-            status_code=400, detail=f"Failed to expand repository paths: {e}"
-        )
+    except Exception:
+        logger.exception("Failed to expand paths for repo %s", body.repo)
+        raise HTTPException(status_code=400, detail="Failed to expand repository paths")
 
     db: Database = request.app.state.database
+    uploads_root = request.app.state.app_config.uploads_dir
     source_str = f"{client.type}:{body.repo}"
     result = []
     for path in file_paths:
@@ -172,7 +167,9 @@ async def fetch_repository_files(request: Request, connector: str, body: FilesRe
             content = await client.get_file_content(body.repo, path)
             filename = os.path.basename(path)
 
-            file_obj = save_upload_file(db, filename, content, source=source_str)
+            file_obj = save_upload_file(
+                db, filename, content, source=source_str, uploads_root=uploads_root
+            )
 
             result.append(
                 FileResponse(
@@ -183,11 +180,11 @@ async def fetch_repository_files(request: Request, connector: str, body: FilesRe
                 )
             )
 
-        except Exception as e:
-            logger.error(f"Failed to download and save repository file {path}: {e}")
+        except Exception:
+            logger.exception("Failed to download repository file %s", path)
             raise HTTPException(
                 status_code=500,
-                detail=f"Failed to download repository file {path}: {e}",
+                detail=f"Failed to download repository file {path}",
             )
 
     return result

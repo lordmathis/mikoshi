@@ -9,7 +9,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from mikoshi.agents.manager import AgentManager
-from mikoshi.agents.streaming import STREAM_DONE, StreamEvent
+from mikoshi.agents.streaming import STREAM_DONE, StreamEvent, error_event
 from mikoshi.routes.schemas import serialize_chat
 from mikoshi.tasks import create_background_task
 
@@ -62,7 +62,7 @@ async def _run_with_done_guard(coro, hub: StreamHub, chat_id: str):
         logger.error(
             "chat_id=%s stream task failed outside _loop: %s", chat_id, e, exc_info=True
         )
-        await hub.put(StreamEvent(type="error", data={"message": str(e)}))
+        await hub.put(error_event(str(e)))
     finally:
         await hub.put(STREAM_DONE)
         _active_streams.pop(chat_id, None)
@@ -132,6 +132,22 @@ def _collect_message_files(database, messages) -> dict:
     return database.get_files(all_file_ids)
 
 
+def _create_agent_with_compensation(
+    agent_manager: AgentManager, database, chat_id: str, config: dict
+):
+    """Create the agent for a freshly created chat row, deleting the chat
+    again if hydration fails so no half-configured chat survives."""
+    try:
+        agent_manager.create(chat_id=chat_id, config=config)
+    except ValueError as e:
+        database.delete_chat(chat_id)
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        database.delete_chat(chat_id)
+        logger.exception("Failed to create agent for chat %s", chat_id)
+        raise HTTPException(status_code=500, detail="Failed to create agent")
+
+
 router = APIRouter()
 
 
@@ -180,14 +196,9 @@ async def create_chat(request: Request, body: CreateChatRequest):
 
     chat = database.create_chat(title=body.title, workspace_id=body.workspace_id)
 
-    try:
-        agent_manager.create(chat_id=chat.id, config=body.config.model_dump())
-    except ValueError as e:
-        database.delete_chat(chat.id)
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        database.delete_chat(chat.id)
-        raise HTTPException(status_code=500, detail=f"Failed to create agent: {str(e)}")
+    _create_agent_with_compensation(
+        agent_manager, database, chat.id, body.config.model_dump()
+    )
 
     updated_chat = database.get_chat(chat.id)
     return serialize_chat(updated_chat)
@@ -252,10 +263,9 @@ async def update_chat(request: Request, chat_id: str, body: UpdateChatRequest):
             agent_manager.create(chat_id=chat_id, config=body.config.model_dump())
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
-        except Exception as e:
-            raise HTTPException(
-                status_code=500, detail=f"Failed to update agent: {str(e)}"
-            )
+        except Exception:
+            logger.exception("Failed to update agent for chat %s", chat_id)
+            raise HTTPException(status_code=500, detail="Failed to update agent")
 
     updated_chat = database.update_chat(chat_id, **update_kwargs)
     if not updated_chat:
@@ -283,22 +293,15 @@ async def branch_chat(request: Request, chat_id: str, body: BranchChatRequest):
         )
 
     try:
-        config = {
-            "model": branched_chat.model,
-            "system_prompt": branched_chat.system_prompt,
-            "tool_servers": json.loads(branched_chat.tool_servers)
-            if branched_chat.tool_servers
-            else None,
-            "model_params": json.loads(branched_chat.model_params)
-            if branched_chat.model_params
-            else None,
-        }
-        agent_manager.create(chat_id=branched_chat.id, config=config)
-    except Exception as e:
+        config = database.get_chat_config(branched_chat.id)
+    except Exception:
         database.delete_chat(branched_chat.id)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to create agent for branch: {str(e)}"
-        )
+        logger.exception("Failed to read config for branch %s", branched_chat.id)
+        raise HTTPException(status_code=500, detail="Failed to create agent for branch")
+
+    _create_agent_with_compensation(
+        agent_manager, database, branched_chat.id, config
+    )
 
     messages = database.get_chat_history(branched_chat.id)
     files_by_id = _collect_message_files(database, messages)
