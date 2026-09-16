@@ -152,6 +152,13 @@ export function ChatView() {
     sidebar.setActiveTab("data");
   };
 
+  const handleSelectWorkspace = (id: string | null) => {
+    sidebar.setActiveWorkspace(id);
+    if (id) {
+      sidebar.setActiveTab("data");
+    }
+  };
+
   const handleSidebarTreeUpdate = useCallback((tree: FileNode) => {
     setSidebarWorkspaceTree(tree);
     setTreeWorkspaceId(activeWorkspaceIdRef.current);
@@ -186,7 +193,7 @@ export function ChatView() {
         activeTab={sidebar.activeTab}
         onTabChange={sidebar.setActiveTab}
         activeWorkspaceId={sidebar.activeWorkspaceId}
-        onSelectWorkspace={sidebar.setActiveWorkspace}
+        onSelectWorkspace={handleSelectWorkspace}
         workspaceTree={sidebarWorkspaceTree}
         treeWorkspaceId={treeWorkspaceId}
         onWorkspaceTreeUpdate={handleSidebarTreeUpdate}
