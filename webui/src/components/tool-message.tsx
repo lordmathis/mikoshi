@@ -82,6 +82,7 @@ export const ToolMessage = memo(function ToolMessage({
         {pendingApproval ? (
           <ApprovalControls
             toolName={pendingApproval.tool_name}
+            args={pendingApproval.arguments}
             resolving={resolving}
             onApprove={handleApprove}
             onDeny={handleDeny}
@@ -135,18 +136,45 @@ export const ToolMessage = memo(function ToolMessage({
 
 interface ApprovalControlsProps {
   toolName: string;
+  args?: Record<string, any>;
   resolving: "once" | "always" | "deny" | null;
   onApprove: (scope: "once" | "always") => void;
   onDeny: () => void;
 }
 
-function ApprovalControls({ toolName, resolving, onApprove, onDeny }: ApprovalControlsProps) {
+function formatToolArguments(args: Record<string, any>): string {
+  return Object.entries(args)
+    .map(([key, value]) =>
+      typeof value === "string" ? `${key}: ${value}` : `${key}: ${JSON.stringify(value)}`
+    )
+    .join("\n");
+}
+
+function ApprovalControls({ toolName, args, resolving, onApprove, onDeny }: ApprovalControlsProps) {
+  const hasArgs = args && Object.keys(args).length > 0;
+
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2 cp-label" style={{ color: 'var(--color-cp-yellow)' }}>
         <ShieldCheck className="h-4 w-4" />
         <span>Approval required: {toolName}</span>
       </div>
+      {hasArgs && (
+        <div
+          className="border p-3 cp-cut-10 max-h-48 overflow-y-auto"
+          style={{
+            borderColor: 'rgb(var(--cp-rgb-yellow) / 0.3)',
+            background: 'rgb(var(--cp-rgb-yellow) / 0.05)',
+          }}
+        >
+          <pre
+            className="font-mono text-xs whitespace-pre-wrap break-words"
+            style={{ color: 'var(--color-cp-text-warm)' }}
+          >
+            {formatToolArguments(args)}
+          </pre>
+        </div>
+      )}
       <div className="flex flex-wrap gap-2">
         <button
           onClick={() => onApprove("once")}
