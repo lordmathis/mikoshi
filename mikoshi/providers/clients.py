@@ -133,7 +133,7 @@ class OpenAIClient(LLMClient):
 
         if self._service_tier:
             api_params["service_tier"] = self._service_tier
-            api_params["background"] = True
+            api_params["extra_body"] = {"background": True}
 
         response = await self.client.chat.completions.create(**api_params)
         if self._service_tier:
@@ -147,17 +147,28 @@ class OpenAIClient(LLMClient):
             response.id,
             self._service_tier,
         )
-        while response.status in self._ACTIVE_STATUSES:
+        while self._background_status(response) in self._ACTIVE_STATUSES:
             await asyncio.sleep(self._POLL_INTERVAL_SECONDS)
             response = await self.client.chat.completions.retrieve(response.id)
-        logger.info("Background completion %s ended with status=%s", response.id, response.status)
-        if response.status in ("failed", "cancelled"):
+        status = self._background_status(response)
+        logger.info(
+            "Background completion %s ended with status=%s", response.id, status
+        )
+        if status in ("failed", "cancelled"):
             # Raise non-retryable: agent-loop retries would resubmit and
             # re-bill the job.
             raise RuntimeError(
-                f"Background completion {response.id} ended with status '{response.status}'"
+                f"Background completion {response.id} ended with status '{status}'"
             )
         return response
+
+    @staticmethod
+    def _background_status(response: Any) -> Optional[str]:
+        # The SDK's ChatCompletion has no status field; when the provider
+        status = getattr(response, "status", None)
+        if status is not None:
+            return status
+        return "completed" if response.choices else "in_progress"
 
     async def create_embedding(self, model: str, input: str) -> Optional[List[float]]:
         """Create an embedding vector using the OpenAI-compatible embeddings API."""

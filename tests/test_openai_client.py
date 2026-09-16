@@ -17,7 +17,16 @@ def _completion(status, text="hello"):
             }
         ],
     }
-    return SimpleNamespace(id="chatcmpl_1", status=status, model_dump=lambda: body)
+    return SimpleNamespace(
+        id="chatcmpl_1",
+        status=status,
+        choices=body["choices"],
+        model_dump=lambda: body,
+    )
+
+
+def _queued_stub(status=None):
+    return SimpleNamespace(id="chatcmpl_1", status=status, choices=[])
 
 
 def _native_client(create_response, retrieve_responses):
@@ -43,7 +52,7 @@ class TestBackgroundPolling:
             model="test-model",
             messages=[{"role": "user", "content": "hi"}],
             service_tier="flex",
-            background=True,
+            extra_body={"background": True},
         )
         assert native.chat.completions.retrieve.await_count == 2
         native.chat.completions.retrieve.assert_awaited_with("chatcmpl_1")
@@ -70,6 +79,29 @@ class TestBackgroundPolling:
         native.chat.completions.retrieve.assert_not_awaited()
         assert result["choices"][0]["message"]["content"] == "hello"
 
+    @pytest.mark.asyncio
+    async def test_statusless_stub_polled_until_choices_arrive(self, _sleep):
+        native = _native_client(
+            _queued_stub(),
+            [_queued_stub(), _completion(None)],
+        )
+        client = OpenAIClient(native, service_tier="flex")
+
+        result = await client.chat_completion("test-model", [{"role": "user", "content": "hi"}])
+
+        assert native.chat.completions.retrieve.await_count == 2
+        assert result["choices"][0]["message"]["content"] == "hello"
+
+    @pytest.mark.asyncio
+    async def test_blocking_response_without_status_skips_polling(self, _sleep):
+        native = _native_client(_completion(None), [])
+        client = OpenAIClient(native, service_tier="flex")
+
+        result = await client.chat_completion("test-model", [{"role": "user", "content": "hi"}])
+
+        native.chat.completions.retrieve.assert_not_awaited()
+        assert result["choices"][0]["message"]["content"] == "hello"
+
 
 class TestRealtimePath:
     @pytest.mark.asyncio
@@ -81,4 +113,4 @@ class TestRealtimePath:
 
         kwargs = native.chat.completions.create.await_args.kwargs
         assert "service_tier" not in kwargs
-        assert "background" not in kwargs
+        assert "extra_body" not in kwargs
