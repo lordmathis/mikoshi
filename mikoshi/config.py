@@ -29,6 +29,9 @@ class ProviderConfig(BaseModel):
     api_key: Optional[str] = None
     api_base: Optional[str] = None
     type: ProviderType = ProviderType.OPENAI
+    # When set (e.g. "flex"), chat completions run on the provider's async
+    # tier via background mode: submit, then poll until the result is ready.
+    service_tier: Optional[str] = None
 
 
 class ServerConfig(BaseModel):

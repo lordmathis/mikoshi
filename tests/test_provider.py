@@ -162,6 +162,15 @@ class TestGetLlmClient:
         assert c1 is c2
         mock_async.assert_called_once_with(api_key="key", base_url="http://localhost:8080")
 
+    @patch("mikoshi.providers.provider.AsyncOpenAI")
+    @patch("mikoshi.providers.provider.OpenAIClient")
+    def test_openai_service_tier_passed_through(self, mock_cls, mock_async):
+        p = _provider(api_key="key", service_tier="flex")
+        p.get_llm_client()
+        mock_cls.assert_called_once_with(
+            mock_async.return_value, service_tier="flex"
+        )
+
     @patch("mikoshi.providers.provider.AsyncAnthropic")
     @patch("mikoshi.providers.provider.AnthropicClient")
     def test_anthropic_branch(self, mock_cls, mock_async):

@@ -32,7 +32,9 @@ class Provider:
 
             else:
                 native_client = AsyncOpenAI(**kwargs)
-                self._llm_client = OpenAIClient(native_client)
+                self._llm_client = OpenAIClient(
+                    native_client, service_tier=self.config.service_tier
+                )
 
         return self._llm_client
 

@@ -1,5 +1,6 @@
 """Base class and implementations for different LLM API clients."""
 
+import asyncio
 import json
 import logging
 import time
@@ -88,13 +89,19 @@ class LLMClient(ABC):
 class OpenAIClient(LLMClient):
     """Client for OpenAI-compatible APIs."""
 
-    def __init__(self, client: Any):
+    _POLL_INTERVAL_SECONDS = 2.0
+    _ACTIVE_STATUSES = ("queued", "in_progress")
+
+    def __init__(self, client: Any, service_tier: Optional[str] = None):
         """Initialize with an OpenAI client instance.
 
         Args:
-            client: openai.OpenAI instance
+            client: openai.AsyncOpenAI instance
+            service_tier: when set (e.g. "flex"), completions run on the
+                provider's async tier in background mode
         """
         self.client = client
+        self._service_tier = service_tier
 
     async def get_models(self) -> List[Dict[str, Any]]:
         """Fetch available models using the async client."""
@@ -124,8 +131,33 @@ class OpenAIClient(LLMClient):
         if tools:
             api_params["tools"] = tools
 
+        if self._service_tier:
+            api_params["service_tier"] = self._service_tier
+            api_params["background"] = True
+
         response = await self.client.chat.completions.create(**api_params)
+        if self._service_tier:
+            response = await self._poll_background(response)
         return response.model_dump()
+
+    async def _poll_background(self, response: Any) -> Any:
+        """Poll a background-mode completion until it reaches a terminal state."""
+        logger.info(
+            "Background completion %s submitted (service_tier=%s)",
+            response.id,
+            self._service_tier,
+        )
+        while response.status in self._ACTIVE_STATUSES:
+            await asyncio.sleep(self._POLL_INTERVAL_SECONDS)
+            response = await self.client.chat.completions.retrieve(response.id)
+        logger.info("Background completion %s ended with status=%s", response.id, response.status)
+        if response.status in ("failed", "cancelled"):
+            # Raise non-retryable: agent-loop retries would resubmit and
+            # re-bill the job.
+            raise RuntimeError(
+                f"Background completion {response.id} ended with status '{response.status}'"
+            )
+        return response
 
     async def create_embedding(self, model: str, input: str) -> Optional[List[float]]:
         """Create an embedding vector using the OpenAI-compatible embeddings API."""
