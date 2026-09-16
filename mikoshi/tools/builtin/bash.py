@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from typing import Any, Dict
+import os
 
 from mikoshi.tools.context import ToolCallContext
 from mikoshi.tools.toolset_handler import ToolSetHandler, tool
@@ -38,15 +39,7 @@ class BashTools(ToolSetHandler):
     ) -> Dict[str, Any]:
         """Execute a bash command and return the output"""
         try:
-            if not context.workspace:
-                return {
-                    "success": False,
-                    "error": "No workspace linked to this chat.",
-                    "command": command,
-                }
-
-            working_dir = context.workspace.root
-
+            working_dir = context.workspace.root if context.workspace else os.getcwd()
             logger.info(f"Executing bash command in {working_dir}: {command}")
 
             process = await asyncio.create_subprocess_shell(
