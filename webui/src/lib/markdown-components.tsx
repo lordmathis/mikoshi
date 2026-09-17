@@ -1,7 +1,7 @@
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
 import rehypeHighlight from "rehype-highlight";
-import { Mermaid } from "../components/mermaid";
+import { Mermaid } from "./mermaid.tsx";
 
 export const REMARK_PLUGINS: any[] = [remarkGfm, remarkBreaks];
 export const REHYPE_PLUGINS: any[] = [[rehypeHighlight, { ignoreMissing: true }]];

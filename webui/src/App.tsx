@@ -1,4 +1,4 @@
-import { ChatView } from "./components/chat-view";
+import { ChatView } from "./chat/chat-view.tsx";
 
 function App() {
   return <ChatView />;
