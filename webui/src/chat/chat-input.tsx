@@ -1,5 +1,5 @@
-import { Send, Bot, Zap, Plus, Upload, Link as LinkIcon, Mic, Square, FileText, Slash, X } from "lucide-react";
-import { useEffect, useState, useCallback } from "react";
+import { Send, Bot, Zap, Plus, Upload, Link as LinkIcon, Mic, Square, File, FileText, Slash, X } from "lucide-react";
+import { useEffect, useState, useCallback, useRef, type ReactNode } from "react";
 import { Button } from "../ui/button.tsx";
 import { Textarea } from "../ui/textarea.tsx";
 import {
@@ -10,12 +10,10 @@ import {
 } from "../ui/dropdown-menu.tsx";
 import { ChatSettingsDialog, type ChatSettings } from "./chat-settings-dialog.tsx";
 import { Chip } from "../shared/chip.tsx";
-import { FileAttachments } from "./file-attachments.tsx";
 import { getToolLabel, formatModelLabel } from "../lib/formatters.ts";
 import { useVoiceRecording } from "./use-voice-recording.ts";
 import { useMentionTrigger } from "./use-mention-trigger.ts";
-import { MentionDropdown } from "./mention-dropdown.tsx";
-import { api, type Skill, type ConnectorEntry } from "../lib/api.ts";
+import { api, type Skill, type ConnectorEntry, type FileResource } from "../lib/api.ts";
 
 interface ChatInputProps {
   inputValue: string;
@@ -29,7 +27,7 @@ interface ChatInputProps {
   currentConversationId: string | undefined;
   chatSettings: ChatSettings;
   onSettingsChange: (settings: ChatSettings) => void;
-  uploadedFiles: import('../lib/api.ts').FileResource[];
+  uploadedFiles: FileResource[];
   connectorEntries: ConnectorEntry[];
   onRemoveFile: (fileId: string) => void;
   onRemoveConnectorEntry: (connectorId: string, resourceId: string) => void;
@@ -405,5 +403,184 @@ export function ChatInput({
         </p>
       </div>
     </div>
+  );
+}
+
+function FileAttachments({
+  uploadedFiles,
+  connectorEntries,
+  onRemoveFile,
+  onRemoveConnectorEntry,
+  onEditConnectorEntry,
+}: {
+  uploadedFiles: FileResource[];
+  connectorEntries: ConnectorEntry[];
+  onRemoveFile: (fileId: string) => void;
+  onRemoveConnectorEntry: (connectorId: string, resourceId: string) => void;
+  onEditConnectorEntry: (connectorId: string, resourceId: string) => void;
+}) {
+  if (uploadedFiles.length === 0 && connectorEntries.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-2">
+      {uploadedFiles.map((f, index) => (
+        <Chip
+          key={`${f.id}-${index}`}
+          className="text-xs"
+          style={{
+            borderColor: "rgb(var(--cp-rgb-yellow) / 0.2)",
+            background: "rgb(var(--cp-rgb-yellow) / 0.06)",
+          }}
+          icon={<File className="h-3.5 w-3.5 text-primary/70" />}
+          label={f.filename}
+          labelClassName="text-primary font-medium"
+          actions={
+            <button
+              onClick={() => onRemoveFile(f.id)}
+              className="ml-1 hover:text-[var(--color-cp-red)] transition-colors"
+              aria-label={`Remove ${f.filename}`}
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          }
+        />
+      ))}
+
+      {connectorEntries.map((entry) => {
+        const label = entry.resourceId.includes('/')
+          ? entry.resourceId.split('/')[1]
+          : entry.resourceId;
+
+        return (
+          <Chip
+            key={`${entry.connectorId}-${entry.resourceId}`}
+            className="text-xs"
+            style={{
+              borderColor: "rgb(var(--cp-rgb-cyan) / 0.2)",
+              background: "rgb(var(--cp-rgb-cyan) / 0.06)",
+            }}
+            icon={<LinkIcon className="h-3.5 w-3.5 text-[var(--color-cp-cyan)]" />}
+            labelClassName="text-[var(--color-cp-cyan)] font-medium"
+            label={
+              <>
+                {entry.files.length} file{entry.files.length !== 1 ? "s" : ""} from{" "}
+                {label}
+              </>
+            }
+            actions={
+              <>
+                <button
+                  onClick={() => onEditConnectorEntry(entry.connectorId, entry.resourceId)}
+                  className="ml-1 hover:text-[var(--color-cp-cyan)]/80 transition-colors"
+                  aria-label="Edit connector entry"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => onRemoveConnectorEntry(entry.connectorId, entry.resourceId)}
+                  className="ml-1 hover:text-[var(--color-cp-red)] transition-colors"
+                  aria-label="Remove connector entry"
+                  title="Remove connector entry"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </>
+            }
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function MentionDropdown<T>({
+  items,
+  selectedIndex,
+  onSelect,
+  onHover,
+  renderItem,
+}: {
+  items: T[];
+  selectedIndex: number;
+  onSelect: (index: number) => void;
+  onHover: (index: number) => void;
+  renderItem: (item: T, isSelected: boolean) => ReactNode;
+}) {
+  return (
+    <div
+      className="absolute bottom-full left-0 mb-2 w-72 border shadow-lg z-50 bg-cp-surface3 cp-cut-x-10"
+      style={{
+        borderColor: "rgb(var(--cp-rgb-yellow) / 0.25)",
+      }}
+    >
+      <div className="max-h-60 overflow-y-auto p-1">
+        {items.map((item, index) => (
+          <MentionItem
+            key={index}
+            index={index}
+            selectedIndex={selectedIndex}
+            onSelect={onSelect}
+            onHover={onHover}
+            renderItem={renderItem}
+            item={item}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MentionItem<T>({
+  index,
+  selectedIndex,
+  onSelect,
+  onHover,
+  renderItem,
+  item,
+}: {
+  index: number;
+  selectedIndex: number;
+  onSelect: (index: number) => void;
+  onHover: (index: number) => void;
+  renderItem: (item: T, isSelected: boolean) => ReactNode;
+  item: T;
+}) {
+  const ref = useRef<HTMLButtonElement>(null);
+  const isSelected = index === selectedIndex;
+
+  useEffect(() => {
+    if (isSelected) {
+      ref.current?.scrollIntoView({ block: "nearest" });
+    }
+  }, [isSelected]);
+
+  return (
+    <button
+      ref={ref}
+      type="button"
+      className={`w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors text-left ${
+        isSelected
+          ? "bg-primary/10 text-primary"
+          : "hover:bg-primary/5 text-foreground"
+      }`}
+      onClick={() => onSelect(index)}
+      onMouseEnter={() => onHover(index)}
+    >
+      {renderItem(item, isSelected)}
+    </button>
   );
 }
