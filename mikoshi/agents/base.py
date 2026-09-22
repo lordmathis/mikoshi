@@ -253,9 +253,6 @@ class BaseAgent(ABC):
         approval_msg_id: List[str],
     ) -> str:
         """Save a placeholder tool message, emit it + the approval request event.
-
-        The persisted message_id is stashed in ``approval_msg_id`` so the caller
-        can update it in place once the tool finishes.
         """
         placeholder = f"Awaiting approval for {tool_name}…"
         msg = await self._save_message(
@@ -509,11 +506,7 @@ class BaseAgent(ABC):
         await queue.put(event)
 
     async def _emit_error(self, queue: asyncio.Queue, message: str) -> None:
-        """Surface a user-visible error and end the turn.
-
-        Soft failures (a stage producing no artifact) aren't exceptions, so
-        they bypass `_loop`'s except block; this gives them the same
-        error-event + done treatment hard exceptions get."""
+        """Surface a user-visible error and end the turn."""
         logger.error("chat_id=%s %s", self.chat_id, message)
         await self._emit(queue, error_event(message))
         await self._emit(queue, STREAM_DONE)
@@ -565,10 +558,34 @@ class BaseAgent(ABC):
             self.db.attach_files(file_ids)
         return msg
 
+    def _resolve_active_skills(self, mentioned: List[str]) -> List[str]:
+        """Skills active for this turn: chat-persisted skills plus newly
+        mentioned ones."""
+        def resolvable(name: str) -> bool:
+            return bool(
+                self.skill_registry and self.skill_registry.get_skill(name)
+            )
+
+        chat = self.db.get_chat(self.chat_id)
+        stored = json.loads(chat.skills) if chat and chat.skills else []
+        persisted = [s for s in stored if resolvable(s)]
+        new_skills = list(
+            dict.fromkeys(
+                s
+                for s in mentioned
+                if resolvable(s) and s not in persisted
+            )
+        )
+        if new_skills or len(persisted) != len(stored):
+            self.db.update_chat(
+                self.chat_id, skills=json.dumps(persisted + new_skills)
+            )
+        return persisted + new_skills
+
     async def _build_context(self, message: str) -> List[ChatCompletionMessageParam]:
-        mentioned_skills = parse_mentions(message)
+        active_skills = self._resolve_active_skills(parse_mentions(message))
         skill_context, required_tool_servers = build_skill_context(
-            mentioned_skills, self.skill_registry
+            active_skills, self.skill_registry
         )
 
         if required_tool_servers:

@@ -13,6 +13,7 @@ def run_migrations(engine):
         _migrate_file_source_column(conn)
         _migrate_chat_workspace_id_column(conn)
         _migrate_workspace_repo_url_nullable(conn)
+        _migrate_chat_skills_column(conn)
         conn.commit()
 
 
@@ -80,6 +81,18 @@ def _migrate_chat_workspace_id_column(conn):
         logger.debug("Column workspace_id already exists in chats table.")
 
 
+def _migrate_chat_skills_column(conn):
+    inspector = inspect(conn)
+    columns = [col["name"] for col in inspector.get_columns("chats")]
+
+    if "skills" not in columns:
+        logger.info("Adding skills column to chats table...")
+        conn.execute(text("ALTER TABLE chats ADD COLUMN skills TEXT"))
+        logger.info("Column skills added to chats table.")
+    else:
+        logger.debug("Column skills already exists in chats table.")
+
+
 def _migrate_workspace_repo_url_nullable(conn):
     inspector = inspect(conn)
 
@@ -90,7 +103,9 @@ def _migrate_workspace_repo_url_nullable(conn):
     columns = [col for col in inspector.get_columns("workspaces")]
     repo_url_col = next((c for c in columns if c["name"] == "repo_url"), None)
     if repo_url_col is None or repo_url_col.get("nullable", True):
-        logger.debug("Column repo_url already nullable (or absent) in workspaces table.")
+        logger.debug(
+            "Column repo_url already nullable (or absent) in workspaces table."
+        )
         return
 
     logger.info("Making workspaces.repo_url nullable...")

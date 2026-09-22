@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from unittest.mock import MagicMock
 
@@ -165,3 +167,100 @@ class TestBuildContextOrdering:
 
         assert messages[0]["role"] == "system"
         assert "Foo skill instructions." in messages[0]["content"]
+
+
+class TestSkillPersistence:
+    """Regression: a mentioned skill must stay in the system prompt for the
+    whole chat, not only the turn where it was mentioned."""
+
+    def _make_agent(self, db, chat, registry):
+        return ReActAgent(
+            chat_id=chat.id,
+            db=db,
+            provider=_FakeProvider(),
+            tool_manager=MagicMock(),
+            model_id="m",
+            data_dir="/tmp",
+            system_prompt="You are Mikoshi.",
+            skill_registry=registry,
+        )
+
+    @pytest.mark.asyncio
+    async def test_followup_turn_keeps_skill(self, db):
+        chat = db.create_chat()
+        agent = self._make_agent(
+            db,
+            chat,
+            FakeRegistry(skills={"foo": FakeSkill(content="Foo skill instructions.")}),
+        )
+        db.save_message(chat.id, "user", "/foo do X")
+        await agent._build_context("/foo do X")
+
+        db.save_message(chat.id, "assistant", "done")
+        db.save_message(chat.id, "user", "now do Y")
+        messages = await agent._build_context("now do Y")
+
+        assert messages[0]["content"].startswith("You are Mikoshi.")
+        assert "Foo skill instructions." in messages[0]["content"]
+
+    @pytest.mark.asyncio
+    async def test_skill_survives_agent_rehydration(self, db):
+        chat = db.create_chat()
+        registry = FakeRegistry(
+            skills={"foo": FakeSkill(content="Foo skill instructions.")}
+        )
+        agent = self._make_agent(db, chat, registry)
+        db.save_message(chat.id, "user", "/foo do X")
+        await agent._build_context("/foo do X")
+
+        rehydrated = self._make_agent(db, chat, registry)
+        db.save_message(chat.id, "assistant", "done")
+        db.save_message(chat.id, "user", "now do Y")
+        messages = await rehydrated._build_context("now do Y")
+
+        assert "Foo skill instructions." in messages[0]["content"]
+
+    @pytest.mark.asyncio
+    async def test_unresolvable_mention_not_persisted(self, db):
+        chat = db.create_chat()
+        agent = self._make_agent(db, chat, FakeRegistry(skills={"foo": FakeSkill()}))
+        db.save_message(chat.id, "user", "/missing and /foo go")
+
+        await agent._build_context("/missing and /foo go")
+
+        assert json.loads(db.get_chat(chat.id).skills) == ["foo"]
+
+    @pytest.mark.asyncio
+    async def test_skills_accumulate_across_turns(self, db):
+        chat = db.create_chat()
+        registry = FakeRegistry(
+            skills={
+                "foo": FakeSkill(content="Foo content."),
+                "bar": FakeSkill(content="Bar content."),
+            }
+        )
+        agent = self._make_agent(db, chat, registry)
+        db.save_message(chat.id, "user", "/foo go")
+        await agent._build_context("/foo go")
+
+        db.save_message(chat.id, "user", "/bar also")
+        messages = await agent._build_context("/bar also")
+
+        assert "Foo content." in messages[0]["content"]
+        assert "Bar content." in messages[0]["content"]
+
+    @pytest.mark.asyncio
+    async def test_stale_persisted_skill_pruned(self, db):
+        chat = db.create_chat()
+        agent = self._make_agent(
+            db, chat, FakeRegistry(skills={"foo": FakeSkill(content="Foo content.")})
+        )
+        db.save_message(chat.id, "user", "/foo go")
+        await agent._build_context("/foo go")
+
+        successor = self._make_agent(db, chat, FakeRegistry(skills={}))
+        db.save_message(chat.id, "user", "now do Y")
+        messages = await successor._build_context("now do Y")
+
+        assert "Foo content." not in messages[0]["content"]
+        assert db.get_chat(chat.id).skills == json.dumps([])

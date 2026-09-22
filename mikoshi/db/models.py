@@ -45,6 +45,9 @@ class Chat(Base):
     tool_servers: Mapped[Optional[str]] = mapped_column(
         Text, nullable=True
     )  # JSON array as string
+    skills: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True
+    )  # JSON array as string; skills stay active for the whole chat once mentioned
     model_params: Mapped[Optional[str]] = mapped_column(
         Text, nullable=True
     )  # JSON object as string
