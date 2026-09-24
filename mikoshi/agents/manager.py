@@ -4,6 +4,7 @@ from typing import Dict, Optional, Type
 from mikoshi.agents.base import BaseAgent
 from mikoshi.agents.react import ReActAgent, ReActAgentPlugin
 from mikoshi.agents.research import ResearchAgentPlugin
+from mikoshi.agents.subagent import SubAgent
 from mikoshi.agents.workspace import WorkspaceAgent, WorkspaceAgentPlugin
 from mikoshi.agents.structured import StructuredAgentPlugin
 from mikoshi.config import TitleGenerationConfig, WorkspaceConfig
@@ -11,6 +12,7 @@ from mikoshi.db.db import Database
 from mikoshi.plugins import discover_plugins
 from mikoshi.providers.registry import ProviderRegistry
 from mikoshi.skills.registry import SkillRegistry
+from mikoshi.tools.builtin.subagents import SUBAGENTS_SERVER_NAME
 from mikoshi.tools.manager import ToolManager
 from mikoshi.tools.builtin.workspace import WORKSPACE_SERVER_NAME
 from mikoshi.workspace import WorkspaceService
@@ -301,3 +303,50 @@ class AgentManager:
         """Remove agent from memory."""
         if chat_id in self._agents:
             del self._agents[chat_id]
+
+    def spawn_subagent(self, agent_name: str, chat_id: str) -> SubAgent:
+        """Instantiate a SubAgent from a registered persona, sharing the
+        chat's workspace. Not registered in `_agents` — a sub-agent is not
+        the chat's agent."""
+        agent_class = self.agent_registry.get_agent_class(agent_name)
+        if not agent_class:
+            names = ", ".join(sorted(self.agent_registry.list_agent_names()))
+            raise ValueError(
+                f"Unknown agent '{agent_name}'. Available agents: {names}"
+            )
+
+        provider = self.provider_registry.get_provider(agent_class.provider_id)
+        if not provider:
+            raise ValueError(f"Provider '{agent_class.provider_id}' not found")
+
+        chat = self.db.get_chat(chat_id)
+        workspace_id = chat.workspace_id if chat else None
+        connector_name = None
+        if workspace_id:
+            workspace = self.db.get_workspace(workspace_id)
+            if workspace:
+                connector_name = workspace.connector
+
+        # Stripping the subagents server is the depth limit: a spawned
+        # sub-agent cannot delegate further.
+        tool_servers = [
+            s for s in (agent_class.tool_servers or []) if s != SUBAGENTS_SERVER_NAME
+        ]
+        params = {
+            "system_prompt": agent_class.system_prompt,
+            "tool_servers": tool_servers,
+            "temperature": agent_class.temperature,
+            "max_tokens": agent_class.max_tokens,
+            "context_window": agent_class.context_window,
+            "max_iterations": agent_class.max_iterations,
+            "phase": f"subagent:{agent_name}",
+        }
+        return self._construct_agent(
+            SubAgent,
+            chat_id,
+            provider,
+            agent_class.model_id,
+            workspace_id,
+            connector_name,
+            params,
+        )

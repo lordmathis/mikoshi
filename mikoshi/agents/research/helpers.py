@@ -3,8 +3,6 @@ from typing import Iterator, List, Optional, Tuple
 
 import tiktoken
 
-from mikoshi.agents.streaming import STREAM_DONE, StreamEvent
-
 DEFAULT_CONTEXT_WINDOW = 64000
 SYNTHESIS_OUTPUT_RESERVE = 2048
 SYNTHESIS_RESERVE_FRACTION = 0.30
@@ -12,18 +10,6 @@ SYNTHESIS_RESERVE_FRACTION = 0.30
 # cl100k_base is an approximation for non-OpenAI models; callers budget
 # conservatively (SYNTHESIS_RESERVE_FRACTION) to absorb the mismatch.
 _ENCODER = tiktoken.get_encoding("cl100k_base")
-
-
-class _FilteredQueue:
-    def __init__(self, queue):
-        self._queue = queue
-
-    async def put(self, item):
-        if item is STREAM_DONE or (
-            isinstance(item, StreamEvent) and item.type == "done"
-        ):
-            return
-        await self._queue.put(item)
 
 
 def _count_tokens(text: str) -> int:

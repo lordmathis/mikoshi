@@ -67,6 +67,10 @@ class BaseAgent(ABC):
         self.context_window = kwargs.get("context_window")
         self.max_iterations = kwargs.get("max_iterations", 5)
         self.workspace_id = kwargs.get("workspace_id")
+        # Set for display-only agents (sub-agents, research stages): their
+        # messages persist tagged with this phase and never enter the
+        # parent conversation's LLM context.
+        self.phase = kwargs.get("phase")
         self.data_dir = kwargs["data_dir"]
         self.connector_name = kwargs.get("connector_name")
         self._workspace_config = kwargs.get("workspace_config")
@@ -176,6 +180,7 @@ class BaseAgent(ABC):
                             chat_id=self.chat_id,
                             workspace=self._build_workspace_context(),
                             on_approval_requested=_on_approval_requested,
+                            stream_queue=queue,
                         )
                         result = await self.tool_manager.call_tool(
                             tool_name, tool_args, ctx
@@ -429,6 +434,8 @@ class BaseAgent(ABC):
         last_user = None
         last_assistant = None
         for msg in reversed(history):
+            if not msg.in_conversation:
+                continue
             if msg.role == "user" and last_user is None:
                 last_user = msg
             elif msg.role == "assistant" and last_assistant is None:
@@ -498,6 +505,7 @@ class BaseAgent(ABC):
             "tool_calls": tool_calls,
             "tool_call_id": msg.tool_call_id,
             "sequence": msg.sequence,
+            "phase": msg.phase,
             "created_at": msg.created_at.isoformat() if msg.created_at else None,
         }
 
@@ -526,6 +534,7 @@ class BaseAgent(ABC):
                 "tool",
                 str(content_or_response),
                 tool_call_id=tool_call_id,
+                phase=self.phase,
             )
         return self._save_user_message(content_or_response, file_ids)
 
@@ -533,7 +542,10 @@ class BaseAgent(ABC):
         if isinstance(content_or_response, dict):
             if "error" in content_or_response:
                 return self.db.save_message(
-                    self.chat_id, "assistant", f"Error: {content_or_response['error']}"
+                    self.chat_id,
+                    "assistant",
+                    f"Error: {content_or_response['error']}",
+                    phase=self.phase,
                 )
             content, reasoning, tool_calls = extract_assistant_content(
                 content_or_response
@@ -545,14 +557,21 @@ class BaseAgent(ABC):
                 content,
                 reasoning_content=reasoning,
                 tool_calls=tool_calls_json,
+                phase=self.phase,
             )
-        return self.db.save_message(self.chat_id, "assistant", content_or_response)
+        return self.db.save_message(
+            self.chat_id, "assistant", content_or_response, phase=self.phase
+        )
 
     def _save_user_message(self, content, file_ids: Optional[List[str]]) -> Message:
         file_ids = file_ids or []
         file_ids_json = json.dumps(file_ids) if file_ids else None
         msg = self.db.save_message(
-            self.chat_id, "user", content, file_ids=file_ids_json
+            self.chat_id,
+            "user",
+            content,
+            file_ids=file_ids_json,
+            phase=self.phase,
         )
         if file_ids:
             self.db.attach_files(file_ids)

@@ -14,6 +14,7 @@ def run_migrations(engine):
         _migrate_chat_workspace_id_column(conn)
         _migrate_workspace_repo_url_nullable(conn)
         _migrate_chat_skills_column(conn)
+        _migrate_message_phase_column(conn)
         conn.commit()
 
 
@@ -91,6 +92,18 @@ def _migrate_chat_skills_column(conn):
         logger.info("Column skills added to chats table.")
     else:
         logger.debug("Column skills already exists in chats table.")
+
+
+def _migrate_message_phase_column(conn):
+    inspector = inspect(conn)
+    columns = [col["name"] for col in inspector.get_columns("messages")]
+
+    if "phase" not in columns:
+        logger.info("Adding phase column to messages table...")
+        conn.execute(text("ALTER TABLE messages ADD COLUMN phase TEXT"))
+        logger.info("Column phase added to messages table.")
+    else:
+        logger.debug("Column phase already exists in messages table.")
 
 
 def _migrate_workspace_repo_url_nullable(conn):

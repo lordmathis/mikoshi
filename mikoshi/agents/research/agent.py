@@ -6,9 +6,7 @@ from openai.types.chat import ChatCompletionMessageParam
 
 from mikoshi.agents.base import BaseAgent
 from mikoshi.agents.plugin_base import AgentPluginBase
-from mikoshi.agents.react import ReActAgent
 from mikoshi.agents.research.helpers import (
-    _FilteredQueue,
     _find_findings_file,
     _iter_plan_lines,
     _parse_pending_tasks,
@@ -21,7 +19,8 @@ from mikoshi.agents.research.stages import (
     Replanner,
     Synthesizer,
 )
-from mikoshi.agents.streaming import STREAM_DONE, StreamEvent
+from mikoshi.agents.streaming import STREAM_DONE, FilteredQueue, StreamEvent
+from mikoshi.agents.subagent import SubAgent
 from mikoshi.observability import observe
 from mikoshi.tasks import create_background_task
 from mikoshi.tools.builtin.workspace import _workspace_result
@@ -29,48 +28,6 @@ from mikoshi.workspace import WorkspaceError, WorkspaceFileNotFoundError
 from phoenix.otel import using_attributes
 
 logger = logging.getLogger(__name__)
-
-
-class _InnerResearchAgent(ReActAgent):
-    """ReAct inner agent whose transcript persists across `_loop` calls: a
-    second `_loop(message)` appends `message` as a user turn and continues
-    the same in-memory conversation instead of starting fresh."""
-
-    def __init__(self, **kwargs):
-        self.phase: Optional[str] = kwargs.pop("phase", None)
-        super().__init__(**kwargs)
-        self._messages: List[ChatCompletionMessageParam] = []
-        self.last_response: str = ""
-
-    async def _get_iteration_context(
-        self, message: str
-    ) -> List[ChatCompletionMessageParam]:
-        if self._messages:
-            self._messages.append({"role": "user", "content": message})
-            return self._messages
-        self._messages = [
-            {"role": "system", "content": self.system_prompt},
-            {"role": "user", "content": message},
-        ]
-        return self._messages
-
-    def _format_message(self, msg) -> dict:
-        data = BaseAgent._format_message(msg)
-        if self.phase:
-            data["phase"] = self.phase
-        return data
-
-    async def _process_final_response(
-        self,
-        response: Dict[str, Any],
-        message_data: Dict[str, Any],
-        queue: asyncio.Queue,
-    ) -> Dict[str, Any]:
-        self.last_response = message_data.get("content") or ""
-        self._messages.append(
-            {"role": "assistant", "content": message_data.get("content")}
-        )
-        return await super()._process_final_response(response, message_data, queue)
 
 
 class ResearchAgent(BaseAgent):
@@ -298,8 +255,8 @@ class ResearchAgent(BaseAgent):
         *,
         tool_servers: List[str],
         phase: Optional[str] = None,
-    ) -> _InnerResearchAgent:
-        agent = _InnerResearchAgent(
+    ) -> SubAgent:
+        agent = SubAgent(
             chat_id=self.chat_id,
             db=self.db,
             provider=self.provider,
@@ -318,7 +275,7 @@ class ResearchAgent(BaseAgent):
             max_tokens=self.max_tokens,
             phase=phase,
         )
-        filtered = _FilteredQueue(queue)
+        filtered = FilteredQueue(queue)
         await agent._loop(user_message, queue=filtered)
         return agent
 

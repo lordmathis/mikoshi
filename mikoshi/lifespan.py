@@ -114,6 +114,9 @@ async def lifespan(app: FastAPI):
     )
     app.state.agent_manager = agent_manager
 
+    # SubagentTools needs the agent manager but ToolManager starts first.
+    tool_manager.bind_agent_manager(agent_manager)
+
     # Initialize model cache
     app.state.models_cache = None
     app.state.models_cache_time = 0.0

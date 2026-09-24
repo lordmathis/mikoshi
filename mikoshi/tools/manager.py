@@ -19,6 +19,7 @@ from mikoshi.tools.builtin import (
     BashTools,
     MemoryTools,
     ScraperTools,
+    SubagentTools,
     WebTools,
     WorkspaceTools,
 )
@@ -32,6 +33,7 @@ BUILTIN_TOOLS: list[tuple[type[ToolSetHandler], Optional[str]]] = [
     (WebTools, "search"),
     (ScraperTools, "search"),
     (MemoryTools, "memory"),
+    (SubagentTools, None),
 ]
 
 
@@ -103,6 +105,15 @@ class ToolManager:
 
     def get_provider(self, name: str) -> Provider | None:
         return self._provider_registry.get_provider(name)
+
+    def bind_agent_manager(self, agent_manager) -> None:
+        """Late-bind the AgentManager into the subagents toolset: ToolManager
+        starts before AgentManager exists."""
+        handler = self._toolset_handlers.get(SubagentTools.server_name)
+        if isinstance(handler, SubagentTools):
+            handler.bind_agent_manager(agent_manager)
+        else:
+            logger.warning("SubagentTools not registered; cannot bind agent manager")
 
     async def start(self):
         """Initialize all handlers"""

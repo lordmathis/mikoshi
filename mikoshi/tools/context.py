@@ -1,3 +1,4 @@
+import asyncio
 import os
 from dataclasses import dataclass
 from typing import Awaitable, Callable, Optional
@@ -32,3 +33,5 @@ class ToolCallContext:
     workspace: Optional[WorkspaceContext] = None
     message_id: Optional[str] = None
     on_approval_requested: Optional[ApprovalCallback] = None
+    # The agent's SSE queue; lets a tool stream sub-agent events to the UI.
+    stream_queue: Optional[asyncio.Queue] = None

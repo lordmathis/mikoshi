@@ -86,6 +86,7 @@ class Database:
         tool_calls: Optional[str] = None,
         tool_call_id: Optional[str] = None,
         file_ids: Optional[str] = None,
+        phase: Optional[str] = None,
     ) -> Message:
         with self.SessionLocal() as session:
             # The next sequence number is computed inside the INSERT
@@ -109,6 +110,7 @@ class Database:
                     tool_calls=tool_calls,
                     tool_call_id=tool_call_id,
                     file_ids=file_ids,
+                    phase=phase,
                 )
             )
 

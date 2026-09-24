@@ -79,12 +79,20 @@ class Message(Base):
     status: Mapped[str] = mapped_column(
         String, default="completed"
     )  # completed, awaiting_tool_approval, tool_approval_denied
+    # NULL = belongs to the parent conversation; set = display-only transcript
+    # (sub-agent or research stage) excluded from LLM context, retry/edit,
+    # and title generation.
+    phase: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     __table_args__ = (
         UniqueConstraint("chat_id", "sequence", name="uq_chat_sequence"),
         Index("idx_chat_sequence", "chat_id", "sequence"),
     )
+
+    @property
+    def in_conversation(self) -> bool:
+        return self.phase is None
 
 
 class File(Base):

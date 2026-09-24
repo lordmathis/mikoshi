@@ -42,6 +42,7 @@ def serialize_message(
         "tool_calls": loads_json_field(msg.tool_calls, None),
         "tool_call_id": msg.tool_call_id,
         "sequence": msg.sequence,
+        "phase": msg.phase,
         "created_at": format_timestamp(msg.created_at),
         "files": files,
     }

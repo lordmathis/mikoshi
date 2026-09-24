@@ -5,6 +5,11 @@
       "repository": "lordmathis/homelab",
       "branch": "main",
       "description": "Homelab repo contains deployment configs of mikoshi and other AI services. Use when figuring out how real plugins are used and to check for potential breaking changes when updating mikoshi"
+    },
+    "hermes": {
+      "repository": "nousresearch/hermes-agent",
+      "branch": "main",
+      "description": "Use as an inspiration for new features"
     }
   }
 }

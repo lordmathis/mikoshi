@@ -187,6 +187,8 @@ def format_history(db: Database, chat_id: str) -> List[ChatCompletionMessagePara
     messages: List[ChatCompletionMessageParam] = []
 
     for msg in history:
+        if not msg.in_conversation:
+            continue
         if msg.role == "user":
             messages.append(process_user_message(db, msg))
         elif msg.role == "assistant":

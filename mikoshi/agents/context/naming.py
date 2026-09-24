@@ -56,6 +56,8 @@ async def generate_title(
 
             conversation_text = ""
             for msg in history[:6]:
+                if not msg.in_conversation:
+                    continue
                 if msg.role in ["user", "assistant"]:
                     content_str = extract_text_content(msg.content)
                     conversation_text += f"{msg.role.capitalize()}: {content_str}\n"

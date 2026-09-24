@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Any, Callable, List, Optional, Protocol
+from typing import Any, Callable, List, Optional, Protocol
 
 from mikoshi.agents.research.helpers import (
     DEFAULT_CONTEXT_WINDOW,
-    _FilteredQueue,
     _batch_files,
     _batch_findings,
     _count_tokens,
@@ -28,11 +27,10 @@ from mikoshi.agents.research.prompts import (
     SYNTHESIS_SUMMARIZE_PROMPT,
     SYNTHESIS_SYSTEM_PROMPT,
 )
+from mikoshi.agents.streaming import FilteredQueue
+from mikoshi.agents.subagent import SubAgent
 from mikoshi.observability import observe
 from mikoshi.tools.builtin.workspace import WORKSPACE_SERVER_NAME
-
-if TYPE_CHECKING:
-    from mikoshi.agents.research.agent import _InnerResearchAgent
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +51,7 @@ class StageContext(Protocol):
         *,
         tool_servers: List[str],
         phase: Optional[str] = None,
-    ) -> "_InnerResearchAgent": ...
+    ) -> SubAgent: ...
 
     def file_exists(self, path: str) -> bool: ...
 
@@ -102,7 +100,7 @@ class Stage:
     def _nudge(self) -> str:
         return NUDGE_PROMPT_TEMPLATE.format(file=self.artifact_path)
 
-    async def _spawn(self, queue: asyncio.Queue) -> "_InnerResearchAgent":
+    async def _spawn(self, queue: asyncio.Queue) -> SubAgent:
         return await self.ctx.spawn(
             self.system_prompt,
             self.user_message,
@@ -123,7 +121,7 @@ class Stage:
             self.ctx.chat_id,
             self.artifact_path,
         )
-        await agent._loop(self._nudge(), queue=_FilteredQueue(queue))
+        await agent._loop(self._nudge(), queue=FilteredQueue(queue))
         resolved = self.success()
         if resolved:
             return resolved

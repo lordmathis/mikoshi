@@ -45,33 +45,37 @@ def format_file_tree(files: List[str]) -> str:
 class WorkspaceAgent(ReActAgent):
     """Agent specialized for workspaces with automatic tree injection."""
 
+    def _insert_workspace_context(
+        self, messages: List[ChatCompletionMessageParam]
+    ) -> None:
+        if not (self.workspace_id and self._workspace_service):
+            return
+        try:
+            files = self._workspace_service.list_files_flat(self.workspace_id)
+            tree_string = format_file_tree(files)
+
+            insert_system_message(
+                messages, f"Current Workspace Structure:\n{tree_string}"
+            )
+
+            agents_md_path = next(
+                (f for f in files if f.lower() == "agents.md"), None
+            )
+            if agents_md_path:
+                agents_md = self._workspace_service.read_file(
+                    self.workspace_id, agents_md_path
+                )
+                insert_system_message(
+                    messages, f"AGENTS.md instructions:\n{agents_md}"
+                )
+        except Exception as e:
+            logger.warning(f"Failed to fetch workspace tree for context: {e}")
+
     async def _get_iteration_context(
         self, message: str
     ) -> List[ChatCompletionMessageParam]:
         messages = await super()._get_iteration_context(message)
-
-        if self.workspace_id and self._workspace_service:
-            try:
-                files = self._workspace_service.list_files_flat(self.workspace_id)
-                tree_string = format_file_tree(files)
-
-                insert_system_message(
-                    messages, f"Current Workspace Structure:\n{tree_string}"
-                )
-
-                agents_md_path = next(
-                    (f for f in files if f.lower() == "agents.md"), None
-                )
-                if agents_md_path:
-                    agents_md = self._workspace_service.read_file(
-                        self.workspace_id, agents_md_path
-                    )
-                    insert_system_message(
-                        messages, f"AGENTS.md instructions:\n{agents_md}"
-                    )
-            except Exception as e:
-                logger.warning(f"Failed to fetch workspace tree for context: {e}")
-
+        self._insert_workspace_context(messages)
         return messages
 
 
