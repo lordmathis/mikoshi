@@ -7,7 +7,7 @@ import viteCompression from 'vite-plugin-compression'
 
 export default defineConfig({
   plugins: [
-    react(), 
+    react(),
     tailwindcss(),
     // Gzip compression
     viteCompression({
@@ -26,7 +26,7 @@ export default defineConfig({
   ],
     resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      "@": path.resolve(import.meta.dirname, "./src"),
     },
   },
   server: {

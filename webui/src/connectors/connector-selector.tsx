@@ -1,4 +1,4 @@
-import { Loader2, Link as LinkIcon, Github } from "lucide-react";
+import { Loader2, GitBranch, Link as LinkIcon } from "lucide-react";
 import { Label } from "../ui/label.tsx";
 import { Button } from "../ui/button.tsx";
 import {
@@ -74,7 +74,7 @@ export function ConnectorSelector({
               {connectors.map((c) => (
                 <SelectItem key={c.name} value={c.name}>
                   <div className="flex items-center gap-2">
-                    {c.type === 'github' ? <Github className="h-4 w-4" /> : <LinkIcon className="h-4 w-4" />}
+                    <GitBranch className="h-4 w-4" />
                     <span>{c.name}</span>
                     <span className="text-xs opacity-50">({c.type})</span>
                   </div>
