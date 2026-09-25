@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from mcp.types import Tool
 
 from mikoshi.agents.structured import StructuredAgent
 from mikoshi.routes.tools import router as tools_router
@@ -14,7 +15,7 @@ _MCP_SCHEMA = {"type": "object", "properties": {"x": {"type": "string"}}}
 
 
 def _mcp_tool():
-    return SimpleNamespace(
+    return Tool(
         name="echo", description="Echo a message", inputSchema=_MCP_SCHEMA
     )
 

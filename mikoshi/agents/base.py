@@ -9,7 +9,7 @@ from openai import APIConnectionError, InternalServerError, RateLimitError
 from openai.types.chat import ChatCompletionMessageParam
 from opentelemetry.trace import get_current_span
 from openinference.semconv.trace import SpanAttributes
-from phoenix.otel import using_attributes
+from openinference.instrumentation import using_attributes
 
 from mikoshi.agents.context import format_history, generate_title, parse_mentions
 from mikoshi.agents.context.messages import (

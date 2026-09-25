@@ -25,7 +25,7 @@ from mikoshi.observability import observe
 from mikoshi.tasks import create_background_task
 from mikoshi.tools.builtin.workspace import _workspace_result
 from mikoshi.workspace import WorkspaceError, WorkspaceFileNotFoundError
-from phoenix.otel import using_attributes
+from openinference.instrumentation import using_attributes
 
 logger = logging.getLogger(__name__)
 

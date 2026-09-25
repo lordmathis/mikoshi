@@ -8,16 +8,19 @@ Covers the meaningful code paths of the tracing layer:
   produce correctly-kinded spans with the OpenInference attributes Phoenix needs
 """
 
+from unittest.mock import MagicMock
+
 import pytest
 from openinference.semconv.trace import SpanAttributes
 from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export import BatchSpanProcessor, SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
     InMemorySpanExporter,
 )
 from opentelemetry.trace.status import StatusCode
 
 import mikoshi.observability as obs
+from mikoshi.config import TracingConfig
 from mikoshi.observability import (
     init_observability,
     observe,
@@ -47,14 +50,61 @@ def span_exporter():
         provider.shutdown()
 
 
-def test_init_observability_with_none_config_does_not_register(monkeypatch):
-    """Disabled tracing must not register a provider."""
-    calls = []
+def test_init_observability_disabled_does_not_build_provider(monkeypatch):
+    """Disabled tracing (None config or missing endpoint) must not build a provider."""
+    built = []
     monkeypatch.setattr(
-        "mikoshi.observability.register", lambda **kw: calls.append(kw)
+        obs, "TracerProvider", lambda **kw: built.append(kw) or MagicMock()
     )
     init_observability(None)
-    assert calls == []
+    init_observability(TracingConfig(endpoint=None))
+    assert built == []
+
+
+def test_init_observability_normalizes_endpoint_and_wires_processor(monkeypatch):
+    """Enabled tracing appends the OTLP path and picks the processor per config."""
+    provider = MagicMock()
+    exporters = []
+    set_providers = []
+    monkeypatch.setattr(obs, "TracerProvider", lambda **kw: provider)
+    monkeypatch.setattr(obs, "OTLPSpanExporter", lambda **kw: exporters.append(kw))
+    monkeypatch.setattr(
+        obs.trace, "set_tracer_provider", lambda p: set_providers.append(p)
+    )
+
+    config = TracingConfig(
+        endpoint="http://collector:4318",
+        headers={"authorization": "Bearer t"},
+        batch=False,
+    )
+    init_observability(config)
+
+    assert exporters == [
+        {
+            "endpoint": "http://collector:4318/v1/traces",
+            "headers": {"authorization": "Bearer t"},
+        }
+    ]
+    processors = [c.args[0] for c in provider.add_span_processor.call_args_list]
+    assert len(processors) == 1
+    assert type(processors[0]) is SimpleSpanProcessor
+    assert set_providers == [provider]
+
+
+def test_init_observability_keeps_full_endpoint_and_uses_batch(monkeypatch):
+    """An endpoint already carrying /v1/traces is left untouched; batch=True wires BatchSpanProcessor."""
+    provider = MagicMock()
+    exporters = []
+    monkeypatch.setattr(obs, "TracerProvider", lambda **kw: provider)
+    monkeypatch.setattr(obs, "OTLPSpanExporter", lambda **kw: exporters.append(kw))
+
+    init_observability(
+        TracingConfig(endpoint="http://collector:4318/v1/traces", batch=True)
+    )
+
+    assert exporters[0]["endpoint"] == "http://collector:4318/v1/traces"
+    processors = [c.args[0] for c in provider.add_span_processor.call_args_list]
+    assert type(processors[0]) is BatchSpanProcessor
 
 
 @pytest.mark.asyncio

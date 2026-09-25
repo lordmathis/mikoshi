@@ -41,9 +41,9 @@ def normalize_tool(tool: Any) -> Dict[str, Any]:
     """Normalize a tool object from any handler type into a plain dict.
 
     ToolSetHandler tools expose ``parameters`` (JSON Schema); MCP ``Tool``
-    objects expose ``inputSchema``.
+    objects expose ``input_schema``.
     """
-    schema = getattr(tool, "inputSchema", None) or getattr(tool, "parameters", None)
+    schema = getattr(tool, "input_schema", None) or getattr(tool, "parameters", None)
     return {
         "name": getattr(tool, "name", "unknown"),
         "description": getattr(tool, "description", "") or "",

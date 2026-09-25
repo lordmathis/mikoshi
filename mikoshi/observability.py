@@ -1,10 +1,11 @@
 """OpenTelemetry-based observability for agent tracing.
 
 Exports traces via OTLP to any compatible backend (Phoenix, Jaeger,
-Tempo, etc.). The provider is wired up through ``arize-phoenix-otel``'s
-``register()`` helper, which reads standard ``OTEL_*`` env vars. When
-tracing is disabled, all decorators and helpers are harmless no-ops —
-OTel returns non-recording spans when no TracerProvider is configured.
+Tempo, etc.). The provider is built on openinference's TracerProvider,
+whose tracers attach ``using_attributes`` context (session, user,
+metadata, tags) and masking to every span. When tracing is disabled,
+all decorators and helpers are harmless no-ops — OTel returns
+non-recording spans when no TracerProvider is configured.
 """
 
 import contextlib
@@ -14,13 +15,16 @@ import json
 import logging
 from typing import Any, Callable, Dict, Optional
 
-from opentelemetry import trace
-from opentelemetry.sdk.resources import Resource
+from openinference.instrumentation import TracerProvider
+from openinference.semconv.resource import ResourceAttributes
 from openinference.semconv.trace import (
     OpenInferenceSpanKindValues,
     SpanAttributes,
 )
-from phoenix.otel import register
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace.export import BatchSpanProcessor, SimpleSpanProcessor
 
 from mikoshi.config import TracingConfig
 
@@ -52,34 +56,35 @@ def _safe_json(obj: Any) -> Optional[str]:
 
 
 def init_observability(config: Optional[TracingConfig]) -> None:
-    """Initialize the OTel tracer provider via arize-phoenix-otel.
+    """Initialize the OTel tracer provider.
 
-    Standard ``OTEL_*`` environment variables are respected by ``register()``.
     No config or no endpoint → tracing stays as no-op spans.
     """
     if not config or not config.endpoint:
         logger.info("Tracing disabled")
         return
 
-    resource_attrs: Dict[str, Any] = {}
+    resource_attrs: Dict[str, Any] = {
+        ResourceAttributes.PROJECT_NAME: config.project_name,
+    }
     if config.service_version:
         resource_attrs["service.version"] = config.service_version
     if config.deployment_environment:
         resource_attrs["deployment.environment"] = config.deployment_environment
 
-    register_kwargs: Dict[str, Any] = {
-        "project_name": config.project_name,
-        "endpoint": config.endpoint,
-        "batch": config.batch,
-        "auto_instrument": False,
-        "verbose": False,
-    }
-    if config.headers:
-        register_kwargs["headers"] = dict(config.headers)
-    if resource_attrs:
-        register_kwargs["resource"] = Resource.create(resource_attrs)
+    endpoint = config.endpoint.rstrip("/")
+    if not endpoint.endswith("/v1/traces"):
+        endpoint += "/v1/traces"
 
-    register(**register_kwargs)
+    exporter = OTLPSpanExporter(
+        endpoint=endpoint,
+        headers=dict(config.headers) if config.headers else None,
+    )
+    provider = TracerProvider(resource=Resource.create(resource_attrs))
+    provider.add_span_processor(
+        BatchSpanProcessor(exporter) if config.batch else SimpleSpanProcessor(exporter)
+    )
+    trace.set_tracer_provider(provider)
 
     # Auto-instrument the LLM SDKs so every chat completion becomes a
     # structured LLM span (messages, invocation params, token usage).
