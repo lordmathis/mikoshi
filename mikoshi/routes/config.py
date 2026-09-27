@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time
 
@@ -43,23 +44,26 @@ async def list_models(request: Request):
             }
         )
 
-    # Add provider models
-    for provider_name, provider in provider_registry.list_providers().items():
+    async def models_for(provider_name, provider):
         try:
             model_ids = await provider.get_model_ids()
-            if model_ids:
-                for model_id in model_ids:
-                    models.append(
-                        {
-                            "id": f"{provider_name}:{model_id}",
-                            "object": "model",
-                            "created": 1234567890,
-                            "owned_by": provider_name,
-                        }
-                    )
         except Exception as e:
             logger.warning("Could not list models from provider %s: %s", provider_name, e)
-            continue
+            return []
+        return [
+            {
+                "id": f"{provider_name}:{model_id}",
+                "object": "model",
+                "created": 1234567890,
+                "owned_by": provider_name,
+            }
+            for model_id in (model_ids or [])
+        ]
+
+    provider_model_lists = await asyncio.gather(
+        *(models_for(name, p) for name, p in provider_registry.list_providers().items())
+    )
+    models.extend(model for models_for_provider in provider_model_lists for model in models_for_provider)
 
     result = {"object": "list", "data": models}
 
@@ -130,21 +134,19 @@ async def list_providers(request: Request):
     """
     provider_registry = request.app.state.provider_registry
 
-    providers = []
-    for provider_name, provider in provider_registry.list_providers().items():
+    async def provider_entry(provider_name, provider):
         try:
             model_ids = await provider.get_model_ids()
-            if model_ids is None:
-                model_ids = []
         except Exception:
             model_ids = []
+        return {
+            "name": provider_name,
+            "api_base": provider.config.api_base,
+            "models": model_ids or [],
+        }
 
-        providers.append(
-            {
-                "name": provider_name,
-                "api_base": provider.config.api_base,
-                "models": model_ids,
-            }
-        )
+    providers = await asyncio.gather(
+        *(provider_entry(name, p) for name, p in provider_registry.list_providers().items())
+    )
 
     return {"providers": providers}

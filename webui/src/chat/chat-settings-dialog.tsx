@@ -141,6 +141,10 @@ export function ChatSettingsDialog({
       }
     }
 
+    // Close before updating the settings prop: the dialog's data effect
+    // depends on [open, settings], so updating settings while still open
+    // would refetch tools/agents/models a second time.
+    setOpen(false);
     onSettingsChange({
       ...localSettings,
       baseModel: modelToSend,
@@ -160,11 +164,8 @@ export function ChatSettingsDialog({
       } catch (error) {
         console.error("Failed to update chat settings:", error);
         alert(`Failed to update chat settings: ${error instanceof Error ? error.message : "Unknown error"}`);
-        return;
       }
     }
-
-    setOpen(false);
   };
 
   const handleCancel = () => {

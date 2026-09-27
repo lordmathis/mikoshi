@@ -94,3 +94,44 @@ class TestToolsRoute:
 
         body = resp.json()
         assert body["tool_servers"][0]["tools"][0]["parameters"] == _MCP_SCHEMA
+
+    @pytest.mark.asyncio
+    async def test_second_request_served_from_cache(self):
+        app = FastAPI()
+        app.include_router(tools_router, prefix="/api")
+        tm = MagicMock()
+        tm.list_tool_servers = AsyncMock(return_value=["mcpserver"])
+        tm.list_tools = AsyncMock(return_value=[_mcp_tool()])
+        app.state.tool_manager = tm
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            first = await client.get("/api/tools")
+            second = await client.get("/api/tools")
+
+        assert first.json() == second.json()
+        assert tm.list_tools.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_failing_server_does_not_hide_other_servers(self):
+        app = FastAPI()
+        app.include_router(tools_router, prefix="/api")
+        tm = MagicMock()
+        tm.list_tool_servers = AsyncMock(return_value=["good", "bad"])
+
+        async def list_tools(server_name):
+            if server_name == "bad":
+                raise RuntimeError("boom")
+            return [_mcp_tool()]
+
+        tm.list_tools = AsyncMock(side_effect=list_tools)
+        app.state.tool_manager = tm
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            resp = await client.get("/api/tools")
+
+        names = [s["name"] for s in resp.json()["tool_servers"]]
+        assert names == ["good"]
