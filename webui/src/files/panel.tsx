@@ -1,5 +1,6 @@
 import { File, X, Loader2, PanelRightClose, PanelRightOpen } from "lucide-react";
 import { Button } from "../ui/button.tsx";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip.tsx";
 import { Preview } from "./preview.tsx";
 import { Editor } from "./editor.tsx";
 import { cn } from "../lib/utils.ts";
@@ -97,15 +98,24 @@ export function Panel({
           >
             Edit
           </button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 opacity-50 hover:opacity-100"
-            onClick={onToggleChat}
-          >
-            {chatHidden ? <PanelRightOpen className="h-4 w-4" /> : <PanelRightClose className="h-4 w-4" />}
-            <span className="sr-only">{chatHidden ? "Show chat" : "Hide chat"}</span>
-          </Button>
+          <TooltipProvider delayDuration={300}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 opacity-50 hover:opacity-100"
+                  onClick={onToggleChat}
+                >
+                  {chatHidden ? <PanelRightOpen className="h-4 w-4" /> : <PanelRightClose className="h-4 w-4" />}
+                  <span className="sr-only">{chatHidden ? "Show chat" : "Hide chat"}</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                <p>{chatHidden ? "Show chat" : "Hide chat"}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <Button variant="ghost" size="icon" className="h-7 w-7 opacity-50 hover:opacity-100" onClick={onClose}>
             <X className="h-4 w-4" />
           </Button>
