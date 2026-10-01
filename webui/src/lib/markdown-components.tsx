@@ -1,10 +1,16 @@
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
-import rehypeHighlight from "rehype-highlight";
+import remarkEmoji from "remark-emoji";
+import remarkGithubAlerts from "remark-github-alerts";
 import { Mermaid } from "./mermaid.tsx";
+import { CodeBlock } from "./code-block.tsx";
 
-export const REMARK_PLUGINS: any[] = [remarkGfm, remarkBreaks];
-export const REHYPE_PLUGINS: any[] = [[rehypeHighlight, { ignoreMissing: true }]];
+export const REMARK_PLUGINS: any[] = [
+  remarkGfm,
+  remarkBreaks,
+  [remarkEmoji, { emoticon: true }],
+  remarkGithubAlerts,
+];
 
 const isMermaid = (className: string | undefined) =>
   /language-mermaid/.test(className || "");
@@ -27,6 +33,36 @@ const baseTableComponents = (rgbVar: string) => ({
   tr: ({ children, ...props }: any) => (
     <tr className="even:bg-primary/3" {...props}>{children}</tr>
   ),
+});
+
+const baseCodeComponents = (rgbVar: string) => ({
+  code: ({ className, children, ...props }: any) => {
+    if (isMermaid(className)) {
+      return <Mermaid chart={String(children).replace(/\n$/, "")} />;
+    }
+    return (
+      <code
+        className="px-1.5 py-0.5 text-xs break-words"
+        style={{ backgroundColor: `rgb(var(${rgbVar}) / 0.08)`, color: `rgb(var(${rgbVar}) / 0.9)` }}
+        {...props}
+      >
+        {children}
+      </code>
+    );
+  },
+  pre: ({ children, ...props }: any) => {
+    const child: any = Array.isArray(children) ? children[0] : children;
+    if (child?.props && isMermaid(child.props.className)) {
+      return <>{children}</>;
+    }
+    if (child?.props) {
+      const match = /language-(\S+)/.exec(child.props.className || "");
+      const lang = match ? match[1].toLowerCase() : "text";
+      const code = String(child.props.children).replace(/\n$/, "");
+      return <CodeBlock code={code} lang={lang} />;
+    }
+    return <pre className="overflow-x-auto mb-4 text-sm" {...props}>{children}</pre>;
+  },
 });
 
 export const markdownComponents = {
@@ -66,32 +102,6 @@ export const markdownComponents = {
   hr: ({ ...props }: any) => (
     <hr className="my-6 border-border" {...props} />
   ),
-  code: ({ className, children, ...props }: any) => {
-    if (isMermaid(className)) {
-      return <Mermaid chart={String(children).replace(/\n$/, "")} />;
-    }
-    return (
-      <code className="bg-primary/[0.08] px-1.5 py-0.5 text-xs text-primary/90 break-words" {...props}>
-        {children}
-      </code>
-    );
-  },
-  pre: ({ children, ...props }: any) => {
-    const child: any = Array.isArray(children) ? children[0] : children;
-    if (child?.props && isMermaid(child.props.className)) {
-      return <>{children}</>;
-    }
-    if (child?.props) {
-      // Re-render the fenced code block directly (bypassing the `code`
-      // override above, which only styles inline code)
-      return (
-        <pre className="overflow-x-auto mb-4 text-sm" {...props}>
-          <code className={child.props.className}>{child.props.children}</code>
-        </pre>
-      );
-    }
-    return <pre className="overflow-x-auto mb-4 text-sm" {...props}>{children}</pre>;
-  },
   a: ({ children, href, ...props }: any) => (
     <a
       href={href}
@@ -103,9 +113,11 @@ export const markdownComponents = {
       {children}
     </a>
   ),
+  ...baseCodeComponents("--cp-rgb-yellow"),
   ...baseTableComponents("--cp-rgb-yellow"),
 };
 
 export const cyanMarkdownComponents = {
+  ...baseCodeComponents("--cp-rgb-cyan"),
   ...baseTableComponents("--cp-rgb-cyan"),
 };

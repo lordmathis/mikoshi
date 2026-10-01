@@ -200,6 +200,49 @@ body {
   background: rgba(245, 216, 0, 0.5);
 }
 
+.markdown-alert {
+  padding: 0.5rem 1rem;
+  margin: 0 0 1rem;
+  border-left: 3px solid var(--color-cp-border);
+}
+
+.markdown-alert .markdown-alert-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.markdown-alert .markdown-alert-title .octicon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  background-color: currentColor;
+  -webkit-mask-image: var(--oct-icon);
+  mask-image: var(--oct-icon);
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+}
+
+.markdown-alert-note      { border-left-color: var(--color-cp-cyan); }
+.markdown-alert-note .markdown-alert-title { color: var(--color-cp-cyan); }
+
+.markdown-alert-tip       { border-left-color: var(--color-cp-cyan-bright); }
+.markdown-alert-tip .markdown-alert-title { color: var(--color-cp-cyan-bright); }
+
+.markdown-alert-important { border-left-color: var(--color-cp-yellow-dim); }
+.markdown-alert-important .markdown-alert-title { color: var(--color-cp-yellow-dim); }
+
+.markdown-alert-warning   { border-left-color: var(--color-cp-yellow); }
+.markdown-alert-warning .markdown-alert-title { color: var(--color-cp-yellow); }
+
+.markdown-alert-caution   { border-left-color: var(--color-cp-red); }
+.markdown-alert-caution .markdown-alert-title { color: var(--color-cp-red); }
+
 mjx-container svg,
 span[data-mathjax] svg {
   display: inline !important;

@@ -1,7 +1,6 @@
 import { Bot, User, Brain, File, GitBranch, RotateCw, Edit2, Copy, Check, Link, Volume2 } from "lucide-react";
 import { cn } from "../lib/utils.ts";
 import ReactMarkdown from "react-markdown";
-import "highlight.js/styles/github-dark.css";
 import { useState, useRef, useEffect, memo } from "react";
 import {
   Tooltip,
@@ -13,7 +12,7 @@ import { IconButtonTooltip } from "../shared/icon-button-tooltip.tsx";
 import { Chip } from "../shared/chip.tsx";
 import { CornerTriangle, MessageAvatar, Scanlines } from "./message-atoms.tsx";
 import { type Message } from "../lib/api.ts";
-import { markdownComponents, REMARK_PLUGINS, REHYPE_PLUGINS } from "../lib/markdown-components.tsx";
+import { markdownComponents, REMARK_PLUGINS } from "../lib/markdown-components.tsx";
 
 interface ChatMessageProps {
   message: Message;
@@ -221,7 +220,6 @@ export const ChatMessage = memo(function ChatMessage({ message, onBranch, onRetr
                 <div className="text-muted-foreground">
                   <ReactMarkdown
                     remarkPlugins={REMARK_PLUGINS}
-                    rehypePlugins={REHYPE_PLUGINS}
                     components={markdownComponents}
                   >
                     {message.reasoning_content}
@@ -274,7 +272,6 @@ export const ChatMessage = memo(function ChatMessage({ message, onBranch, onRetr
         <div className="text-foreground/90 font-sans break-words" style={{ lineHeight: '1.6', overflowWrap: 'anywhere' }}>
           <ReactMarkdown
             remarkPlugins={REMARK_PLUGINS}
-            rehypePlugins={REHYPE_PLUGINS}
             components={markdownComponents}
           >
             {message.content}

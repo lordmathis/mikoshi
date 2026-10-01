@@ -1,12 +1,11 @@
 import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
 import rehypeMathjax from "rehype-mathjax";
-import "highlight.js/styles/github-dark.css";
 import { Loader2, X, File } from "lucide-react";
 import { Button } from "../ui/button.tsx";
 import { ScrollArea } from "../ui/scroll-area.tsx";
 import { remarkWikiLinks, resolveTarget } from "../lib/remark-wiki-links.ts";
-import { markdownComponents, REMARK_PLUGINS, REHYPE_PLUGINS } from "../lib/markdown-components.tsx";
+import { markdownComponents, REMARK_PLUGINS } from "../lib/markdown-components.tsx";
 import { encodeFilePath } from "../lib/api.ts";
 
 interface PreviewProps {
@@ -258,7 +257,7 @@ export function Preview({ filePath, fileContent, isLoading, onClose, workspaceId
                     {parsed && <FrontmatterPanel metadata={parsed.metadata} />}
                     <ReactMarkdown
                       remarkPlugins={remarkPlugins}
-                      rehypePlugins={[...REHYPE_PLUGINS, rehypeMathjax]}
+                      rehypePlugins={[rehypeMathjax]}
                       components={components}
                       urlTransform={(url) => {
                         if (url.startsWith("wiki://") || url.startsWith("wiki-image://")) return url;

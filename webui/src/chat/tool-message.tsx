@@ -2,9 +2,8 @@ import { Wrench, ShieldCheck, Check, X } from "lucide-react";
 import { cn } from "../lib/utils.ts";
 import { useState, useMemo, memo } from "react";
 import ReactMarkdown from "react-markdown";
-import "highlight.js/styles/github-dark.css";
 import type { Message, PendingApproval } from "../lib/api.ts";
-import { cyanMarkdownComponents, REMARK_PLUGINS, REHYPE_PLUGINS } from "../lib/markdown-components.tsx";
+import { cyanMarkdownComponents, REMARK_PLUGINS } from "../lib/markdown-components.tsx";
 import { CornerTriangle, MessageAvatar, Scanlines } from "./message-atoms.tsx";
 
 interface ToolMessageProps {
@@ -119,7 +118,6 @@ export const ToolMessage = memo(function ToolMessage({
                 <div className="text-foreground/90" style={{ letterSpacing: '0.02em', lineHeight: '1.6' }}>
                   <ReactMarkdown
                     remarkPlugins={REMARK_PLUGINS}
-                    rehypePlugins={REHYPE_PLUGINS}
                     components={cyanMarkdownComponents}
                   >
                     {displayContent}
