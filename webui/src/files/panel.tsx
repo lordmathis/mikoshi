@@ -1,4 +1,4 @@
-import { File, X, Loader2 } from "lucide-react";
+import { File, X, Loader2, PanelRightClose, PanelRightOpen } from "lucide-react";
 import { Button } from "../ui/button.tsx";
 import { Preview } from "./preview.tsx";
 import { Editor } from "./editor.tsx";
@@ -19,6 +19,8 @@ interface PanelProps {
   isDirty: boolean;
   isSaving: boolean;
   onSave: () => void;
+  chatHidden: boolean;
+  onToggleChat: () => void;
 }
 
 function isTextFile(path: string): boolean {
@@ -41,6 +43,8 @@ export function Panel({
   isDirty,
   isSaving,
   onSave,
+  chatHidden,
+  onToggleChat,
 }: PanelProps) {
   if (!filePath) return null;
 
@@ -93,6 +97,15 @@ export function Panel({
           >
             Edit
           </button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 opacity-50 hover:opacity-100"
+            onClick={onToggleChat}
+          >
+            {chatHidden ? <PanelRightOpen className="h-4 w-4" /> : <PanelRightClose className="h-4 w-4" />}
+            <span className="sr-only">{chatHidden ? "Show chat" : "Hide chat"}</span>
+          </Button>
           <Button variant="ghost" size="icon" className="h-7 w-7 opacity-50 hover:opacity-100" onClick={onClose}>
             <X className="h-4 w-4" />
           </Button>

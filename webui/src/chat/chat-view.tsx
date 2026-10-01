@@ -92,6 +92,11 @@ export function ChatView() {
   };
 
   const showPreview = filePreview.filePath !== null;
+  const [chatHidden, setChatHidden] = useState(false);
+
+  useEffect(() => {
+    if (!showPreview) setChatHidden(false);
+  }, [showPreview]);
 
   return (
     <div className="relative flex h-screen" style={{ background: "var(--color-background)" }}>
@@ -163,10 +168,13 @@ export function ChatView() {
                 isDirty={filePreview.isDirty}
                 isSaving={filePreview.isSaving}
                 onSave={filePreview.saveFile}
+                chatHidden={chatHidden}
+                onToggleChat={() => setChatHidden((hidden) => !hidden)}
               />
             </div>
           )}
 
+          {!chatHidden && (
           <div className="flex flex-col flex-1 min-w-0">
             <MessagesList
               messages={messages.messages}
@@ -219,6 +227,7 @@ export function ChatView() {
               hasWorkspace={!!sidebar.activeWorkspaceId}
             />
           </div>
+          )}
         </div>
       </div>
 
