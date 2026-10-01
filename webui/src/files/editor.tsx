@@ -90,7 +90,6 @@ const cyberpunkHighlight = HighlightStyle.define([
   { tag: tags.meta, color: "#d0c8b0" },
   { tag: tags.processingInstruction, color: "#a89e88" },
   { tag: tags.strikethrough, textDecoration: "line-through", color: "#a89e88" },
-  { tag: tags.list, color: "#f5d800" },
   { tag: tags.typeName, color: "#e63329" },
   { tag: tags.tagName, color: "#00d4ff" },
   { tag: tags.propertyName, color: "#d0c8b0" },
