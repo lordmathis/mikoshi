@@ -1,4 +1,14 @@
-import type { CapacitorConfig } from '@capacitor/cli';
+// Structural subset of @capacitor/cli's CapacitorConfig — the CLI parses
+// this file itself; the type just keeps the fields we set honest.
+interface CapacitorConfig {
+  appId: string;
+  appName: string;
+  webDir: string;
+  server?: {
+    url?: string;
+    allowNavigation?: string[];
+  };
+}
 
 // Domains come from the environment so they never land in the repo.
 // Copy webui/.env.capacitor.example to webui/.env.capacitor (gitignored)
