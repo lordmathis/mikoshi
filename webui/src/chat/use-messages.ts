@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { api, type Message, type FileResource, type PendingApproval } from "../lib/api.ts";
+import { api, type ChatWithMessages, type Message, type FileResource, type PendingApproval, ApiError } from "../lib/api.ts";
 import { type ChatSettings } from "./chat-settings-dialog.tsx";
 
 function tryParseWorkspaceChange(
@@ -26,7 +26,8 @@ export function useMessages(
   const [pendingApprovals, setPendingApprovals] = useState<Record<string, PendingApproval>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [chat, setChat] = useState<ChatWithMessages | null>(null);
+  const [loadError, setLoadError] = useState<{ message: string; status: number | null } | null>(null);
   const [loadedChatId, setLoadedChatId] = useState<string | undefined>(undefined);
   const streamAbortRef = useRef<AbortController | null>(null);
   const pendingApprovalsRef = useRef<Record<string, PendingApproval>>({});
@@ -62,6 +63,7 @@ export function useMessages(
       const chatData = await api.getChat(chatId);
       if (chatIdRef.current !== chatId) return;
       setMessages(chatData.messages);
+      setChat(chatData);
       setChatSettings({
         baseModel: chatData.model || "",
         systemPrompt: chatData.system_prompt || "",
@@ -82,8 +84,12 @@ export function useMessages(
       console.error("Failed to reload messages:", error);
       if (chatIdRef.current !== chatId) return;
       setMessages([]);
+      setChat(null);
       setPendingApprovals({});
-      setLoadError(error instanceof Error ? error.message : "Failed to load messages");
+      setLoadError({
+        message: error instanceof Error ? error.message : "Failed to load messages",
+        status: error instanceof ApiError ? error.status : null,
+      });
     } finally {
       if (chatIdRef.current === chatId) {
         setLoadedChatId(chatId);
@@ -154,6 +160,7 @@ export function useMessages(
   useEffect(() => {
     if (!chatId) {
       setMessages([]);
+      setChat(null);
       setPendingApprovals({});
       setLoadError(null);
       setLoadedChatId(undefined);
@@ -330,7 +337,9 @@ export function useMessages(
     messages: isStale ? [] : messages,
     isLoading: isLoading || isStale,
     isSending,
-    loadError: isStale ? null : loadError,
+    loadError: isStale ? null : loadError?.message ?? null,
+    loadErrorStatus: isStale ? null : loadError?.status ?? null,
+    chat: isStale ? null : chat,
     chatSettings,
     setChatSettings,
     pendingApprovals: isStale ? {} : pendingApprovals,

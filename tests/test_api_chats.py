@@ -235,6 +235,38 @@ class TestListChats:
         titles = [c["title"] for c in resp.json()["chats"]]
         assert "A" in titles and "B" in titles
 
+    @pytest.mark.asyncio
+    async def test_workspace_id_param_filters(self, client, db):
+        from sqlalchemy import text
+
+        ws = db.create_workspace(name="ws", repo_url="https://x.com/repo")
+        db.create_chat(title="bound", workspace_id=ws.id)
+        db.create_chat(title="unbound")
+
+        resp = await client.get(f"/api/chats?workspace_id={ws.id}")
+        assert [c["title"] for c in resp.json()["chats"]] == ["bound"]
+
+        resp = await client.get("/api/chats")
+        assert [c["title"] for c in resp.json()["chats"]] == ["unbound"]
+
+    @pytest.mark.asyncio
+    async def test_offset_param_reaches_query(self, client, db):
+        from sqlalchemy import text
+
+        chats = [db.create_chat(title=f"c{i}") for i in range(3)]
+        with db.engine.connect() as conn:
+            for i, chat in enumerate(chats):
+                conn.execute(
+                    text(
+                        "UPDATE chats SET updated_at = datetime('now', :minus) WHERE id = :id"
+                    ),
+                    {"minus": f"-{i} minutes", "id": chat.id},
+                )
+            conn.commit()
+
+        resp = await client.get("/api/chats?limit=2&offset=2")
+        assert [c["title"] for c in resp.json()["chats"]] == ["c2"]
+
 
 class TestGetChat:
     @pytest.mark.asyncio

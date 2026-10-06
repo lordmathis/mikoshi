@@ -208,6 +208,16 @@ export interface GitResult {
   output: string;
 }
 
+export class ApiError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 class ApiClient {
   private baseURL: string;
 
@@ -218,7 +228,10 @@ class ApiClient {
   private async assertOk(response: Response): Promise<void> {
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: response.statusText }));
-      throw new Error(error.detail || `HTTP ${response.status}: ${response.statusText}`);
+      throw new ApiError(
+        error.detail || `HTTP ${response.status}: ${response.statusText}`,
+        response.status
+      );
     }
   }
 
@@ -242,8 +255,14 @@ class ApiClient {
   }
 
   // Chat endpoints
-  async listChats(limit: number = 20): Promise<{ chats: Chat[] }> {
-    return this.request(`/chats?limit=${limit}`);
+  async listChats(
+    limit: number = 20,
+    offset: number = 0,
+    workspaceId?: string | null
+  ): Promise<{ chats: Chat[] }> {
+    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    if (workspaceId) params.set("workspace_id", workspaceId);
+    return this.request(`/chats?${params.toString()}`);
   }
 
   async getChat(chatId: string): Promise<ChatWithMessages> {

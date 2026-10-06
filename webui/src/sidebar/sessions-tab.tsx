@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { Plus, X } from "lucide-react";
 import { Button } from "../ui/button.tsx";
 import { EmptyState } from "../shared/empty-state.tsx";
@@ -13,6 +14,8 @@ interface SessionsTabProps {
   onNewConversation: () => void;
   onDeleteConversation: (id: string) => void;
   onClearFilter: () => void;
+  hasMore: boolean;
+  onLoadMore: () => void;
   isLoading?: boolean;
 }
 
@@ -25,16 +28,23 @@ export function SessionsTab({
   onNewConversation,
   onDeleteConversation,
   onClearFilter,
+  hasMore,
+  onLoadMore,
   isLoading = false,
 }: SessionsTabProps) {
-  let filtered: Conversation[];
-  if (activeWorkspaceId) {
-    filtered = conversations.filter(
-      (c) => c.workspace_id === activeWorkspaceId,
-    );
-  } else {
-    filtered = conversations.filter((c) => !c.workspace_id);
-  }
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting) && hasMore && !isLoading) {
+        onLoadMore();
+      }
+    });
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, isLoading, onLoadMore]);
 
   const activeWorkspaceName = activeWorkspaceId
     ? workspaces.find((w) => w.id === activeWorkspaceId)?.name
@@ -70,14 +80,12 @@ export function SessionsTab({
       )}
 
       <div className="flex-1 overflow-y-auto px-3 pb-6 space-y-2">
-        {isLoading ? (
-          <div className="py-12 text-center cp-label opacity-40 animate-pulse">Syncing...</div>
-        ) : filtered.length === 0 ? (
+        {conversations.length === 0 && !isLoading ? (
           <EmptyState>
             {activeWorkspaceId ? "No sessions bound to this node" : "No sessions found"}
           </EmptyState>
         ) : (
-          filtered.map((conversation) => {
+          conversations.map((conversation) => {
             const isActive = currentConversationId === conversation.id;
             const hasWorkspace = !!conversation.workspace_id;
             return (
@@ -99,6 +107,9 @@ export function SessionsTab({
             );
           })
         )}
+        <div ref={sentinelRef} className="py-2 text-center cp-label opacity-40">
+          {isLoading && <span className="animate-pulse inline-block">Syncing...</span>}
+        </div>
       </div>
     </>
   );

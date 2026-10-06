@@ -8,6 +8,7 @@ import { ChatInput } from "./chat-input.tsx";
 import { Panel } from "../files/panel.tsx";
 import { useConversations } from "./use-conversations.ts";
 import { useMessages } from "./use-messages.ts";
+import { useChatRoute } from "./use-chat-route.ts";
 import { useChatFiles } from "./use-chat-files.ts";
 import { useChatInput } from "./use-chat-input.ts";
 import { useSidebar } from "../sidebar/use-sidebar.ts";
@@ -18,11 +19,12 @@ import { useConnectorDialog } from "../connectors/use-connector-dialog.ts";
 export function ChatView() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const connectorDialog = useConnectorDialog();
-  const [currentConversationId, setCurrentConversationId] = useState<string | undefined>();
+  const { chatId, navigate } = useChatRoute();
+  const currentConversationId = chatId ?? undefined;
   const [isCreateNodeOpen, setIsCreateNodeOpen] = useState(false);
 
-  const conversations = useConversations();
   const sidebar = useSidebar();
+  const conversations = useConversations(sidebar.activeWorkspaceId);
   const workspaces = useWorkspaces(sidebar);
   const filePreview = usePreview(sidebar.activeWorkspaceId);
 
@@ -44,6 +46,29 @@ export function ChatView() {
 
   const messages = useMessages(currentConversationId, handleWorkspaceChange);
   const files = useChatFiles();
+
+  const loadedChat = messages.chat;
+  const loadedChatId = loadedChat?.id;
+  const loadedChatWorkspaceId = loadedChat?.workspace_id ?? null;
+  const setActiveWorkspace = sidebar.setActiveWorkspace;
+  useEffect(() => {
+    if (!loadedChatId) return;
+    setActiveWorkspace(loadedChatWorkspaceId);
+  }, [loadedChatId, loadedChatWorkspaceId, setActiveWorkspace]);
+
+  const chatInList = conversations.conversations.some((c) => c.id === loadedChatId);
+  const upsertConversation = conversations.upsertConversation;
+  useEffect(() => {
+    if (!loadedChat || chatInList) return;
+    upsertConversation(loadedChat);
+  }, [loadedChat, chatInList, upsertConversation]);
+
+  useEffect(() => {
+    if (!messages.loadError) return;
+    if (messages.loadErrorStatus === 404 && chatId) {
+      navigate(null, { replace: true });
+    }
+  }, [messages.loadError, messages.loadErrorStatus, chatId, navigate]);
 
   const currentConversation = conversations.conversations.find(
     (conv) => conv.id === currentConversationId
@@ -84,8 +109,8 @@ export function ChatView() {
 
   const handleBranch = useCallback(async (messageId: string) => {
     const id = await conversations.branchConversation(currentConversationIdRef.current!, messageId);
-    setCurrentConversationId(id);
-  }, [conversations.branchConversation]);
+    navigate(id);
+  }, [conversations.branchConversation, navigate]);
 
   const handleFileUploadClick = () => {
     fileInputRef.current?.click();
@@ -105,18 +130,20 @@ export function ChatView() {
         onToggle={() => setSidebarOpen(!sidebarOpen)}
         conversations={conversations.conversations}
         currentConversationId={currentConversationId}
-        onConversationSelect={setCurrentConversationId}
+        onConversationSelect={(id) => navigate(id)}
         onNewConversation={async () => {
           const id = await conversations.createConversation(
             undefined,
             sidebar.activeWorkspaceId
           );
-          setCurrentConversationId(id);
+          navigate(id);
         }}
         onDeleteConversation={async (id) => {
           await conversations.deleteConversation(id);
-          if (currentConversationId === id) setCurrentConversationId(undefined);
+          if (chatId === id) navigate(null, { replace: true });
         }}
+        hasMore={conversations.hasMore}
+        onLoadMore={conversations.loadMore}
         isLoading={conversations.isLoading}
         activeTab={sidebar.activeTab}
         onTabChange={sidebar.setActiveTab}

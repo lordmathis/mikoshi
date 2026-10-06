@@ -149,9 +149,26 @@ class Database:
         with self.SessionLocal() as session:
             return session.get(Chat, chat_id)
 
-    def list_chats(self, limit: int = 20) -> List[Chat]:
+    def list_chats(
+        self,
+        limit: int = 20,
+        offset: int = 0,
+        workspace_id: Optional[str] = None,
+    ) -> List[Chat]:
+        # Absent workspace_id means unbound-only — the only semantics the
+        # sessions list uses. There is deliberately no "no filter" mode.
         with self.SessionLocal() as session:
-            stmt = select(Chat).order_by(Chat.updated_at.desc()).limit(limit)
+            if workspace_id is None:
+                condition = Chat.workspace_id.is_(None)
+            else:
+                condition = Chat.workspace_id == workspace_id
+            stmt = (
+                select(Chat)
+                .where(condition)
+                .order_by(Chat.updated_at.desc())
+                .offset(offset)
+                .limit(limit)
+            )
             result = session.execute(stmt)
             return list(result.scalars().all())
 

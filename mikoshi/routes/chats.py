@@ -205,9 +205,14 @@ async def create_chat(request: Request, body: CreateChatRequest):
 
 
 @router.get("/chats")
-async def list_chats(request: Request, limit: int = 20):
+async def list_chats(
+    request: Request,
+    limit: int = 20,
+    offset: int = 0,
+    workspace_id: Optional[str] = None,
+):
     database = request.app.state.database
-    chats = database.list_chats(limit=limit)
+    chats = database.list_chats(limit=limit, offset=offset, workspace_id=workspace_id)
     return {"chats": [serialize_chat(chat) for chat in chats]}
 
 

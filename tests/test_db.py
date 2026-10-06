@@ -56,6 +56,36 @@ class TestChatCRUD:
         chats = db.list_chats(limit=3)
         assert len(chats) == 3
 
+    def test_list_chats_filters_by_workspace(self, db):
+        ws1 = db.create_workspace("one", "https://one.com")
+        ws2 = db.create_workspace("two", "https://two.com")
+        db.create_chat(title="a", workspace_id=ws1.id)
+        db.create_chat(title="b", workspace_id=ws1.id)
+        db.create_chat(title="c", workspace_id=ws2.id)
+        db.create_chat(title="d")
+        db.create_chat(title="e")
+
+        assert {c.title for c in db.list_chats(workspace_id=ws1.id)} == {"a", "b"}
+        assert {c.title for c in db.list_chats(workspace_id=ws2.id)} == {"c"}
+        assert {c.title for c in db.list_chats()} == {"d", "e"}
+
+    def test_list_chats_offset_skips(self, db):
+        from sqlalchemy import text as sql_text
+
+        chats = [db.create_chat(title=f"c{i}") for i in range(5)]
+        with db.engine.connect() as conn:
+            for i, chat in enumerate(chats):
+                conn.execute(
+                    sql_text(
+                        "UPDATE chats SET updated_at = datetime('now', :minus) WHERE id = :id"
+                    ),
+                    {"minus": f"-{i} minutes", "id": chat.id},
+                )
+            conn.commit()
+
+        assert [c.title for c in db.list_chats()] == ["c0", "c1", "c2", "c3", "c4"]
+        assert [c.title for c in db.list_chats(limit=2, offset=1)] == ["c1", "c2"]
+
     def test_delete_chat(self, db):
         chat = db.create_chat()
         db.delete_chat(chat.id)

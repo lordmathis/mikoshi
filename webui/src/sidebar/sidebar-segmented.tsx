@@ -16,6 +16,8 @@ interface SidebarSegmentedControlProps {
   onConversationSelect: (conversationId: string) => void;
   onNewConversation: () => void;
   onDeleteConversation: (conversationId: string) => void;
+  hasMore: boolean;
+  onLoadMore: () => void;
   isLoading?: boolean;
 
   activeTab: SidebarTab;
@@ -53,6 +55,8 @@ export function SidebarSegmentedControl({
   onConversationSelect,
   onNewConversation,
   onDeleteConversation,
+  hasMore,
+  onLoadMore,
   isLoading,
 
   activeTab,
@@ -135,6 +139,8 @@ export function SidebarSegmentedControl({
                 onNewConversation={onNewConversation}
                 onDeleteConversation={onDeleteConversation}
                 onClearFilter={onClearFilter}
+                hasMore={hasMore}
+                onLoadMore={onLoadMore}
                 isLoading={isLoading}
               />
             )}
