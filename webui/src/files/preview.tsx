@@ -6,7 +6,9 @@ import { Button } from "../ui/button.tsx";
 import { ScrollArea } from "../ui/scroll-area.tsx";
 import { remarkWikiLinks, resolveTarget } from "../lib/remark-wiki-links.ts";
 import { markdownComponents, REMARK_PLUGINS } from "../lib/markdown-components.tsx";
+import { formatValue, parseFrontmatter } from "../lib/frontmatter.ts";
 import { encodeFilePath } from "../lib/api.ts";
+import { ViewBlockContext } from "./view-block.tsx";
 
 interface PreviewProps {
   filePath: string | null;
@@ -21,98 +23,6 @@ interface PreviewProps {
 
 function isMarkdownFile(path: string): boolean {
   return /\.(md|mdx|markdown)$/i.test(path);
-}
-
-interface FrontmatterData {
-  metadata: Record<string, unknown>;
-  content: string;
-}
-
-const FRONTMATTER_RE = /^---\s*\r?\n([\s\S]*?)\r?\n---\s*\r?\n/;
-
-function parseFrontmatter(raw: string): FrontmatterData | null {
-  const match = raw.match(FRONTMATTER_RE);
-  if (!match) return null;
-
-  const yaml = match[1].trim();
-  if (!yaml) return null;
-
-  const metadata: Record<string, unknown> = {};
-  const lines = yaml.split(/\r?\n/);
-  let currentKey: string | null = null;
-  const currentArray: unknown[] = [];
-
-  function flushArray() {
-    if (currentKey !== null && currentArray.length > 0) {
-      metadata[currentKey] = currentArray.slice();
-      currentArray.length = 0;
-    }
-  }
-
-  for (const line of lines) {
-    const arrayItem = line.match(/^\s+-\s+(.*)/);
-    if (arrayItem) {
-      if (currentKey !== null) {
-        currentArray.push(parseValue(arrayItem[1]));
-      }
-      continue;
-    }
-
-    const kv = line.match(/^([\w.-]+)\s*:\s*(.*)/);
-    if (kv) {
-      flushArray();
-      currentKey = kv[1];
-      const val = kv[2].trim();
-      if (val === "") {
-        currentArray.length = 0;
-      } else {
-        metadata[currentKey] = parseValue(val);
-        currentKey = null;
-      }
-      continue;
-    }
-
-    if (currentKey !== null && line.trim() !== "") {
-      const existing = metadata[currentKey];
-      if (typeof existing === "string") {
-        metadata[currentKey] = existing + "\n" + line.trim();
-      }
-    }
-  }
-
-  flushArray();
-
-  if (Object.keys(metadata).length === 0) return null;
-
-  return {
-    metadata,
-    content: raw.slice(match[0].length),
-  };
-}
-
-function parseValue(val: string): unknown {
-  if (val === "true") return true;
-  if (val === "false") return false;
-  if (val === "null" || val === "~") return null;
-  if (/^-?\d+$/.test(val)) return parseInt(val, 10);
-  if (/^-?\d+\.\d+$/.test(val)) return parseFloat(val);
-  if (/^(["'])(.*)\1$/.test(val)) return val.slice(1, -1);
-  if (/^\[.*\]$/.test(val)) {
-    try {
-      return JSON.parse(val);
-    } catch {
-      return val;
-    }
-  }
-  return val;
-}
-
-function formatValue(value: unknown): string {
-  if (value === null || value === undefined) return "null";
-  if (typeof value === "boolean") return value ? "true" : "false";
-  if (Array.isArray(value)) return value.map(formatValue).join(", ");
-  if (typeof value === "object") return JSON.stringify(value);
-  return String(value);
 }
 
 function FrontmatterPanel({ metadata }: { metadata: Record<string, unknown> }) {
@@ -248,28 +158,30 @@ export function Preview({ filePath, fileContent, isLoading, onClose, workspaceId
               Failed to load file
             </div>
           ) : isMd ? (
-            <div className="text-foreground/90 font-sans" style={{ lineHeight: '1.6' }}>
-              {(() => {
-                const parsed = parseFrontmatter(fileContent);
-                const mdContent = parsed ? parsed.content : fileContent;
-                return (
-                  <>
-                    {parsed && <FrontmatterPanel metadata={parsed.metadata} />}
-                    <ReactMarkdown
-                      remarkPlugins={remarkPlugins}
-                      rehypePlugins={[rehypeMathjax]}
-                      components={components}
-                      urlTransform={(url) => {
-                        if (url.startsWith("wiki://") || url.startsWith("wiki-image://")) return url;
-                        return url;
-                      }}
-                    >
-                      {mdContent}
-                    </ReactMarkdown>
-                  </>
-                );
-              })()}
-            </div>
+            <ViewBlockContext.Provider value={workspaceId ? { workspaceId, onFileClick } : null}>
+              <div className="text-foreground/90 font-sans" style={{ lineHeight: '1.6' }}>
+                {(() => {
+                  const parsed = parseFrontmatter(fileContent);
+                  const mdContent = parsed ? parsed.content : fileContent;
+                  return (
+                    <>
+                      {parsed && <FrontmatterPanel metadata={parsed.metadata} />}
+                      <ReactMarkdown
+                        remarkPlugins={remarkPlugins}
+                        rehypePlugins={[rehypeMathjax]}
+                        components={components}
+                        urlTransform={(url) => {
+                          if (url.startsWith("wiki://") || url.startsWith("wiki-image://")) return url;
+                          return url;
+                        }}
+                      >
+                        {mdContent}
+                      </ReactMarkdown>
+                    </>
+                  );
+                })()}
+              </div>
+            </ViewBlockContext.Provider>
           ) : (
             <pre className="text-sm text-foreground/80 whitespace-pre-wrap break-words font-mono">
               {fileContent}

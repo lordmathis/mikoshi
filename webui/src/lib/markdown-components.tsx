@@ -4,6 +4,7 @@ import remarkEmoji from "remark-emoji";
 import remarkGithubAlerts from "remark-github-alerts";
 import { Mermaid } from "./mermaid.tsx";
 import { CodeBlock } from "./code-block.tsx";
+import { ViewBlock } from "../files/view-block.tsx";
 
 export const REMARK_PLUGINS: any[] = [
   remarkGfm,
@@ -14,6 +15,9 @@ export const REMARK_PLUGINS: any[] = [
 
 const isMermaid = (className: string | undefined) =>
   /language-mermaid/.test(className || "");
+
+const isView = (className: string | undefined) =>
+  /language-view\b/.test(className || "");
 
 const baseTableComponents = (rgbVar: string) => ({
   table: ({ children, ...props }: any) => (
@@ -54,6 +58,9 @@ const baseCodeComponents = (rgbVar: string) => ({
     const child: any = Array.isArray(children) ? children[0] : children;
     if (child?.props && isMermaid(child.props.className)) {
       return <>{children}</>;
+    }
+    if (child?.props && isView(child.props.className)) {
+      return <ViewBlock query={String(child.props.children).replace(/\n$/, "")} />;
     }
     if (child?.props) {
       const match = /language-(\S+)/.exec(child.props.className || "");

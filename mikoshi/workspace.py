@@ -1,14 +1,55 @@
+import datetime
 import logging
 import mimetypes
 import os
+import re
 import shutil
 from typing import List, Optional
+
+import yaml
 
 from mikoshi.config import ConnectorsConfig, resolve_connector_token
 from mikoshi.connectors.client_base import FileNode
 from mikoshi.git import GitTimeout, auth_env, run_git
 
 logger = logging.getLogger(__name__)
+
+FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
+
+# Frontmatter must open and close within this many bytes or the file is skipped.
+FRONTMATTER_READ_CAP = 64 * 1024
+
+
+def _glob_to_regex(pattern: str) -> re.Pattern:
+    parts = []
+    i = 0
+    while i < len(pattern):
+        if pattern.startswith("**/", i):
+            parts.append("(?:[^/]+/)*")
+            i += 3
+        elif pattern.startswith("**", i):
+            parts.append(".*")
+            i += 2
+        elif pattern[i] == "*":
+            parts.append("[^/]*")
+            i += 1
+        elif pattern[i] == "?":
+            parts.append("[^/]")
+            i += 1
+        else:
+            parts.append(re.escape(pattern[i]))
+            i += 1
+    return re.compile("^" + "".join(parts) + "$")
+
+
+def _json_safe(value):
+    if isinstance(value, datetime.date):
+        return value.isoformat()
+    if isinstance(value, list):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    return value
 
 
 class WorkspaceError(Exception):
@@ -221,3 +262,39 @@ class WorkspaceService:
         return sorted(
             os.path.relpath(path, root) for path in walk_files(root)
         )
+
+    def get_frontmatter(self, workspace_id: str, pattern: str) -> List[dict]:
+        root = self.get_workspace_path(workspace_id)
+        regex = _glob_to_regex(pattern)
+
+        results = []
+        for rel_path in self.list_files_flat(workspace_id):
+            if not regex.match(rel_path):
+                continue
+            frontmatter = self._read_frontmatter(os.path.join(root, rel_path))
+            if frontmatter:
+                results.append({"path": rel_path, "frontmatter": frontmatter})
+        return results
+
+    def _read_frontmatter(self, full_path: str) -> Optional[dict]:
+        try:
+            with open(full_path, "rb") as f:
+                head = f.read(FRONTMATTER_READ_CAP).decode(
+                    "utf-8", errors="replace"
+                )
+        except OSError:
+            return None
+
+        match = FRONTMATTER_RE.match(head)
+        if not match:
+            return None
+
+        try:
+            data = yaml.safe_load(match.group(1))
+        except yaml.YAMLError:
+            logger.debug(f"Invalid frontmatter YAML in {full_path}")
+            return None
+
+        if not isinstance(data, dict) or not data:
+            return None
+        return _json_safe(data)

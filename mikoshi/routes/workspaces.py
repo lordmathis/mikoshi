@@ -178,6 +178,22 @@ async def rename_workspace_file(
     return {"success": True, "new_path": new_path}
 
 
+@router.get("/{workspace_id}/frontmatter")
+async def get_workspace_frontmatter(
+    request: Request, workspace_id: str, glob: str = "**/*"
+):
+    database = request.app.state.database
+    workspace_service = _get_workspace_service(request)
+    _require_workspace(database, workspace_id)
+
+    try:
+        files = workspace_service.get_frontmatter(workspace_id, glob)
+    except WorkspaceError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return {"files": files}
+
+
 @router.get("/{workspace_id}/ls")
 async def list_workspace_files(request: Request, workspace_id: str):
     database = request.app.state.database

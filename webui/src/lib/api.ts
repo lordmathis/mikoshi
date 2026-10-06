@@ -159,6 +159,11 @@ export interface FileNode {
   children?: FileNode[];
 }
 
+export interface FrontmatterEntry {
+  path: string;
+  frontmatter: Record<string, unknown>;
+}
+
 export interface Workspace {
   id: string;
   name: string;
@@ -587,6 +592,13 @@ class ApiClient {
 
   async getWorkspaceFileList(id: string): Promise<string[]> {
     const result = await this.request<{ files: string[] }>(`/workspaces/${id}/ls`);
+    return result.files;
+  }
+
+  async getWorkspaceFrontmatter(id: string, glob: string): Promise<FrontmatterEntry[]> {
+    const result = await this.request<{ files: FrontmatterEntry[] }>(
+      `/workspaces/${id}/frontmatter?glob=${encodeURIComponent(glob)}`
+    );
     return result.files;
   }
 

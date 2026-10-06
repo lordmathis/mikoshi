@@ -10,6 +10,7 @@ from mikoshi.workspace import (
     WorkspaceError,
     WorkspaceNotFoundError,
     WorkspaceService,
+    _glob_to_regex,
     _remove_empty_parents,
 )
 
@@ -372,3 +373,99 @@ class TestListFilesFlat:
 
         files = ws.list_files_flat("test-ws")
         assert files == ["code.py"]
+
+
+class TestGlobToRegex:
+    @pytest.mark.parametrize(
+        "pattern,path,expected",
+        [
+            ("**/*.md", "a.md", True),
+            ("**/*.md", "sub/a.md", True),
+            ("**/*.md", "sub/deep/a.md", True),
+            ("**/*.md", "a.txt", False),
+            ("**/*.md", "sub/a.txt", False),
+            ("specs/**/*.md", "specs/a.md", True),
+            ("specs/**/*.md", "specs/sub/a.md", True),
+            ("specs/**/*.md", "a.md", False),
+            ("specs/*.md", "specs/a.md", True),
+            ("specs/*.md", "specs/sub/a.md", False),
+            ("**", "anything/at/all.txt", True),
+            ("?.md", "a.md", True),
+            ("?.md", "ab.md", False),
+            ("?.md", "sub/a.md", False),
+            ("a.b.md", "aXbXmd", False),
+            ("a.b.md", "a.b.md", True),
+        ],
+    )
+    def test_matching(self, pattern, path, expected):
+        assert bool(_glob_to_regex(pattern).match(path)) is expected
+
+
+class TestGetFrontmatter:
+    def _spec(self, root, rel_path, frontmatter, body="content"):
+        return _create_file(
+            root, rel_path, f"---\n{frontmatter}\n---\n{body}"
+        )
+
+    def test_returns_frontmatter_for_matching_files(self, ws):
+        root = _create_workspace(ws)
+        self._spec(root, "specs/a.md", "status: draft\npriority: 2")
+        self._spec(root, "specs/sub/b.md", "status: done")
+
+        result = ws.get_frontmatter("test-ws", "specs/**/*.md")
+
+        assert result == [
+            {"path": "specs/a.md", "frontmatter": {"status": "draft", "priority": 2}},
+            {"path": "specs/sub/b.md", "frontmatter": {"status": "done"}},
+        ]
+
+    def test_skips_files_without_frontmatter(self, ws):
+        root = _create_workspace(ws)
+        _create_file(root, "plain.md", "no frontmatter here")
+        _create_file(root, "empty.md", "")
+
+        assert ws.get_frontmatter("test-ws", "**/*.md") == []
+
+    def test_skips_invalid_yaml(self, ws):
+        root = _create_workspace(ws)
+        _create_file(root, "bad.md", "---\nstatus: [unclosed\n---\nbody")
+
+        assert ws.get_frontmatter("test-ws", "**/*.md") == []
+
+    def test_skips_non_dict_frontmatter(self, ws):
+        root = _create_workspace(ws)
+        _create_file(root, "list.md", "---\n- a\n- b\n---\nbody")
+
+        assert ws.get_frontmatter("test-ws", "**/*.md") == []
+
+    def test_date_serialized_as_iso_string(self, ws):
+        root = _create_workspace(ws)
+        self._spec(root, "dated.md", "updated: 2026-10-01")
+
+        result = ws.get_frontmatter("test-ws", "**/*.md")
+        assert result[0]["frontmatter"]["updated"] == "2026-10-01"
+
+    def test_nested_values_made_json_safe(self, ws):
+        root = _create_workspace(ws)
+        self._spec(
+            root,
+            "nested.md",
+            "meta:\n  updated: 2026-10-01\n  tags:\n    - a",
+        )
+
+        result = ws.get_frontmatter("test-ws", "**/*.md")
+        assert result[0]["frontmatter"]["meta"] == {
+            "updated": "2026-10-01",
+            "tags": ["a"],
+        }
+
+    def test_skips_file_whose_frontmatter_exceeds_read_cap(self, ws):
+        root = _create_workspace(ws)
+        huge = "key: " + "x" * 64 * 1024
+        _create_file(root, "huge.md", f"---\n{huge}\n---\nbody")
+
+        assert ws.get_frontmatter("test-ws", "**/*.md") == []
+
+    def test_workspace_not_found(self, ws):
+        with pytest.raises(WorkspaceNotFoundError):
+            ws.get_frontmatter("nonexistent", "**/*.md")

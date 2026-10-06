@@ -24,6 +24,7 @@ class _StubWorkspaceService:
     def __init__(self, fail_init=False):
         self._fail_init = fail_init
         self._files = {}
+        self.frontmatter_calls = []
 
     async def initialize_workspace(self, workspace_id, repo_url, connector_name=None):
         if self._fail_init:
@@ -60,6 +61,10 @@ class _StubWorkspaceService:
 
     def list_files_flat(self, workspace_id):
         return [path for ws, path in self._files if ws == workspace_id]
+
+    def get_frontmatter(self, workspace_id, pattern):
+        self.frontmatter_calls.append((workspace_id, pattern))
+        return [{"path": "a.md", "frontmatter": {"status": "draft"}}]
 
     def connector_token(self, connector_name):
         return None
@@ -265,6 +270,34 @@ class TestListFiles:
         resp = await client.get(f"/api/workspaces/{ws.id}/ls")
         assert resp.status_code == 200
         assert "a.txt" in resp.json()["files"]
+
+
+class TestFrontmatter:
+    @pytest.mark.asyncio
+    async def test_returns_files_with_glob(self, client, db):
+        ws = db.create_workspace(name="ws", repo_url="https://x.com/repo")
+        resp = await client.get(
+            f"/api/workspaces/{ws.id}/frontmatter",
+            params={"glob": "specs/**/*.md"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["files"] == [
+            {"path": "a.md", "frontmatter": {"status": "draft"}}
+        ]
+        svc = client._transport.app.state.workspace_service
+        assert svc.frontmatter_calls == [(ws.id, "specs/**/*.md")]
+
+    @pytest.mark.asyncio
+    async def test_default_glob(self, client, db):
+        ws = db.create_workspace(name="ws", repo_url="https://x.com/repo")
+        await client.get(f"/api/workspaces/{ws.id}/frontmatter")
+        svc = client._transport.app.state.workspace_service
+        assert svc.frontmatter_calls == [(ws.id, "**/*")]
+
+    @pytest.mark.asyncio
+    async def test_not_found(self, client):
+        resp = await client.get("/api/workspaces/nonexistent/frontmatter")
+        assert resp.status_code == 404
 
 
 class TestGitEndpoints:
