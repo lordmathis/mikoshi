@@ -48,6 +48,7 @@ function manualStream() {
 
 describe("useMessages", () => {
   beforeEach(() => {
+    localStorage.clear();
     vi.spyOn(api, "getChat").mockResolvedValue(chat("chat-a", []));
     vi.spyOn(api, "listApprovals").mockResolvedValue({ approvals: [] });
     vi.spyOn(api, "getStreamStatus").mockResolvedValue({ active: false });
@@ -114,5 +115,43 @@ describe("useMessages", () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.loadError).toBe("network down");
     expect(result.current.messages).toEqual([]);
+  });
+
+  it("paints cached messages before revalidation replaces them", async () => {
+    const cached = chat("chat-c", [message("c1", "user", "cached msg")]);
+    localStorage.setItem("mikoshi-cache:messages:chat-c", JSON.stringify(cached));
+
+    const { result } = renderHook(() => useMessages("chat-c"));
+
+    expect(result.current.messages.map((m) => m.content)).toEqual(["cached msg"]);
+    expect(result.current.isLoading).toBe(false);
+
+    await waitFor(() =>
+      expect(result.current.messages.map((m) => m.content)).toEqual([])
+    );
+  });
+
+  it("writes the fetched chat to the cache", async () => {
+    vi.mocked(api.getChat).mockResolvedValue(chat("chat-d", [message("d1", "user", "hi")]));
+
+    const { result } = renderHook(() => useMessages("chat-d"));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    const stored = JSON.parse(
+      localStorage.getItem("mikoshi-cache:messages:chat-d") ?? "null"
+    ) as { messages: { content: string }[] };
+    expect(stored.messages.map((m) => m.content)).toEqual(["hi"]);
+  });
+
+  it("does not cache chats whose payload exceeds the cache limit", async () => {
+    vi.mocked(api.getChat).mockResolvedValue(
+      chat("chat-e", [message("e1", "user", "x".repeat(512 * 1024))])
+    );
+
+    const { result } = renderHook(() => useMessages("chat-e"));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(localStorage.getItem("mikoshi-cache:messages:chat-e")).toBeNull();
+    expect(result.current.messages).toHaveLength(1);
   });
 });

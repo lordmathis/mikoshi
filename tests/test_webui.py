@@ -12,6 +12,11 @@ def static_app(tmp_path, monkeypatch):
     dist.mkdir()
     (dist / "index.html").write_text("<html>index</html>")
     (dist / "app.js").write_text("console.log(1)")
+    (dist / "sw.js").write_text("// sw")
+    (dist / "manifest.webmanifest").write_text("{}")
+    assets = dist / "assets"
+    assets.mkdir()
+    (assets / "index-abc123.js").write_text("console.log(2)")
     (tmp_path / "secret.txt").write_text("SECRET")
     monkeypatch.setattr(webui_module, "_find_webui_dist", lambda: dist)
 
@@ -58,3 +63,45 @@ class TestStaticContainment:
     async def test_symlink_inside_dist_pointing_out_rejected(self, static_app, tmp_path):
         (tmp_path / "dist" / "linked.js").symlink_to(tmp_path / "secret.txt")
         assert (await _get(static_app, "/linked.js")).status_code == 404
+
+
+class TestCacheHeaders:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "/",
+            "/some/route",
+            "/index.html",
+            "/sw.js",
+            "/manifest.webmanifest",
+        ],
+    )
+    async def test_shell_files_are_no_cache(self, static_app, path):
+        response = await _get(static_app, path)
+        assert response.status_code == 200
+        assert response.headers["cache-control"] == "no-cache"
+
+    @pytest.mark.asyncio
+    async def test_hashed_assets_are_immutable(self, static_app):
+        response = await _get(static_app, "/assets/index-abc123.js")
+        assert response.status_code == 200
+        assert response.headers["cache-control"] == (
+            "public, max-age=31536000, immutable"
+        )
+
+    @pytest.mark.asyncio
+    async def test_regular_files_have_no_cache_control(self, static_app):
+        response = await _get(static_app, "/app.js")
+        assert response.status_code == 200
+        assert "cache-control" not in response.headers
+
+
+class TestMimeTypes:
+    @pytest.mark.asyncio
+    async def test_webmanifest_mime_type(self, static_app):
+        response = await _get(static_app, "/manifest.webmanifest")
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith(
+            "application/manifest+json"
+        )

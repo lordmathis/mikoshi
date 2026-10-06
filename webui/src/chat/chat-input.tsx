@@ -218,7 +218,7 @@ export function ChatInput({
 
   return (
     <div
-      className="sticky bottom-0 z-20 shrink-0 bg-background"
+      className="sticky bottom-0 z-20 shrink-0 bg-background cp-safe-bottom"
       style={{ borderTop: "1px solid rgb(var(--cp-rgb-yellow) / 0.15)" }}
     >
       <div className="mx-auto max-w-3xl px-4 py-4 sm:px-6">
@@ -283,7 +283,7 @@ export function ChatInput({
             onChange={(e) => handleInputChangeWithMentions(e.target.value)}
             onKeyDown={handleKeyDownWithMentions}
             placeholder="Type command..."
-            className="typing-area min-h-[60px] resize-none pr-32 overflow-y-auto cp-cut-12 font-sans"
+            className="typing-area min-h-[60px] resize-none pr-32 overflow-y-auto cp-cut-12 font-sans text-base lg:text-sm"
             style={{
               background: "var(--color-cp-surface3)",
             }}
@@ -345,7 +345,7 @@ export function ChatInput({
                 <Button
                   size="icon"
                   variant="ghost"
-                  className="h-9 w-9"
+                  className="h-10 w-10 lg:h-9 lg:w-9"
                   disabled={isSending || isUploadingFiles || !currentConversationId}
                 >
                   <Plus className="h-5 w-5" />
@@ -366,7 +366,7 @@ export function ChatInput({
             <Button
               size="icon"
               variant={isRecording ? "destructive" : "ghost"}
-              className="h-9 w-9"
+              className="h-10 w-10 lg:h-9 lg:w-9"
               onClick={handleVoiceRecording}
               disabled={isSending || isProcessing || !currentConversationId}
             >
@@ -387,7 +387,7 @@ export function ChatInput({
             />
             <Button
               size="icon"
-              className="h-9 w-9"
+              className="h-10 w-10 lg:h-9 lg:w-9"
               type="submit"
               onClick={onSend}
               disabled={isSending || !currentConversationId || !inputValue.trim()}
@@ -522,7 +522,7 @@ function MentionDropdown<T>({
 }) {
   return (
     <div
-      className="absolute bottom-full left-0 mb-2 w-72 border shadow-lg z-50 bg-cp-surface3 cp-cut-x-10"
+      className="absolute bottom-full left-0 mb-2 w-72 max-w-full border shadow-lg z-50 bg-cp-surface3 cp-cut-x-10"
       style={{
         borderColor: "rgb(var(--cp-rgb-yellow) / 0.25)",
       }}

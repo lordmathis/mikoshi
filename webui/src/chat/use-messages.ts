@@ -1,6 +1,22 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { api, type ChatWithMessages, type Message, type FileResource, type PendingApproval, ApiError } from "../lib/api.ts";
 import { type ChatSettings } from "./chat-settings-dialog.tsx";
+import { localCache } from "../lib/local-cache.ts";
+
+function messagesCacheKey(chatId: string): string {
+  return `mikoshi-cache:messages:${chatId}`;
+}
+
+function chatSettingsFrom(chat: ChatWithMessages): ChatSettings {
+  return {
+    baseModel: chat.model || "",
+    systemPrompt: chat.system_prompt || "",
+    enabledTools: chat.tool_servers || [],
+    modelParams: chat.model_params || {
+      max_iterations: 5,
+    },
+  };
+}
 
 function tryParseWorkspaceChange(
   content: string,
@@ -64,14 +80,8 @@ export function useMessages(
       if (chatIdRef.current !== chatId) return;
       setMessages(chatData.messages);
       setChat(chatData);
-      setChatSettings({
-        baseModel: chatData.model || "",
-        systemPrompt: chatData.system_prompt || "",
-        enabledTools: chatData.tool_servers || [],
-        modelParams: chatData.model_params || {
-          max_iterations: 5,
-        },
-      });
+      setChatSettings(chatSettingsFrom(chatData));
+      localCache.set(messagesCacheKey(chatId), chatData);
       const { approvals } = await api.listApprovals(chatId);
       if (chatIdRef.current !== chatId) return;
       const map: Record<string, PendingApproval> = {};
@@ -168,8 +178,16 @@ export function useMessages(
       return;
     }
     const abortController = beginStream();
+    // Paint the cached chat synchronously; fetchInitial revalidates below.
+    const cached = localCache.get<ChatWithMessages>(messagesCacheKey(chatId));
+    if (cached) {
+      setMessages(cached.messages);
+      setChat(cached);
+      setChatSettings(chatSettingsFrom(cached));
+      setLoadedChatId(chatId);
+    }
     const fetchInitial = async () => {
-      setIsLoading(true);
+      setIsLoading(!cached);
       await reloadMessages();
       setIsLoading(false);
       if (chatIdRef.current !== chatId || abortController.signal.aborted) return;

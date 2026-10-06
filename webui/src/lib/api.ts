@@ -218,6 +218,16 @@ export class ApiError extends Error {
   }
 }
 
+let lastSessionReloadAt = 0;
+
+function reloadOnSessionExpiry(): void {
+  const now = Date.now();
+  // Guard against reload loops when the session is still expired after reload.
+  if (now - lastSessionReloadAt < 5000) return;
+  lastSessionReloadAt = now;
+  window.location.reload();
+}
+
 class ApiClient {
   private baseURL: string;
 
@@ -226,6 +236,11 @@ class ApiClient {
   }
 
   private async assertOk(response: Response): Promise<void> {
+    if (response.status === 401) {
+      // With the service worker serving cached HTML, an expired Authelia
+      // session would otherwise leave a zombie UI of failing API calls.
+      reloadOnSessionExpiry();
+    }
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: response.statusText }));
       throw new ApiError(

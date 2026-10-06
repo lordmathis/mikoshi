@@ -11,6 +11,8 @@ wheels/
 
 # Environment variable files
 .env
+.env.*
+!.env.*.example
 
 # Database files
 *.db

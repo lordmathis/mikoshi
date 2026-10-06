@@ -20,6 +20,7 @@ function fullPage(prefix: string, startMinute: number): Chat[] {
 
 describe("useConversations", () => {
   beforeEach(() => {
+    localStorage.clear();
     vi.spyOn(api, "listChats").mockResolvedValue({ chats: [] });
   });
 
@@ -109,5 +110,43 @@ describe("useConversations", () => {
     act(() => result.current.upsertConversation(chat("deep-link", 500)));
     expect(result.current.conversations).toHaveLength(21);
     expect(result.current.conversations.filter((c) => c.id === "deep-link")).toHaveLength(1);
+  });
+
+  it("paints the cached list synchronously on mount, then revalidates in the background", async () => {
+    localStorage.setItem(
+      "mikoshi-cache:conversations",
+      JSON.stringify([{ id: "cached-1", title: "Cached", timestamp: "now", updated_at: "2026-01-01T00:00:00Z" }])
+    );
+    vi.mocked(api.listChats).mockResolvedValue({ chats: [chat("fresh", 0)] });
+
+    const { result } = renderHook(() => useConversations(null));
+
+    expect(result.current.conversations.map((c) => c.id)).toEqual(["cached-1"]);
+
+    await waitFor(() =>
+      expect(result.current.conversations.map((c) => c.id)).toEqual(["fresh", "cached-1"])
+    );
+  });
+
+  it("writes the merged list to the cache after fetching", async () => {
+    vi.mocked(api.listChats).mockResolvedValue({ chats: [chat("fresh", 0)] });
+
+    const { result } = renderHook(() => useConversations(null));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    const stored = JSON.parse(
+      localStorage.getItem("mikoshi-cache:conversations") ?? "[]"
+    ) as { id: string }[];
+    expect(stored.map((c) => c.id)).toEqual(["fresh"]);
+  });
+
+  it("keys the cache per workspace", async () => {
+    vi.mocked(api.listChats).mockResolvedValue({ chats: [chat("w1", 0, "ws-1")] });
+
+    const { result } = renderHook(() => useConversations("ws-1"));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(localStorage.getItem("mikoshi-cache:conversations:ws-1")).not.toBeNull();
+    expect(localStorage.getItem("mikoshi-cache:conversations")).toBeNull();
   });
 });

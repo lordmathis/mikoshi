@@ -15,13 +15,29 @@ import { useSidebar } from "../sidebar/use-sidebar.ts";
 import { useWorkspaces } from "../sidebar/use-workspaces.ts";
 import { usePreview } from "../files/use-preview.ts";
 import { useConnectorDialog } from "../connectors/use-connector-dialog.ts";
+import { useOverlayHistory, isDesktopViewport } from "../lib/use-overlay-history.ts";
 
 export function ChatView() {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() => isDesktopViewport());
   const connectorDialog = useConnectorDialog();
   const { chatId, navigate } = useChatRoute();
   const currentConversationId = chatId ?? undefined;
   const [isCreateNodeOpen, setIsCreateNodeOpen] = useState(false);
+
+  const closeSidebarOnMobile = useCallback(() => {
+    if (!isDesktopViewport()) setSidebarOpen(false);
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSidebarOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  const toggleSidebar = useCallback(() => setSidebarOpen((open) => !open), []);
+  useOverlayHistory(sidebarOpen, toggleSidebar);
 
   const sidebar = useSidebar();
   const conversations = useConversations(sidebar.activeWorkspaceId);
@@ -85,6 +101,7 @@ export function ChatView() {
   }, [currentConversation?.title]);
 
   const chatInput = useChatInput({
+    chatId: currentConversationId,
     onSend: messages.send,
     onEdit: messages.edit,
     messages: messages.messages,
@@ -118,25 +135,30 @@ export function ChatView() {
 
   const showPreview = filePreview.filePath !== null;
   const [chatHidden, setChatHidden] = useState(false);
+  useOverlayHistory(showPreview, filePreview.closePreview);
 
   useEffect(() => {
     if (!showPreview) setChatHidden(false);
   }, [showPreview]);
 
   return (
-    <div className="relative flex h-screen" style={{ background: "var(--color-background)" }}>
+    <div className="relative flex h-dvh" style={{ background: "var(--color-background)" }}>
       <SidebarSegmentedControl
         isOpen={sidebarOpen}
-        onToggle={() => setSidebarOpen(!sidebarOpen)}
+        onToggle={toggleSidebar}
         conversations={conversations.conversations}
         currentConversationId={currentConversationId}
-        onConversationSelect={(id) => navigate(id)}
+        onConversationSelect={(id) => {
+          navigate(id);
+          closeSidebarOnMobile();
+        }}
         onNewConversation={async () => {
           const id = await conversations.createConversation(
             undefined,
             sidebar.activeWorkspaceId
           );
           navigate(id);
+          closeSidebarOnMobile();
         }}
         onDeleteConversation={async (id) => {
           await conversations.deleteConversation(id);
@@ -148,12 +170,18 @@ export function ChatView() {
         activeTab={sidebar.activeTab}
         onTabChange={sidebar.setActiveTab}
         activeWorkspaceId={sidebar.activeWorkspaceId}
-        onSelectWorkspace={workspaces.selectWorkspace}
+        onSelectWorkspace={(id) => {
+          workspaces.selectWorkspace(id);
+          closeSidebarOnMobile();
+        }}
         workspaceTree={workspaces.workspaceTree}
         treeWorkspaceId={workspaces.treeWorkspaceId}
         onWorkspaceTreeUpdate={workspaces.updateTree}
         activeFilePath={filePreview.filePath}
-        onFileClick={filePreview.openFile}
+        onFileClick={(path) => {
+          filePreview.openFile(path);
+          closeSidebarOnMobile();
+        }}
         onFileDeleted={filePreview.handleFileDeleted}
         onFileRenamed={filePreview.handleFileRenamed}
         activeWorkspaceHasRepo={workspaces.activeWorkspaceHasRepo}
@@ -179,7 +207,10 @@ export function ChatView() {
 
         <div className="flex flex-1 min-h-0">
           {showPreview && (
-            <div className="h-full overflow-hidden" style={{ flex: '2 2 0%', minWidth: 0 }}>
+            <div
+              className="fixed inset-0 z-40 bg-background lg:relative lg:inset-auto lg:z-auto lg:h-full lg:overflow-hidden"
+              style={{ flex: "2 2 0%", minWidth: 0 }}
+            >
               <Panel
                 filePath={filePreview.filePath}
                 fileContent={filePreview.fileContent}
@@ -292,7 +323,7 @@ function ChatHeader({ sidebarOpen, onToggleSidebar, chatTitle }: {
 }) {
   return (
     <div
-      className="sticky top-0 z-20 shrink-0 px-4 py-3 sm:px-6 overflow-hidden"
+      className="sticky top-0 z-20 shrink-0 px-4 py-3 cp-safe-top sm:px-6 overflow-hidden"
       style={{
         background: "linear-gradient(180deg, rgb(var(--cp-rgb-surface3) / 0.95) 0%, rgb(var(--cp-rgb-surface3) / 0.8) 100%)",
         backdropFilter: "blur(8px)",

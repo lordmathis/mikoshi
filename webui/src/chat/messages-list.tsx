@@ -3,8 +3,28 @@ import { ChatMessage } from "./chat-message.tsx";
 import { ToolMessage } from "./tool-message.tsx";
 import { ScrollArea } from "../ui/scroll-area.tsx";
 import { CornerTriangle, MessageAvatar } from "./message-atoms.tsx";
-import { useEffect, memo } from "react";
+import { useEffect, memo, useRef } from "react";
 import type { Message, PendingApproval } from "../lib/api.ts";
+import { localCache } from "../lib/local-cache.ts";
+
+const SCROLL_PERSIST_DELAY_MS = 300;
+
+export function shouldFollowBottom(
+  currentScrollTop: number,
+  scrollHeight: number,
+  clientHeight: number
+): boolean {
+  return scrollHeight - currentScrollTop - clientHeight <= 40;
+}
+
+interface ScrollPosition {
+  top: number;
+  atBottom: boolean;
+}
+
+function scrollKey(chatId: string): string {
+  return `mikoshi-scroll:${chatId}`;
+}
 
 interface MessagesListProps {
   messages: Message[];
@@ -35,9 +55,71 @@ export const MessagesList = memo(function MessagesList({
   onRetry,
   onEdit,
 }: MessagesListProps) {
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLElement | null>(null);
+  const atBottomRef = useRef(true);
+  const restoredForChatRef = useRef<string | undefined>(undefined);
+  const chatIdRef = useRef(currentConversationId);
+  chatIdRef.current = currentConversationId;
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isSending, messagesEndRef]);
+    const viewport = scrollAreaRef.current?.querySelector<HTMLElement>(
+      "[data-slot=scroll-area-viewport]"
+    );
+    viewportRef.current = viewport ?? null;
+    if (!viewport) return;
+
+    let persistTimer: ReturnType<typeof setTimeout> | undefined;
+    const onScroll = () => {
+      atBottomRef.current = shouldFollowBottom(
+        viewport.scrollTop,
+        viewport.scrollHeight,
+        viewport.clientHeight
+      );
+      const chatId = chatIdRef.current;
+      if (!chatId) return;
+      const top = viewport.scrollTop;
+      const atBottom = atBottomRef.current;
+      clearTimeout(persistTimer);
+      persistTimer = setTimeout(() => {
+        localCache.set(scrollKey(chatId), { top, atBottom } satisfies ScrollPosition);
+      }, SCROLL_PERSIST_DELAY_MS);
+    };
+    viewport.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      viewport.removeEventListener("scroll", onScroll);
+      clearTimeout(persistTimer);
+    };
+  }, []);
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport || !currentConversationId || messages.length === 0) return;
+    if (restoredForChatRef.current === currentConversationId) return;
+    restoredForChatRef.current = currentConversationId;
+
+    const saved = localCache.get<ScrollPosition>(scrollKey(currentConversationId));
+    if (saved && !saved.atBottom) {
+      viewport.scrollTop = saved.top;
+      atBottomRef.current = false;
+    } else {
+      viewport.scrollTop = viewport.scrollHeight;
+      atBottomRef.current = true;
+    }
+  }, [currentConversationId, messages]);
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    if (isSending) {
+      // Smooth-animated per-token scrolls jank; jump instead.
+      if (atBottomRef.current) viewport.scrollTop = viewport.scrollHeight;
+      return;
+    }
+    if (shouldFollowBottom(viewport.scrollTop, viewport.scrollHeight, viewport.clientHeight)) {
+      viewport.scrollTo({ top: viewport.scrollHeight, behavior: "smooth" });
+    }
+  }, [messages, isSending]);
 
   const lastUserMessageIndex = messages.reduce(
     (acc, m, i) => (m.role === "user" ? i : acc),
@@ -45,7 +127,7 @@ export const MessagesList = memo(function MessagesList({
   );
 
   return (
-    <ScrollArea className="flex-1 min-h-0">
+    <ScrollArea ref={scrollAreaRef} className="flex-1 min-h-0">
       <div className="mx-auto max-w-3xl px-4 pb-6">
         {isLoading ? (
           <div className="flex items-center justify-center py-12">

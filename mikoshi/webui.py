@@ -25,12 +25,26 @@ def _get_content_type(file_path: Path) -> str:
         ".woff2": "font/woff2",
         ".ttf": "font/ttf",
         ".eot": "application/vnd.ms-fontobject",
+        ".webmanifest": "application/manifest+json",
     }
     return content_types.get(suffix, "application/octet-stream")
 
 
+def _cache_control(full_path: str, file_path: Path) -> str | None:
+    if full_path.startswith("assets/"):
+        # Content-hashed build outputs never change for a given name.
+        return "public, max-age=31536000, immutable"
+    if file_path.name in ("index.html", "sw.js", "manifest.webmanifest"):
+        # The SW and shell must always be revalidated.
+        return "no-cache"
+    return None
+
+
 def _serve_with_compression(
-    file_path: Path, request: Request, content_type: str | None = None
+    file_path: Path,
+    request: Request,
+    content_type: str | None = None,
+    headers: dict[str, str] | None = None,
 ) -> FileResponse:
     """Serve a file with compression support (brotli/gzip)"""
     logger.debug(f"Attempting to serve file: {file_path}")
@@ -41,26 +55,32 @@ def _serve_with_compression(
     if content_type is None:
         content_type = _get_content_type(file_path)
 
+    def extra_headers() -> dict[str, str]:
+        base = {"Content-Type": content_type}
+        if headers:
+            base.update(headers)
+        return base
+
     # Check for brotli version first (better compression)
     if supports_brotli:
         br_path = Path(str(file_path) + ".br")
         if br_path.exists():
-            return FileResponse(
-                br_path,
-                headers={"Content-Encoding": "br", "Content-Type": content_type},
-            )
+            response = FileResponse(br_path)
+            response.headers["Content-Encoding"] = "br"
+            response.headers.update(extra_headers())
+            return response
 
     # Fall back to gzip
     if supports_gzip:
         gz_path = Path(str(file_path) + ".gz")
         if gz_path.exists():
-            return FileResponse(
-                gz_path,
-                headers={"Content-Encoding": "gzip", "Content-Type": content_type},
-            )
+            response = FileResponse(gz_path)
+            response.headers["Content-Encoding"] = "gzip"
+            response.headers.update(extra_headers())
+            return response
 
     # Serve uncompressed
-    return FileResponse(file_path)
+    return FileResponse(file_path, headers=extra_headers())
 
 
 def _find_webui_dist() -> Path | None:
@@ -92,7 +112,9 @@ def setup_webui(app: FastAPI):
         """Serve static files with compression support"""
         if not full_path:
             index_path = webui_dist / "index.html"
-            return _serve_with_compression(index_path, request, "text/html")
+            return _serve_with_compression(
+                index_path, request, "text/html", {"Cache-Control": "no-cache"}
+            )
 
         # Starlette hands us percent-decoded dot-segments; resolve and
         # contain before serving anything.
@@ -100,10 +122,17 @@ def setup_webui(app: FastAPI):
         if not file_path.is_relative_to(webui_dist):
             raise HTTPException(status_code=404, detail="File not found")
         if file_path.exists() and file_path.is_file():
-            return _serve_with_compression(file_path, request)
+            cache_control = _cache_control(full_path, file_path)
+            return _serve_with_compression(
+                file_path,
+                request,
+                headers={"Cache-Control": cache_control} if cache_control else None,
+            )
 
         if "." not in full_path:
             index_path = webui_dist / "index.html"
-            return _serve_with_compression(index_path, request, "text/html")
+            return _serve_with_compression(
+                index_path, request, "text/html", {"Cache-Control": "no-cache"}
+            )
 
         raise HTTPException(status_code=404, detail="File not found")

@@ -53,7 +53,7 @@ export function Panel({
   const canEdit = fileContent !== null && isTextFile(filePath);
 
   return (
-    <div className="flex flex-col h-full overflow-hidden border-r" style={{ borderColor: "rgb(var(--cp-rgb-yellow) / 0.1)" }}>
+    <div className="flex flex-col h-full overflow-hidden border-r cp-safe-top" style={{ borderColor: "rgb(var(--cp-rgb-yellow) / 0.1)" }}>
       <div
         className="flex items-center justify-between px-4 py-2 shrink-0 border-b"
         style={{
@@ -104,7 +104,7 @@ export function Panel({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7 opacity-50 hover:opacity-100"
+                  className="hidden h-7 w-7 opacity-50 hover:opacity-100 lg:inline-flex"
                   onClick={onToggleChat}
                 >
                   {chatHidden ? <PanelRightOpen className="h-4 w-4" /> : <PanelRightClose className="h-4 w-4" />}

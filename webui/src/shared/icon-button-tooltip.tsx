@@ -31,7 +31,7 @@ export function IconButtonTooltip({
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 w-8 p-0"
+            className="h-9 w-9 p-0 lg:h-8 lg:w-8"
             onClick={onClick}
             disabled={disabled}
           >

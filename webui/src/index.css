@@ -117,6 +117,14 @@ body {
 .cp-tri-bl  { clip-path: polygon(0 0, 100% 100%, 100% 0); }
 .cp-tri-tr  { clip-path: polygon(0 0, 100% 0, 0 100%); }
 
+.cp-safe-top {
+  padding-top: max(0px, env(safe-area-inset-top));
+}
+
+.cp-safe-bottom {
+  padding-bottom: max(0px, env(safe-area-inset-bottom));
+}
+
 .cp-hover-user {
   border-color: rgb(var(--cp-rgb-yellow) / 0.2);
   transition: border-color 0.15s, box-shadow 0.15s;

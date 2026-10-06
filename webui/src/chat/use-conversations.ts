@@ -2,8 +2,15 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { api, type Chat, type ChatConfig } from "../lib/api.ts";
 import { type Conversation } from "../sidebar/sidebar.tsx";
 import { formatTimestamp } from "../lib/formatters.ts";
+import { localCache } from "../lib/local-cache.ts";
 
 const PAGE_SIZE = 20;
+
+function cacheKey(workspaceId: string | null): string {
+  return workspaceId
+    ? `mikoshi-cache:conversations:${workspaceId}`
+    : "mikoshi-cache:conversations";
+}
 
 function toConversation(chat: Chat): Conversation {
   return {
@@ -16,29 +23,35 @@ function toConversation(chat: Chat): Conversation {
   };
 }
 
+function mergeConversations(prev: Conversation[], incoming: Chat[]): Conversation[] {
+  const byId = new Map(prev.map((c) => [c.id, c]));
+  for (const chat of incoming) {
+    byId.set(chat.id, toConversation(chat));
+  }
+  // Page shifts from chats moving in updated_at order are absorbed by
+  // the dedupe above; re-sorting keeps the merged list consistent.
+  return [...byId.values()].sort((a, b) =>
+    b.updated_at.localeCompare(a.updated_at)
+  );
+}
+
 export function useConversations(activeWorkspaceId: string | null) {
-  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [initial] = useState(() => {
+    const cached = localCache.get<Conversation[]>(cacheKey(activeWorkspaceId));
+    return { conversations: cached ?? [], fromCache: cached !== null };
+  });
+  const [conversations, setConversations] = useState<Conversation[]>(
+    initial.conversations
+  );
   const [hasMore, setHasMore] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(!initial.fromCache);
 
   const workspaceRef = useRef(activeWorkspaceId);
   workspaceRef.current = activeWorkspaceId;
   const conversationsRef = useRef(conversations);
   conversationsRef.current = conversations;
-
-  const mergePage = useCallback((incoming: Chat[]) => {
-    setConversations((prev) => {
-      const byId = new Map(prev.map((c) => [c.id, c]));
-      for (const chat of incoming) {
-        byId.set(chat.id, toConversation(chat));
-      }
-      // Page shifts from chats moving in updated_at order are absorbed by
-      // the dedupe above; re-sorting keeps the merged list consistent.
-      return [...byId.values()].sort((a, b) =>
-        b.updated_at.localeCompare(a.updated_at)
-      );
-    });
-  }, []);
+  // The mount-run list reset would blank the synchronously painted cache.
+  const skipInitialResetRef = useRef(initial.fromCache);
 
   const fetchPage = useCallback(async (offset: number) => {
     const requestWorkspace = workspaceRef.current;
@@ -46,18 +59,24 @@ export function useConversations(activeWorkspaceId: string | null) {
       setIsLoading(true);
       const response = await api.listChats(PAGE_SIZE, offset, requestWorkspace);
       if (workspaceRef.current !== requestWorkspace) return;
-      mergePage(response.chats);
+      const merged = mergeConversations(conversationsRef.current, response.chats);
+      setConversations(merged);
       setHasMore(response.chats.length === PAGE_SIZE);
+      localCache.set(cacheKey(requestWorkspace), merged);
     } catch (error) {
       console.error("Failed to fetch conversations:", error);
     } finally {
       if (workspaceRef.current === requestWorkspace) setIsLoading(false);
     }
-  }, [mergePage]);
+  }, []);
 
   useEffect(() => {
-    setConversations([]);
-    setHasMore(false);
+    if (skipInitialResetRef.current) {
+      skipInitialResetRef.current = false;
+    } else {
+      setConversations([]);
+      setHasMore(false);
+    }
     void fetchPage(0);
   }, [activeWorkspaceId, fetchPage]);
 

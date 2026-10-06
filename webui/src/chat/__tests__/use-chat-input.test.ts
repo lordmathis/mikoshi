@@ -1,10 +1,19 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
+import type { KeyboardEvent } from "react";
 import { useChatInput } from "../use-chat-input.ts";
 import type { Message, FileResource } from "../../lib/api.ts";
 
 const noFiles: FileResource[] = [];
 const emptyMessages: Message[] = [];
+
+const baseOptions = {
+  onSend: vi.fn().mockResolvedValue(undefined),
+  onEdit: vi.fn().mockResolvedValue(undefined),
+  messages: emptyMessages,
+  getFiles: () => noFiles,
+  isSending: false,
+};
 
 function renderChatInput(overrides: Partial<Parameters<typeof useChatInput>[0]> = {}) {
   return renderHook(() =>
@@ -20,6 +29,10 @@ function renderChatInput(overrides: Partial<Parameters<typeof useChatInput>[0]> 
 }
 
 describe("useChatInput", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
   it("sends message and clears input", async () => {
     const onSend = vi.fn().mockResolvedValue(undefined);
     const { result } = renderChatInput({ onSend });
@@ -147,5 +160,90 @@ describe("useChatInput", () => {
 
     expect(result.current.inputValue).toBe("");
     expect(result.current.isEditingMode).toBe(false);
+  });
+
+  describe("drafts", () => {
+    it("restores the draft when the chat changes", () => {
+      localStorage.setItem("mikoshi-draft:chat-b", JSON.stringify("saved draft"));
+      const { result, rerender } = renderHook(
+        ({ chatId }) => useChatInput({ chatId, ...baseOptions }),
+        { initialProps: { chatId: "chat-a" } }
+      );
+
+      act(() => result.current.setInputValue("typing in a"));
+      rerender({ chatId: "chat-b" });
+
+      expect(result.current.inputValue).toBe("saved draft");
+    });
+
+    it("debounces draft writes", () => {
+      vi.useFakeTimers();
+      try {
+        const { result } = renderHook(
+          ({ chatId }) => useChatInput({ chatId, ...baseOptions }),
+          { initialProps: { chatId: "chat-a" } }
+        );
+
+        act(() => result.current.setInputValue("hello"));
+        act(() => {
+          vi.advanceTimersByTime(299);
+        });
+        expect(localStorage.getItem("mikoshi-draft:chat-a")).toBeNull();
+
+        act(() => {
+          vi.advanceTimersByTime(1);
+        });
+        expect(localStorage.getItem("mikoshi-draft:chat-a")).toBe(
+          JSON.stringify("hello")
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("clears the draft on send", async () => {
+      localStorage.setItem("mikoshi-draft:chat-a", JSON.stringify("about to send"));
+      const { result } = renderChatInput({ chatId: "chat-a" });
+
+      act(() => result.current.setInputValue("about to send"));
+      await act(() => result.current.handleSend());
+
+      expect(localStorage.getItem("mikoshi-draft:chat-a")).toBeNull();
+    });
+
+    it("clears the draft on cancel edit", () => {
+      const messages: Message[] = [
+        { id: "1", role: "user", content: "original", sequence: 0, created_at: "" },
+      ];
+      const { result } = renderChatInput({ chatId: "chat-a", messages });
+
+      act(() => result.current.handleEdit());
+      act(() => result.current.cancelEdit());
+
+      expect(localStorage.getItem("mikoshi-draft:chat-a")).toBeNull();
+    });
+  });
+
+  describe("coarse pointer", () => {
+    it("Enter does not send on touch devices", async () => {
+      const matchMedia = vi
+        .spyOn(window, "matchMedia")
+        .mockReturnValue({ matches: true } as MediaQueryList);
+      const onSend = vi.fn().mockResolvedValue(undefined);
+      const { result } = renderChatInput({ onSend });
+
+      act(() => result.current.setInputValue("hello"));
+      act(() =>
+        result.current.handleKeyDown({
+          key: "Enter",
+          shiftKey: false,
+          preventDefault: vi.fn(),
+        } as unknown as KeyboardEvent<HTMLTextAreaElement>)
+      );
+      await act(() => Promise.resolve());
+
+      expect(onSend).not.toHaveBeenCalled();
+      matchMedia.mockRestore();
+    });
   });
 });

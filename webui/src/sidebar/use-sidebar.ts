@@ -9,7 +9,7 @@ interface SidebarState {
 
 function loadState(): SidebarState {
   try {
-    const raw = sessionStorage.getItem("mikoshi-sidebar");
+    const raw = localStorage.getItem("mikoshi-sidebar");
     if (raw) {
       const parsed = JSON.parse(raw);
       return {
@@ -23,7 +23,7 @@ function loadState(): SidebarState {
 
 function saveState(state: SidebarState) {
   try {
-    sessionStorage.setItem("mikoshi-sidebar", JSON.stringify(state));
+    localStorage.setItem("mikoshi-sidebar", JSON.stringify(state));
   } catch {}
 }
 

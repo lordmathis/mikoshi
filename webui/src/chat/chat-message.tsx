@@ -280,7 +280,7 @@ export const ChatMessage = memo(function ChatMessage({ message, onBranch, onRetr
       </div>
       
       {(onBranch || (onRetry && !isUser) || (onEdit && isUser && isLastUserMessage) || !isUser) && (
-        <div className="absolute right-4 top-6 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+        <div className="absolute right-4 top-6 flex gap-1 opacity-0 transition-opacity z-10 max-lg:opacity-100 group-hover:opacity-100">
           {!isUser && (
             <IconButtonTooltip
               icon={
