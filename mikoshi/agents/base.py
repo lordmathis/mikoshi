@@ -198,6 +198,12 @@ class BaseAgent(ABC):
                                 else "",
                             },
                         )
+                    except Exception as e:
+                        logger.exception(
+                            "chat_id=%s tool %s failed", self.chat_id, tool_name
+                        )
+                        span.record_exception(e)
+                        result = f"Error executing tool '{tool_name}': {e}"
                     else:
                         if approval_msg_id:
                             get_current_span().add_event(

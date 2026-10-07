@@ -139,6 +139,42 @@ async def monkeypatch_asyncio_sleep(monkeypatch):
     monkeypatch.setattr("mikoshi.agents.base.asyncio.sleep", fake_sleep)
 
 
+class TestToolErrorReturnedToLLM:
+    @pytest.mark.asyncio
+    async def test_unknown_tool_error_appended_as_tool_message(self, db):
+        chat = db.create_chat()
+        agent = _make_agent(db, chat.id, _ScriptedLLM())
+        agent.tool_manager.call_tool.side_effect = ValueError(
+            "Tool server 'nope' not found"
+        )
+        messages = []
+        queue = asyncio.Queue()
+        tool_call = {"id": "tc1", "function": {"name": "nope__tool", "arguments": "{}"}}
+
+        await agent._execute_tool_calls([tool_call], messages, queue)
+
+        assert len(messages) == 1
+        assert messages[0]["role"] == "tool"
+        assert messages[0]["tool_call_id"] == "tc1"
+        assert "Error executing tool 'nope__tool'" in messages[0]["content"]
+        assert "not found" in messages[0]["content"]
+
+    @pytest.mark.asyncio
+    async def test_tool_exception_error_appended_as_tool_message(self, db):
+        chat = db.create_chat()
+        agent = _make_agent(db, chat.id, _ScriptedLLM())
+        agent.tool_manager.call_tool.side_effect = TimeoutError("MCP timed out")
+        messages = []
+        queue = asyncio.Queue()
+        tool_call = {"id": "tc2", "function": {"name": "srv__slow", "arguments": "{}"}}
+
+        await agent._execute_tool_calls([tool_call], messages, queue)
+
+        assert messages[0]["role"] == "tool"
+        assert "Error executing tool 'srv__slow'" in messages[0]["content"]
+        assert "MCP timed out" in messages[0]["content"]
+
+
 class TestChatTitleSkippedOnFailedTurn:
     @pytest.mark.asyncio
     async def test_failed_turn_emits_error_and_skips_title(self, db, monkeypatch):
