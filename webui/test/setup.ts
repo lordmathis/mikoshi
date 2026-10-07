@@ -2,6 +2,8 @@ import { vi } from 'vitest'
 
 HTMLCanvasElement.prototype.getContext = vi.fn() as any
 
+Element.prototype.scrollTo = () => {}
+
 if (!window.matchMedia) {
   Object.defineProperty(window, "matchMedia", {
     writable: true,
@@ -16,4 +18,16 @@ if (!window.matchMedia) {
       dispatchEvent: vi.fn(),
     }),
   })
+}
+
+if (!("IntersectionObserver" in globalThis)) {
+  class IntersectionObserverStub {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords() {
+      return []
+    }
+  }
+  (globalThis as Record<string, unknown>).IntersectionObserver = IntersectionObserverStub
 }
