@@ -7,7 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "anthropic>=1.8.0",
     "beautifulsoup4>=4.15.0",
-    "fastapi>=0.141.1",
+    "fastapi>=0.142.2",
     "firecrawl-py>=4.44.0",
     "httpx>=0.28.1",
     "markdownify>=1.2.3",

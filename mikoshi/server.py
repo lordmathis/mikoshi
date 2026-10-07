@@ -14,7 +14,16 @@ logger = logging.getLogger(__name__)
 
 in_flight = InFlightRequests()
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(
+    lifespan=lifespan,
+    telemetry={
+        "tracing": False,
+        "operation_spans": False,
+        "metrics": False,
+        "logs": False,
+        "auto_configure": False,
+    },
+)
 app.state.in_flight = in_flight
 
 
