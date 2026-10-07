@@ -171,6 +171,9 @@ export function ChatView() {
         onTabChange={sidebar.setActiveTab}
         activeWorkspaceId={sidebar.activeWorkspaceId}
         onSelectWorkspace={(id) => {
+          if (id && loadedChatWorkspaceId !== id) {
+            navigate(null);
+          }
           workspaces.selectWorkspace(id);
           closeSidebarOnMobile();
         }}
@@ -310,7 +313,10 @@ export function ChatView() {
       <CreateNodeDialog
         open={isCreateNodeOpen}
         onOpenChange={setIsCreateNodeOpen}
-        onCreated={workspaces.workspaceCreated}
+        onCreated={(ws) => {
+          navigate(null);
+          workspaces.workspaceCreated(ws);
+        }}
       />
     </div>
   );
