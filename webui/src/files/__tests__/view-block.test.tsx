@@ -34,7 +34,7 @@ describe("ViewBlock", () => {
     expect(spy).toHaveBeenCalledWith("ws-1", "specs/**/*.md");
 
     const links = Array.from(container.querySelectorAll("tbody a"));
-    expect(links.map((l) => l.textContent)).toEqual(["alpha.md", "beta.md"]);
+    expect(links.map((l) => l.textContent)).toEqual(["specs/alpha.md", "specs/beta.md"]);
   });
 
   it("defaults columns to the union of frontmatter keys", async () => {
@@ -63,7 +63,7 @@ describe("ViewBlock", () => {
     expect(headers).toEqual(["File", "status"]);
 
     const firstRowCells = container.querySelectorAll("tbody tr")[0].querySelectorAll("td");
-    expect(firstRowCells[0].textContent).toBe("alpha.md");
+    expect(firstRowCells[0].textContent).toBe("specs/alpha.md");
     expect(firstRowCells[1].textContent).toBe("draft");
   });
 

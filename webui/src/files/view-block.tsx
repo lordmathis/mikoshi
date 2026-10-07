@@ -66,6 +66,12 @@ function basename(path: string): string {
   return path.split("/").pop() || path;
 }
 
+function dirname(path: string): string {
+  const parts = path.split("/");
+  parts.pop();
+  return parts.join("/");
+}
+
 export function ViewBlock({ query }: { query: string }) {
   const ctx = useContext(ViewBlockContext);
   if (!ctx) {
@@ -205,11 +211,17 @@ function ViewTable({ query, workspaceId, onFileClick }: { query: string } & View
                     <a
                       href="#"
                       className="text-primary underline decoration-primary/40 hover:decoration-primary"
+                      title={entry.path}
                       onClick={(e) => {
                         e.preventDefault();
                         onFileClick(entry.path);
                       }}
                     >
+                      {dirname(entry.path) && (
+                        <span className="text-[var(--color-cp-text-muted)]">
+                          {dirname(entry.path)}/
+                        </span>
+                      )}
                       {basename(entry.path)}
                     </a>
                   </td>
