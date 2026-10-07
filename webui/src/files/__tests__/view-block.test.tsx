@@ -90,6 +90,16 @@ describe("ViewBlock", () => {
     expect(onFileClick).toHaveBeenCalledWith("specs/alpha.md");
   });
 
+  it("accepts a leading-* glob without yaml alias errors", async () => {
+    const { container, spy } = renderView("glob: **/*.md", ENTRIES);
+
+    await waitFor(() => {
+      expect(container.querySelector("table")).not.toBeNull();
+    });
+
+    expect(spy).toHaveBeenCalledWith("ws-1", "**/*.md");
+  });
+
   it("renders an error box for invalid query yaml", () => {
     const { container } = renderView("glob: [unclosed");
 

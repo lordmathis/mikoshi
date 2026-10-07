@@ -21,7 +21,13 @@ interface ViewQuery {
 function parseQuery(query: string): { query: ViewQuery | null; error: string } {
   let data: unknown;
   try {
-    data = parse(query);
+    // Globs like `**/*.md` read as YAML aliases (unresolved-anchor errors);
+    // quote any plain value starting with `*` so it parses as a string.
+    const quoted = query.replace(
+      /^(\s*[^\s:#][^:]*:\s*)(\*.+)$/gm,
+      (_m, key: string, value: string) => `${key}${JSON.stringify(value)}`
+    );
+    data = parse(quoted);
   } catch (e) {
     return { query: null, error: e instanceof Error ? e.message : String(e) };
   }
