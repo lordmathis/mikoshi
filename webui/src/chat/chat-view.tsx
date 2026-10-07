@@ -76,12 +76,27 @@ export function ChatView() {
     setActiveWorkspace(loadedChatWorkspaceId);
   }, [loadedChatId, loadedChatWorkspaceId, setActiveWorkspace]);
 
+  // When the active node changes (selected, toggled off, deleted, cleared),
+  // drop the open session unless it belongs to the new node.
+  const prevActiveWorkspaceRef = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    const prev = prevActiveWorkspaceRef.current;
+    prevActiveWorkspaceRef.current = sidebar.activeWorkspaceId;
+    if (prev === undefined || prev === sidebar.activeWorkspaceId) return;
+    if (loadedChatId && loadedChatWorkspaceId !== sidebar.activeWorkspaceId) {
+      navigate(null);
+    }
+  }, [sidebar.activeWorkspaceId, loadedChatId, loadedChatWorkspaceId, navigate]);
+
   const chatInList = conversations.conversations.some((c) => c.id === loadedChatId);
   const upsertConversation = conversations.upsertConversation;
+  const activeWorkspaceId = sidebar.activeWorkspaceId;
   useEffect(() => {
     if (!loadedChat || chatInList) return;
+    // Never inject a chat into a node-filtered list it doesn't belong to.
+    if (loadedChatWorkspaceId !== activeWorkspaceId) return;
     upsertConversation(loadedChat);
-  }, [loadedChat, chatInList, upsertConversation]);
+  }, [loadedChat, chatInList, loadedChatWorkspaceId, activeWorkspaceId, upsertConversation]);
 
   useEffect(() => {
     if (!messages.loadError) return;
@@ -175,9 +190,6 @@ export function ChatView() {
         onTabChange={sidebar.setActiveTab}
         activeWorkspaceId={sidebar.activeWorkspaceId}
         onSelectWorkspace={(id) => {
-          if (id && loadedChatWorkspaceId !== id) {
-            navigate(null);
-          }
           workspaces.selectWorkspace(id);
           closeSidebarOnMobile();
         }}
@@ -317,10 +329,7 @@ export function ChatView() {
       <CreateNodeDialog
         open={isCreateNodeOpen}
         onOpenChange={setIsCreateNodeOpen}
-        onCreated={(ws) => {
-          navigate(null);
-          workspaces.workspaceCreated(ws);
-        }}
+        onCreated={workspaces.workspaceCreated}
       />
     </div>
   );
