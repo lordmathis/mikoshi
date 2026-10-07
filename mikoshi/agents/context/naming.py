@@ -1,9 +1,11 @@
+import asyncio
 import logging
-from typing import List
+from typing import List, Optional
 
 from openai.types.chat import ChatCompletionMessageParam
 
 from mikoshi.agents.context.messages import extract_text_content
+from mikoshi.agents.streaming import StreamEvent
 from mikoshi.db.db import Database
 from mikoshi.providers.clients import LLMClient
 
@@ -36,10 +38,13 @@ async def generate_title(
     db: Database,
     llm_client: LLMClient,
     model_id: str,
+    queue: Optional[asyncio.Queue] = None,
 ) -> None:
     """Generate a title for the chat if it's still 'Untitled Chat'.
 
-    This is meant to be run as a background task after the first exchange.
+    Runs inline in the agent turn; when a stream queue is provided the
+    new title is announced as a chat_renamed event so clients can update
+    the sidebar without a refetch.
     """
     try:
         chat = db.get_chat(chat_id)
@@ -86,6 +91,13 @@ async def generate_title(
                     if title:
                         logger.info(f"Generated chat title: '{title}'")
                         db.update_chat(chat_id, title=title)
+                        if queue is not None:
+                            await queue.put(
+                                StreamEvent(
+                                    type="chat_renamed",
+                                    data={"chat_id": chat_id, "title": title},
+                                )
+                            )
         finally:
             _pending_titles.discard(chat_id)
     except Exception as e:

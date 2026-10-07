@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { api, type ChatWithMessages, type Message, type FileResource, type PendingApproval, ApiError } from "../lib/api.ts";
+import { api, type ChatWithMessages, type Message, type FileResource, type PendingApproval, type ChatRenamedEvent, ApiError } from "../lib/api.ts";
 import { type ChatSettings } from "./chat-settings-dialog.tsx";
 import { localCache } from "../lib/local-cache.ts";
 
@@ -36,7 +36,8 @@ function isAbortError(error: unknown): boolean {
 
 export function useMessages(
   chatId: string | undefined,
-  onWorkspaceChange?: (paths: string[]) => void
+  onWorkspaceChange?: (paths: string[]) => void,
+  onChatRenamed?: (chatId: string, title: string) => void
 ) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [pendingApprovals, setPendingApprovals] = useState<Record<string, PendingApproval>>({});
@@ -149,6 +150,10 @@ export function useMessages(
           created_at: null,
         };
         setPendingApprovals((prev) => ({ ...prev, [req.message_id]: approval }));
+      } else if (event.type === "chat_renamed") {
+        const { chat_id, title } = event.data as ChatRenamedEvent;
+        setChat((prev) => (prev && prev.id === chat_id ? { ...prev, title } : prev));
+        onChatRenamed?.(chat_id, title);
       } else if (event.type === "error") {
         const errMsg = (event.data as { message: string }).message;
         console.error('[Messages] error event:', errMsg);
@@ -164,7 +169,7 @@ export function useMessages(
         ]);
       }
     },
-    [onWorkspaceChange]
+    [onWorkspaceChange, onChatRenamed]
   );
 
   useEffect(() => {

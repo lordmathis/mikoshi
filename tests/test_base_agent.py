@@ -148,7 +148,7 @@ class TestChatTitleSkippedOnFailedTurn:
         agent = _make_agent(db, chat.id, llm)
         title_calls = []
 
-        async def fake_generate_title():
+        async def fake_generate_title(queue):
             title_calls.append(True)
 
         agent._generate_title = fake_generate_title
@@ -167,7 +167,7 @@ class TestChatTitleSkippedOnFailedTurn:
         agent = _make_agent(db, chat.id, llm)
         title_calls = []
 
-        async def fake_generate_title():
+        async def fake_generate_title(queue):
             title_calls.append(True)
 
         agent._generate_title = fake_generate_title
@@ -178,3 +178,33 @@ class TestChatTitleSkippedOnFailedTurn:
         assert title_calls == [True]
         events = _drain(queue)
         assert events[-1].type == "done"
+
+    @pytest.mark.asyncio
+    async def test_successful_turn_emits_chat_renamed_before_done(self, db):
+        chat = db.create_chat()
+        llm = _ScriptedLLM(response=_response("Fix Login Bug"))
+        agent = _make_agent(db, chat.id, llm)
+        queue = asyncio.Queue()
+
+        await agent.chat("hello", queue)
+
+        events = _drain(queue)
+        types = [e.type for e in events]
+        assert "chat_renamed" in types
+        assert types.index("chat_renamed") < types.index("done")
+        renamed = next(e for e in events if e.type == "chat_renamed")
+        assert renamed.data == {"chat_id": chat.id, "title": "Fix Login Bug"}
+        assert db.get_chat(chat.id).title == "Fix Login Bug"
+
+    @pytest.mark.asyncio
+    async def test_already_titled_chat_emits_no_rename_event(self, db):
+        chat = db.create_chat(title="Named already")
+        llm = _ScriptedLLM(response=_response("New Title"))
+        agent = _make_agent(db, chat.id, llm)
+        queue = asyncio.Queue()
+
+        await agent.chat("hello", queue)
+
+        events = _drain(queue)
+        assert all(e.type != "chat_renamed" for e in events)
+        assert db.get_chat(chat.id).title == "Named already"

@@ -84,9 +84,14 @@ export interface ApprovalRequestEvent {
   arguments: Record<string, any>;
 }
 
+export interface ChatRenamedEvent {
+  chat_id: string;
+  title: string;
+}
+
 export interface StreamEvent {
-  type: 'message' | 'error' | 'done' | 'tool_approval_request';
-  data: Message | { message: string } | ApprovalRequestEvent | Record<string, never>;
+  type: 'message' | 'error' | 'done' | 'tool_approval_request' | 'chat_renamed';
+  data: Message | { message: string } | ApprovalRequestEvent | ChatRenamedEvent | Record<string, never>;
 }
 
 export interface ModelParams {

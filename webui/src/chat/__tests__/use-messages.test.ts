@@ -107,6 +107,39 @@ describe("useMessages", () => {
     });
   });
 
+  it("chat_renamed updates the chat title and notifies the caller", async () => {
+    const manual = manualStream();
+    vi.spyOn(api, "streamMessage").mockImplementation(async function* () {
+      yield* manual.stream();
+    });
+    const onChatRenamed = vi.fn();
+
+    const { result } = renderHook(
+      ({ id }) => useMessages(id, undefined, onChatRenamed),
+      { initialProps: { id: "chat-a" as string | undefined } }
+    );
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    let sendPromise: Promise<void> | undefined;
+    act(() => {
+      sendPromise = result.current.send("hello", []);
+    });
+    await waitFor(() =>
+      expect(result.current.messages.some((m) => m.content === "hello")).toBe(true)
+    );
+
+    await act(async () => {
+      manual.push({ type: "chat_renamed", data: { chat_id: "chat-a", title: "Hello Plan" } });
+    });
+    expect(result.current.chat?.title).toBe("Hello Plan");
+    expect(onChatRenamed).toHaveBeenCalledWith("chat-a", "Hello Plan");
+
+    await act(async () => {
+      manual.end();
+      await sendPromise;
+    });
+  });
+
   it("stops loading and reports an error when fetching a chat fails", async () => {
     vi.spyOn(api, "getChat").mockRejectedValue(new Error("network down"));
 

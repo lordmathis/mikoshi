@@ -60,7 +60,11 @@ export function ChatView() {
     [workspaces.refreshTree]
   );
 
-  const messages = useMessages(currentConversationId, handleWorkspaceChange);
+  const messages = useMessages(
+    currentConversationId,
+    handleWorkspaceChange,
+    conversations.renameConversation
+  );
   const files = useChatFiles();
 
   const loadedChat = messages.chat;

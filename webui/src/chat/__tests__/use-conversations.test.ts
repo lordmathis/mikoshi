@@ -112,6 +112,21 @@ describe("useConversations", () => {
     expect(result.current.conversations.filter((c) => c.id === "deep-link")).toHaveLength(1);
   });
 
+  it("renameConversation updates the title in place", async () => {
+    vi.mocked(api.listChats).mockResolvedValue({
+      chats: [chat("c-old", 0), chat("c-new", 5)],
+    });
+
+    const { result } = renderHook(() => useConversations(null));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    act(() => result.current.renameConversation("c-new", "Auto Title"));
+    expect(
+      result.current.conversations.find((c) => c.id === "c-new")?.title
+    ).toBe("Auto Title");
+    expect(result.current.conversations.map((c) => c.id)).toEqual(["c-old", "c-new"]);
+  });
+
   it("paints the cached list synchronously on mount, then revalidates in the background", async () => {
     localStorage.setItem(
       "mikoshi-cache:conversations",

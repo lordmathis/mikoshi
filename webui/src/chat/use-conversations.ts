@@ -94,6 +94,12 @@ export function useConversations(activeWorkspaceId: string | null) {
     });
   }, []);
 
+  const renameConversation = useCallback((id: string, title: string) => {
+    setConversations((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, title } : c))
+    );
+  }, []);
+
   const createConversation = useCallback(async (
     overrideConfig?: Partial<ChatConfig>,
     workspaceId?: string | null
@@ -141,5 +147,6 @@ export function useConversations(activeWorkspaceId: string | null) {
     deleteConversation,
     branchConversation,
     upsertConversation,
+    renameConversation,
   };
 }

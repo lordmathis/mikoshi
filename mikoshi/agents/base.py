@@ -17,7 +17,7 @@ from mikoshi.agents.context.messages import (
     insert_system_message,
 )
 from mikoshi.agents.context.skills import apply_skill_context, build_skill_context
-from mikoshi.agents.streaming import STREAM_DONE, StreamEvent, error_event
+from mikoshi.agents.streaming import STREAM_DONE, FilteredQueue, StreamEvent, error_event
 from mikoshi.config import WorkspaceConfig
 from mikoshi.db.db import Database
 from mikoshi.db.models import Message
@@ -27,7 +27,6 @@ from mikoshi.skills.registry import SkillRegistry
 from mikoshi.tools.approval import ToolDeniedError
 from mikoshi.tools.context import ToolCallContext, WorkspaceContext
 from mikoshi.tools.manager import ToolManager, normalize_tool
-from mikoshi.tasks import create_background_task
 from mikoshi.workspace import WorkspaceService
 
 logger = logging.getLogger(__name__)
@@ -417,11 +416,15 @@ class BaseAgent(ABC):
         logger.info("chat_id=%s chat() START", self.chat_id)
         try:
             await self._save_message("user", message, file_ids=file_ids)
-            result = await self._loop(message, queue=queue)
+            # The loop emits its own done events; swallow them so the
+            # turn's terminal done lands after the auto-generated title
+            # and clients stopping at done still receive chat_renamed.
+            result = await self._loop(message, queue=FilteredQueue(queue))
             # Failed turns already emitted an error event; don't title the
             # chat off an error message.
             if not (isinstance(result, dict) and result.get("error")):
-                await self._generate_title()
+                await self._generate_title(queue)
+            await self._emit(queue, STREAM_DONE)
             logger.info("chat_id=%s chat() COMPLETE", self.chat_id)
         except Exception as e:
             logger.error(
@@ -698,20 +701,16 @@ class BaseAgent(ABC):
                 )
                 await asyncio.sleep(delay)
 
-    async def _generate_title(self) -> None:
+    async def _generate_title(self, queue: asyncio.Queue) -> None:
         client = self._title_llm_client or self._llm_client
         model = self._title_model_id or self.model_id
 
-        async def _run() -> None:
-            # Background task: explicitly tag with the session id so the
-            # title-generation LLM call groups under the same Phoenix session
-            # (create_task does not inherit the agent turn's OTel context).
-            with using_attributes(
-                session_id=self.chat_id,
-                tags=["title_generation"],
-            ):
-                await generate_title(self.chat_id, self.db, client, model)
-
-        # create_task only keeps a weak reference; route through the
-        # background-task helper so the title call can't be GC'd mid-run.
-        create_background_task(_run(), name=f"title-{self.chat_id}")
+        # Awaited inline so the chat_renamed event reaches the client
+        # before the stream's done event tears the connection down.
+        # Tagged with the session id so the title-generation LLM call
+        # groups under the same Phoenix session.
+        with using_attributes(
+            session_id=self.chat_id,
+            tags=["title_generation"],
+        ):
+            await generate_title(self.chat_id, self.db, client, model, queue=queue)
