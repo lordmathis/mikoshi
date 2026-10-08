@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { api, type ChatWithMessages, type Message, type FileResource, type PendingApproval, type ChatRenamedEvent, ApiError } from "../lib/api.ts";
 import { type ChatSettings } from "./chat-settings-dialog.tsx";
 import { localCache } from "../lib/local-cache.ts";
+import { notifications } from "../lib/notifications.ts";
 
 function messagesCacheKey(chatId: string): string {
   return `mikoshi-cache:messages:${chatId}`;
@@ -51,6 +52,10 @@ export function useMessages(
   pendingApprovalsRef.current = pendingApprovals;
   const chatIdRef = useRef(chatId);
   chatIdRef.current = chatId;
+  const chatRef = useRef(chat);
+  chatRef.current = chat;
+  const lastAssistantRef = useRef<string | null>(null);
+  const wasSendingRef = useRef(false);
   const [chatSettings, setChatSettings] = useState<ChatSettings>({
     baseModel: "",
     systemPrompt: "",
@@ -110,6 +115,7 @@ export function useMessages(
 
   const beginStream = useCallback(() => {
     streamAbortRef.current?.abort();
+    lastAssistantRef.current = null;
     const controller = new AbortController();
     streamAbortRef.current = controller;
     return controller;
@@ -128,6 +134,10 @@ export function useMessages(
           }
           return [...prev, msg];
         });
+
+        if (msg.role === "assistant" && msg.content) {
+          lastAssistantRef.current = msg.content;
+        }
 
         if (msg.role === "tool") {
           const change = tryParseWorkspaceChange(msg.content);
@@ -150,6 +160,10 @@ export function useMessages(
           created_at: null,
         };
         setPendingApprovals((prev) => ({ ...prev, [req.message_id]: approval }));
+        notifications.notifyWhenHidden(
+          chatRef.current?.title ?? "Mikoshi",
+          `Tool approval needed: ${req.tool_name}`
+        );
       } else if (event.type === "chat_renamed") {
         const { chat_id, title } = event.data as ChatRenamedEvent;
         setChat((prev) => (prev && prev.id === chat_id ? { ...prev, title } : prev));
@@ -218,9 +232,20 @@ export function useMessages(
     return () => abortController.abort();
   }, [chatId, reloadMessages, loadDefaultSettings, handleEvent, beginStream]);
 
+  useEffect(() => {
+    if (wasSendingRef.current && !isSending) {
+      const content = lastAssistantRef.current;
+      if (content) {
+        notifications.notifyWhenHidden(chatRef.current?.title ?? "Mikoshi", content);
+      }
+    }
+    wasSendingRef.current = isSending;
+  }, [isSending]);
+
   const send = useCallback(async (text: string, files: FileResource[]) => {
     if (!chatId) return;
 
+    notifications.requestPermission();
     const controller = beginStream();
 
     const tempId = `temp-${Date.now()}`;

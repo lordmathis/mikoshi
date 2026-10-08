@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { useMessages } from "../use-messages.ts";
 import { api, type Message, type StreamEvent } from "../../lib/api.ts";
+import { notifications } from "../../lib/notifications.ts";
 
 function chat(id: string, messages: Message[]) {
   return {
@@ -133,6 +134,71 @@ describe("useMessages", () => {
     });
     expect(result.current.chat?.title).toBe("Hello Plan");
     expect(onChatRenamed).toHaveBeenCalledWith("chat-a", "Hello Plan");
+
+    await act(async () => {
+      manual.end();
+      await sendPromise;
+    });
+  });
+
+  it("notifies with the last assistant message when the response completes", async () => {
+    const notify = vi.spyOn(notifications, "notifyWhenHidden").mockImplementation(() => {});
+    const manual = manualStream();
+    vi.spyOn(api, "streamMessage").mockImplementation(async function* () {
+      yield* manual.stream();
+    });
+
+    const { result } = renderHook(({ id }) => useMessages(id), {
+      initialProps: { id: "chat-a" as string | undefined },
+    });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    let sendPromise: Promise<void> | undefined;
+    act(() => {
+      sendPromise = result.current.send("hello", []);
+    });
+
+    await act(async () => {
+      manual.push({ type: "message", data: message("reply", "assistant", "the answer") });
+    });
+    expect(notify).not.toHaveBeenCalled();
+
+    await act(async () => {
+      manual.end();
+      await sendPromise;
+    });
+    expect(notify).toHaveBeenCalledWith("chat-a", "the answer");
+  });
+
+  it("notifies when a tool approval is requested", async () => {
+    const notify = vi.spyOn(notifications, "notifyWhenHidden").mockImplementation(() => {});
+    const manual = manualStream();
+    vi.spyOn(api, "streamMessage").mockImplementation(async function* () {
+      yield* manual.stream();
+    });
+
+    const { result } = renderHook(({ id }) => useMessages(id), {
+      initialProps: { id: "chat-a" as string | undefined },
+    });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    let sendPromise: Promise<void> | undefined;
+    act(() => {
+      sendPromise = result.current.send("hello", []);
+    });
+
+    await act(async () => {
+      manual.push({
+        type: "tool_approval_request",
+        data: {
+          approval_id: "appr-1",
+          message_id: "m1",
+          tool_name: "shell",
+          arguments: { cmd: "ls" },
+        },
+      });
+    });
+    expect(notify).toHaveBeenCalledWith("chat-a", "Tool approval needed: shell");
 
     await act(async () => {
       manual.end();
