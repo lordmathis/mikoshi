@@ -29,6 +29,8 @@ class ProviderConfig(BaseModel):
     api_key: Optional[str] = None
     api_base: Optional[str] = None
     type: ProviderType = ProviderType.OPENAI
+    # Model auto-selected when switching to this provider in the UI.
+    preferred_model: Optional[str] = None
     # When set (e.g. "flex"), chat completions run on the provider's async
     # tier via background mode: submit, then poll until the result is ready.
     service_tier: Optional[str] = None

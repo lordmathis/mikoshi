@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Settings } from "lucide-react";
+import { Settings, Star } from "lucide-react";
 import { Button } from "../ui/button.tsx";
 import { CollapsibleSection } from "../shared/collapsible-section.tsx";
 import {
@@ -46,7 +46,7 @@ export function ChatSettingsDialog({
 }: ChatSettingsDialogProps) {
   const [open, setOpen] = useState(false);
   const [localSettings, setLocalSettings] = useState<ChatSettings>(settings);
-  const [modelsByProvider, setModelsByProvider] = useState<Record<string, { id: string; label: string }[]>>({});
+  const [modelsByProvider, setModelsByProvider] = useState<Record<string, { id: string; label: string; preferred?: boolean }[]>>({});
   const [providers, setProviders] = useState<string[]>([]);
   const [selectedProvider, setSelectedProvider] = useState<string>("");
   const [selectedAgent, setSelectedAgent] = useState<string>("");
@@ -57,6 +57,9 @@ export function ChatSettingsDialog({
   const [toolsExpanded, setToolsExpanded] = useState(false);
   const [systemPromptExpanded, setSystemPromptExpanded] = useState(false);
   const [modelParamsExpanded, setModelParamsExpanded] = useState(false);
+
+  const defaultModelFor = (models: { id: string; preferred?: boolean }[] | undefined) =>
+    models?.find((m) => m.preferred) ?? models?.[0];
 
   useEffect(() => {
     setLocalSettings(settings);
@@ -78,12 +81,12 @@ export function ChatSettingsDialog({
 
       const toolServers = toolsRes.tool_servers;
       const agentConfigs = agentsRes.agents;
-      const grouped: Record<string, { id: string; label: string }[]> = {};
+      const grouped: Record<string, { id: string; label: string; preferred?: boolean }[]> = {};
       for (const model of modelsRes.data) {
         if (model.owned_by === "mikoshi") continue;
         const provider = model.owned_by || "Unknown";
         if (!grouped[provider]) grouped[provider] = [];
-        grouped[provider].push({ id: model.id, label: formatModelLabel(model.id) });
+        grouped[provider].push({ id: model.id, label: formatModelLabel(model.id), preferred: model.preferred });
       }
       const providers = Object.keys(grouped).sort();
 
@@ -109,7 +112,7 @@ export function ChatSettingsDialog({
       } else if (providers.length > 0) {
         setSelectedProvider(providers[0]);
         if (!baseModel) {
-          const firstModel = grouped[providers[0]]?.[0];
+          const firstModel = defaultModelFor(grouped[providers[0]]);
           if (firstModel) {
             setLocalSettings((prev) => ({ ...prev, baseModel: firstModel.id }));
           }
@@ -204,9 +207,9 @@ export function ChatSettingsDialog({
 
   const handleProviderChange = (value: string) => {
     setSelectedProvider(value);
-    const modelsForProvider = modelsByProvider[value] || [];
-    if (modelsForProvider.length > 0) {
-      setLocalSettings((prev) => ({ ...prev, baseModel: modelsForProvider[0].id }));
+    const model = defaultModelFor(modelsByProvider[value]);
+    if (model) {
+      setLocalSettings((prev) => ({ ...prev, baseModel: model.id }));
     }
   };
 
@@ -286,7 +289,12 @@ export function ChatSettingsDialog({
               <SelectContent>
                 {(modelsByProvider[selectedProvider] || []).map((model) => (
                   <SelectItem key={model.id} value={model.id}>
-                    {model.label}
+                    <span className="flex items-center gap-1.5">
+                      {model.label}
+                      {model.preferred && (
+                        <Star className="h-3 w-3 fill-cp-yellow text-cp-yellow" aria-label="Preferred model" />
+                      )}
+                    </span>
                   </SelectItem>
                 ))}
               </SelectContent>

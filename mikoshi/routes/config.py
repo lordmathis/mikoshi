@@ -50,12 +50,14 @@ async def list_models(request: Request):
         except Exception as e:
             logger.warning("Could not list models from provider %s: %s", provider_name, e)
             return []
+        preferred = getattr(provider.config, "preferred_model", None)
         return [
             {
                 "id": f"{provider_name}:{model_id}",
                 "object": "model",
                 "created": 1234567890,
                 "owned_by": provider_name,
+                "preferred": model_id == preferred,
             }
             for model_id in (model_ids or [])
         ]

@@ -130,6 +130,7 @@ export interface Model {
   object: string;
   created: number;
   owned_by: string;
+  preferred?: boolean;
 }
 
 export interface ToolServer {

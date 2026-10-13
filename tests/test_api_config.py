@@ -22,8 +22,9 @@ def _registry(agent_names=(), providers=None):
     return registry
 
 
-def _provider(model_ids=None, error=None):
+def _provider(model_ids=None, error=None, preferred_model=None):
     provider = MagicMock()
+    provider.config.preferred_model = preferred_model
     if error is not None:
         provider.get_model_ids = AsyncMock(side_effect=error)
     else:
@@ -47,6 +48,38 @@ class TestListModels:
 
         ids = [m["id"] for m in resp.json()["data"]]
         assert ids == ["3X-1L-3D", "prov:m1", "prov:m2"]
+
+    @pytest.mark.asyncio
+    async def test_preferred_model_flagged(self):
+        provider = _provider(model_ids=["m1", "m2"], preferred_model="m2")
+        app = _make_app(
+            _registry(),
+            _registry(providers={"prov": provider}),
+        )
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            resp = await client.get("/api/config/models")
+
+        models = {m["id"]: m for m in resp.json()["data"]}
+        assert models["prov:m1"]["preferred"] is False
+        assert models["prov:m2"]["preferred"] is True
+
+    @pytest.mark.asyncio
+    async def test_no_preferred_model_defaults_to_false(self):
+        provider = _provider(model_ids=["m1"], preferred_model=None)
+        app = _make_app(
+            _registry(),
+            _registry(providers={"prov": provider}),
+        )
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            resp = await client.get("/api/config/models")
+
+        assert resp.json()["data"][0]["preferred"] is False
 
     @pytest.mark.asyncio
     async def test_failed_provider_does_not_hide_other_providers(self):
