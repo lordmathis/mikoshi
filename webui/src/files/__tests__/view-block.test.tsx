@@ -23,6 +23,34 @@ const ENTRIES: FrontmatterEntry[] = [
   { path: "specs/alpha.md", frontmatter: { status: "draft", priority: 2 } },
 ];
 
+const KANBAN_ENTRIES: FrontmatterEntry[] = [
+  { path: "tasks/a.md", frontmatter: { status: "doing" } },
+  { path: "tasks/b.md", frontmatter: { status: "todo" } },
+  { path: "tasks/c.md", frontmatter: { status: "doing" } },
+  { path: "tasks/d.md", frontmatter: {} },
+];
+
+async function renderKanban(query: string, entries: FrontmatterEntry[]) {
+  const utils = renderView(query, entries);
+  await waitFor(() => {
+    expect(utils.container.querySelector("[data-lane]")).not.toBeNull();
+  });
+  return utils;
+}
+
+function laneLabels(container: HTMLElement): (string | null)[] {
+  return Array.from(container.querySelectorAll("[data-lane]")).map((el) =>
+    el.getAttribute("data-lane")
+  );
+}
+
+function laneCardTitles(container: HTMLElement, lane: string): (string | null)[] {
+  const el = container.querySelector(`[data-lane="${lane}"]`);
+  return el
+    ? Array.from(el.querySelectorAll("a")).map((a) => a.getAttribute("title"))
+    : [];
+}
+
 describe("ViewBlock", () => {
   it("renders a row per entry with linked file names and passes the glob", async () => {
     const { container, spy } = renderView("glob: specs/**/*.md", ENTRIES);
@@ -113,5 +141,65 @@ describe("ViewBlock", () => {
 
     expect(container.querySelector("table")).toBeNull();
     expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("groups cards into lanes by group_by in first-appearance order", async () => {
+    const { container } = await renderKanban("display: kanban\ngroup_by: status", KANBAN_ENTRIES);
+
+    expect(laneLabels(container)).toEqual(["doing", "todo", "No status"]);
+    expect(laneCardTitles(container, "doing")).toEqual(["tasks/a.md", "tasks/c.md"]);
+    expect(laneCardTitles(container, "todo")).toEqual(["tasks/b.md"]);
+    expect(laneCardTitles(container, "No status")).toEqual(["tasks/d.md"]);
+  });
+
+  it("honors explicit lane order, renders empty lanes, and overflows to Other and No-key lanes", async () => {
+    const entries: FrontmatterEntry[] = [
+      { path: "t/a.md", frontmatter: { status: "doing" } },
+      { path: "t/b.md", frontmatter: { status: "todo" } },
+      { path: "t/c.md", frontmatter: { status: "wip" } },
+      { path: "t/d.md", frontmatter: {} },
+    ];
+    const { container } = await renderKanban(
+      "display: kanban\ngroup_by: status\nlanes: [todo, done, doing]",
+      entries
+    );
+
+    expect(laneLabels(container)).toEqual(["todo", "done", "doing", "Other", "No status"]);
+    expect(laneCardTitles(container, "done")).toEqual([]);
+    expect(laneCardTitles(container, "Other")).toEqual(["t/c.md"]);
+  });
+
+  it("sorts cards within lanes by the sort key", async () => {
+    const entries: FrontmatterEntry[] = [
+      { path: "t/a.md", frontmatter: { status: "doing", priority: 1 } },
+      { path: "t/b.md", frontmatter: { status: "doing", priority: 3 } },
+      { path: "t/c.md", frontmatter: { status: "doing", priority: 2 } },
+    ];
+    const { container } = await renderKanban(
+      "display: kanban\ngroup_by: status\nsort: -priority",
+      entries
+    );
+
+    expect(laneCardTitles(container, "doing")).toEqual(["t/b.md", "t/c.md", "t/a.md"]);
+  });
+
+  it("calls onFileClick with the full path when a kanban card is clicked", async () => {
+    const { container, onFileClick } = await renderKanban(
+      "display: kanban\ngroup_by: status",
+      KANBAN_ENTRIES
+    );
+
+    const link = container.querySelector<HTMLAnchorElement>('[data-lane="doing"] a');
+    expect(link).not.toBeNull();
+    if (link) fireEvent.click(link);
+    expect(onFileClick).toHaveBeenCalledWith("tasks/a.md");
+  });
+
+  it("errors when display kanban has no group_by", () => {
+    const { container } = renderView("display: kanban", KANBAN_ENTRIES);
+
+    expect(container.querySelector("[data-lane]")).toBeNull();
+    expect(container.querySelector("table")).toBeNull();
+    expect(container.textContent).toContain("group_by");
   });
 });

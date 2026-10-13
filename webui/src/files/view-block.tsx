@@ -16,6 +16,9 @@ interface ViewQuery {
   glob?: string;
   columns?: string[];
   sort?: string;
+  display?: string;
+  group_by?: string;
+  lanes?: string[];
 }
 
 function parseQuery(query: string): { query: ViewQuery | null; error: string } {
@@ -35,7 +38,26 @@ function parseQuery(query: string): { query: ViewQuery | null; error: string } {
   if (typeof data !== "object" || Array.isArray(data)) {
     return { query: null, error: "View query must be a YAML mapping" };
   }
+  const error = validateQuery(data as Record<string, unknown>);
+  if (error) return { query: null, error };
   return { query: data, error: "" };
+}
+
+function validateQuery(query: Record<string, unknown>): string {
+  const display = query["display"];
+  if (display !== undefined && display !== "table" && display !== "kanban") {
+    return `display must be "table" or "kanban", got: ${formatValue(display)}`;
+  }
+  if (display === "kanban" && typeof query["group_by"] !== "string") {
+    return "kanban display requires group_by";
+  }
+  const lanes = query["lanes"];
+  if (lanes !== undefined) {
+    const list: unknown[] = Array.isArray(lanes) ? lanes : [lanes];
+    const nonScalar = list.find((lane) => lane === null || typeof lane === "object");
+    if (nonScalar !== undefined) return "lanes entries must be scalar values";
+  }
+  return "";
 }
 
 function compareValues(a: unknown, b: unknown): number {
@@ -66,6 +88,38 @@ function basename(path: string): string {
   return path.split("/").pop() || path;
 }
 
+interface Lane {
+  label: string;
+  rows: FrontmatterEntry[];
+}
+
+function groupLanes(rows: FrontmatterEntry[], groupBy: string, lanes?: string[]): Lane[] {
+  const byKey = new Map<string, FrontmatterEntry[]>();
+  const missing: FrontmatterEntry[] = [];
+  for (const row of rows) {
+    const value = row.frontmatter[groupBy];
+    if (value === null || value === undefined) {
+      missing.push(row);
+      continue;
+    }
+    const key = formatValue(value);
+    const bucket = byKey.get(key);
+    if (bucket) bucket.push(row);
+    else byKey.set(key, [row]);
+  }
+
+  const ordered = (lanes ?? [...byKey.keys()]).map(String);
+  const listed = new Set(ordered);
+  const result = ordered.map((label) => ({ label, rows: byKey.get(label) ?? [] }));
+
+  const other = [...byKey.entries()]
+    .filter(([key]) => !listed.has(key))
+    .flatMap(([, laneRows]) => laneRows);
+  if (other.length > 0) result.push({ label: "Other", rows: other });
+  if (missing.length > 0) result.push({ label: `No ${groupBy}`, rows: missing });
+  return result;
+}
+
 function dirname(path: string): string {
   const parts = path.split("/");
   parts.pop();
@@ -77,10 +131,10 @@ export function ViewBlock({ query }: { query: string }) {
   if (!ctx) {
     return <CodeBlock code={query} lang="view" />;
   }
-  return <ViewTable query={query} workspaceId={ctx.workspaceId} onFileClick={ctx.onFileClick} />;
+  return <ViewDisplay query={query} workspaceId={ctx.workspaceId} onFileClick={ctx.onFileClick} />;
 }
 
-function ViewTable({ query, workspaceId, onFileClick }: { query: string } & ViewContextValue) {
+function ViewDisplay({ query, workspaceId, onFileClick }: { query: string } & ViewContextValue) {
   const [entries, setEntries] = useState<FrontmatterEntry[] | null>(null);
   const [fetchError, setFetchError] = useState("");
   const [refreshTick, setRefreshTick] = useState(0);
@@ -112,19 +166,8 @@ function ViewTable({ query, workspaceId, onFileClick }: { query: string } & View
     [entries, parsed.query?.sort]
   );
 
-  const columns = useMemo(() => {
-    const specified = parsed.query?.columns;
-    if (typeof specified === "string") return [specified];
-    if (Array.isArray(specified) && specified.length > 0) return specified;
-
-    const seen: string[] = [];
-    for (const entry of rows) {
-      for (const key of Object.keys(entry.frontmatter)) {
-        if (!seen.includes(key)) seen.push(key);
-      }
-    }
-    return seen;
-  }, [rows, parsed.query?.columns]);
+  const groupBy = parsed.query?.group_by;
+  const kanban = parsed.query?.display === "kanban" && groupBy ? groupBy : undefined;
 
   if (parsed.error) {
     return (
@@ -176,74 +219,165 @@ function ViewTable({ query, workspaceId, onFileClick }: { query: string } & View
       </div>
       {rows.length === 0 ? (
         <div className="px-3 py-6 text-center cp-label opacity-40 italic">No files match</div>
+      ) : kanban ? (
+        <KanbanView
+          rows={rows}
+          groupBy={kanban}
+          lanes={parsed.query?.lanes}
+          onFileClick={onFileClick}
+        />
       ) : (
-        <div className="overflow-x-auto">
-          <table
-            className="w-full border-collapse border"
-            style={{ borderColor: "rgb(var(--cp-rgb-yellow) / 0.2)" }}
-          >
-            <thead style={{ backgroundColor: "rgb(var(--cp-rgb-yellow) / 0.06)" }}>
-              <tr>
-                <th
-                  className="px-3 py-2 text-left text-sm font-bold text-foreground"
-                  style={{ borderWidth: "1px", borderStyle: "solid", borderColor: "rgb(var(--cp-rgb-yellow) / 0.2)" }}
-                >
-                  File
-                </th>
-                {columns.map((column) => (
-                  <th
-                    key={column}
-                    className="px-3 py-2 text-left text-sm font-bold text-foreground"
-                    style={{ borderWidth: "1px", borderStyle: "solid", borderColor: "rgb(var(--cp-rgb-yellow) / 0.2)" }}
-                  >
-                    {column}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((entry) => (
-                <tr key={entry.path} className="even:bg-primary/3">
-                  <td
-                    className="px-3 py-2 text-sm"
-                    style={{ borderWidth: "1px", borderStyle: "solid", borderColor: "rgb(var(--cp-rgb-yellow) / 0.15)" }}
-                  >
-                    <a
-                      href="#"
-                      className="text-primary underline decoration-primary/40 hover:decoration-primary"
-                      title={entry.path}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        onFileClick(entry.path);
-                      }}
-                    >
-                      {dirname(entry.path) && (
-                        <span className="text-[var(--color-cp-text-muted)]">
-                          {dirname(entry.path)}/
-                        </span>
-                      )}
-                      {basename(entry.path)}
-                    </a>
-                  </td>
-                  {columns.map((column) => (
-                    <td
-                      key={column}
-                      className="px-3 py-2 text-sm text-foreground/80 font-mono"
-                      style={{ borderWidth: "1px", borderStyle: "solid", borderColor: "rgb(var(--cp-rgb-yellow) / 0.15)" }}
-                    >
-                      {column in entry.frontmatter ? (
-                        formatValue(entry.frontmatter[column])
-                      ) : (
-                        <span className="text-foreground/25">—</span>
-                      )}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <TableView
+          rows={rows}
+          columns={parsed.query?.columns}
+          onFileClick={onFileClick}
+        />
       )}
+    </div>
+  );
+}
+
+function TableView({
+  rows,
+  columns: specified,
+  onFileClick,
+}: {
+  rows: FrontmatterEntry[];
+  columns?: string[];
+  onFileClick: (path: string) => void;
+}) {
+  const columns = useMemo(() => {
+    if (typeof specified === "string") return [specified];
+    if (Array.isArray(specified) && specified.length > 0) return specified;
+
+    const seen: string[] = [];
+    for (const entry of rows) {
+      for (const key of Object.keys(entry.frontmatter)) {
+        if (!seen.includes(key)) seen.push(key);
+      }
+    }
+    return seen;
+  }, [rows, specified]);
+
+  return (
+    <div className="overflow-x-auto">
+      <table
+        className="w-full border-collapse border"
+        style={{ borderColor: "rgb(var(--cp-rgb-yellow) / 0.2)" }}
+      >
+        <thead style={{ backgroundColor: "rgb(var(--cp-rgb-yellow) / 0.06)" }}>
+          <tr>
+            <th
+              className="px-3 py-2 text-left text-sm font-bold text-foreground"
+              style={{ borderWidth: "1px", borderStyle: "solid", borderColor: "rgb(var(--cp-rgb-yellow) / 0.2)" }}
+            >
+              File
+            </th>
+            {columns.map((column) => (
+              <th
+                key={column}
+                className="px-3 py-2 text-left text-sm font-bold text-foreground"
+                style={{ borderWidth: "1px", borderStyle: "solid", borderColor: "rgb(var(--cp-rgb-yellow) / 0.2)" }}
+              >
+                {column}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((entry) => (
+            <tr key={entry.path} className="even:bg-primary/3">
+              <td
+                className="px-3 py-2 text-sm"
+                style={{ borderWidth: "1px", borderStyle: "solid", borderColor: "rgb(var(--cp-rgb-yellow) / 0.15)" }}
+              >
+                <a
+                  href="#"
+                  className="text-primary underline decoration-primary/40 hover:decoration-primary"
+                  title={entry.path}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onFileClick(entry.path);
+                  }}
+                >
+                  {dirname(entry.path) && (
+                    <span className="text-[var(--color-cp-text-muted)]">
+                      {dirname(entry.path)}/
+                    </span>
+                  )}
+                  {basename(entry.path)}
+                </a>
+              </td>
+              {columns.map((column) => (
+                <td
+                  key={column}
+                  className="px-3 py-2 text-sm text-foreground/80 font-mono"
+                  style={{ borderWidth: "1px", borderStyle: "solid", borderColor: "rgb(var(--cp-rgb-yellow) / 0.15)" }}
+                >
+                  {column in entry.frontmatter ? (
+                    formatValue(entry.frontmatter[column])
+                  ) : (
+                    <span className="text-foreground/25">—</span>
+                  )}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function KanbanView({
+  rows,
+  groupBy,
+  lanes,
+  onFileClick,
+}: {
+  rows: FrontmatterEntry[];
+  groupBy: string;
+  lanes?: string[];
+  onFileClick: (path: string) => void;
+}) {
+  const laneList = typeof lanes === "string" ? [lanes] : lanes;
+  const laneData = groupLanes(rows, groupBy, laneList);
+
+  return (
+    <div className="overflow-x-auto p-3 flex gap-4 items-start">
+      {laneData.map((lane) => (
+        <div key={lane.label} data-lane={lane.label} className="w-56 shrink-0">
+          <div className="cp-label mb-2 px-1 text-primary/50" style={{ fontSize: "10px" }}>
+            {lane.label} · {lane.rows.length}
+          </div>
+          <div className="flex flex-col gap-2">
+            {lane.rows.map((entry) => (
+              <div
+                key={entry.path}
+                className="cp-cut-6 cp-hover-user border bg-cp-surface2 px-2.5 py-2"
+                style={{ borderColor: "rgb(var(--cp-rgb-yellow) / 0.15)" }}
+              >
+                <a
+                  href="#"
+                  className="text-sm text-primary underline decoration-primary/40 hover:decoration-primary"
+                  title={entry.path}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onFileClick(entry.path);
+                  }}
+                >
+                  {basename(entry.path)}
+                </a>
+                {dirname(entry.path) && (
+                  <div className="text-xs font-mono text-[var(--color-cp-text-muted)]">
+                    {dirname(entry.path)}/
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
