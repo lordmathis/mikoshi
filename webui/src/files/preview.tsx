@@ -4,7 +4,7 @@ import rehypeMathjax from "rehype-mathjax";
 import { Loader2, X, File } from "lucide-react";
 import { Button } from "../ui/button.tsx";
 import { ScrollArea } from "../ui/scroll-area.tsx";
-import { remarkWikiLinks, resolveTarget } from "../lib/remark-wiki-links.ts";
+import { remarkWikiLinks, resolveTarget, parseWikiLinks } from "../lib/remark-wiki-links.ts";
 import { markdownComponents, REMARK_PLUGINS } from "../lib/markdown-components.tsx";
 import { formatValue, parseFrontmatter } from "../lib/frontmatter.ts";
 import { encodeFilePath } from "../lib/api.ts";
@@ -25,7 +25,57 @@ function isMarkdownFile(path: string): boolean {
   return /\.(md|mdx|markdown)$/i.test(path);
 }
 
-function FrontmatterPanel({ metadata }: { metadata: Record<string, unknown> }) {
+function UnresolvedWiki({ children }: { children: React.ReactNode }) {
+  return (
+    <span
+      style={{ color: "rgb(var(--cp-rgb-yellow) / 0.5)", background: "rgb(var(--cp-rgb-yellow) / 0.06)", padding: "0 3px", borderRadius: "3px", fontSize: "0.9em" }}
+    >
+      {children}
+    </span>
+  );
+}
+
+interface WikiLinkValueProps {
+  text: string;
+  workspaceId: string | null;
+  fileIndex: Map<string, string>;
+  onFileClick: (path: string) => void;
+}
+
+function WikiLinkValue({ text, workspaceId, fileIndex, onFileClick }: WikiLinkValueProps) {
+  return (
+    <>
+      {parseWikiLinks(text).map((segment, i) => {
+        if (segment.kind === "text") return segment.value;
+        if (segment.kind === "image") return segment.raw;
+
+        const resolved = workspaceId ? resolveTarget(segment.target, fileIndex) : null;
+        if (!resolved) {
+          return <UnresolvedWiki key={i}>{`[[${segment.target}]]`}</UnresolvedWiki>;
+        }
+        return (
+          <a
+            key={i}
+            href="#"
+            className="text-primary underline decoration-primary/40 hover:decoration-primary"
+            onClick={(e) => { e.preventDefault(); onFileClick(resolved); }}
+          >
+            {segment.label}
+          </a>
+        );
+      })}
+    </>
+  );
+}
+
+interface FrontmatterPanelProps {
+  metadata: Record<string, unknown>;
+  workspaceId: string | null;
+  fileIndex: Map<string, string>;
+  onFileClick: (path: string) => void;
+}
+
+export function FrontmatterPanel({ metadata, workspaceId, fileIndex, onFileClick }: FrontmatterPanelProps) {
   const entries = Object.entries(metadata);
   if (entries.length === 0) return null;
 
@@ -60,7 +110,12 @@ function FrontmatterPanel({ metadata }: { metadata: Record<string, unknown> }) {
             </span>
             <span className="text-foreground/25">:</span>
             <span className="text-foreground/60 font-mono break-all" style={{ fontSize: "12px" }}>
-              {formatValue(value)}
+              <WikiLinkValue
+                text={formatValue(value)}
+                workspaceId={workspaceId}
+                fileIndex={fileIndex}
+                onFileClick={onFileClick}
+              />
             </span>
           </div>
         ))}
@@ -94,13 +149,7 @@ export function Preview({ filePath, fileContent, isLoading, onClose, workspaceId
         if (resolved) {
           return <img src={`/api/workspaces/${workspaceId}/files/${encodeFilePath(resolved)}`} alt={target} className="max-w-full h-auto rounded" />;
         }
-        return (
-          <span
-            style={{ color: "rgb(var(--cp-rgb-yellow) / 0.5)", background: "rgb(var(--cp-rgb-yellow) / 0.06)", padding: "0 3px", borderRadius: "3px", fontSize: "0.9em" }}
-          >
-            {`![[${target}]]`}
-          </span>
-        );
+        return <UnresolvedWiki>{`![[${target}]]`}</UnresolvedWiki>;
       }
       if (href?.startsWith("wiki://")) {
         const target = decodeURIComponent(href.replace("wiki://", ""));
@@ -116,13 +165,7 @@ export function Preview({ filePath, fileContent, isLoading, onClose, workspaceId
             </a>
           );
         }
-        return (
-          <span
-            style={{ color: "rgb(var(--cp-rgb-yellow) / 0.5)", background: "rgb(var(--cp-rgb-yellow) / 0.06)", padding: "0 3px", borderRadius: "3px", fontSize: "0.9em" }}
-          >
-            {`[[${target}]]`}
-          </span>
-        );
+        return <UnresolvedWiki>{`[[${target}]]`}</UnresolvedWiki>;
       }
       return <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>;
     },
@@ -165,7 +208,14 @@ export function Preview({ filePath, fileContent, isLoading, onClose, workspaceId
                   const mdContent = parsed ? parsed.content : fileContent;
                   return (
                     <>
-                      {parsed && <FrontmatterPanel metadata={parsed.metadata} />}
+                      {parsed && (
+                    <FrontmatterPanel
+                      metadata={parsed.metadata}
+                      workspaceId={workspaceId}
+                      fileIndex={fileIndex}
+                      onFileClick={onFileClick}
+                    />
+                  )}
                       <ReactMarkdown
                         remarkPlugins={remarkPlugins}
                         rehypePlugins={[rehypeMathjax]}

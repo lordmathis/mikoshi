@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { remarkWikiLinks, resolveTarget } from "../remark-wiki-links";
+import { remarkWikiLinks, resolveTarget, parseWikiLinks } from "../remark-wiki-links";
 import type { Root } from "mdast";
 
 function makeTree(text: string): Root {
@@ -101,6 +101,42 @@ describe("remarkWikiLinks", () => {
     const links = collectLinks(tree);
     expect(links).toHaveLength(0);
     expect(collectTexts(tree)).toContain("Malformed [[link");
+  });
+});
+
+describe("parseWikiLinks", () => {
+  it("returns a single text segment for text without links", () => {
+    expect(parseWikiLinks("no links here")).toEqual([
+      { kind: "text", value: "no links here" },
+    ]);
+  });
+
+  it("splits mixed text, link, and image segments with raw preserved", () => {
+    expect(parseWikiLinks("see [[note]] and ![[img.png]] end")).toEqual([
+      { kind: "text", value: "see " },
+      { kind: "link", target: "note", label: "note", raw: "[[note]]" },
+      { kind: "text", value: " and " },
+      { kind: "image", target: "img.png", raw: "![[img.png]]" },
+      { kind: "text", value: " end" },
+    ]);
+  });
+
+  it("strips heading fragment and applies pipe display override", () => {
+    expect(parseWikiLinks("[[page#sec|display]]")).toEqual([
+      { kind: "link", target: "page", label: "display", raw: "[[page#sec|display]]" },
+    ]);
+  });
+
+  it("keeps full path as target with basename as label", () => {
+    expect(parseWikiLinks("[[path/to/note.md]]")).toEqual([
+      { kind: "link", target: "path/to/note.md", label: "note.md", raw: "[[path/to/note.md]]" },
+    ]);
+  });
+
+  it("leaves malformed [[link as text", () => {
+    expect(parseWikiLinks("Malformed [[link")).toEqual([
+      { kind: "text", value: "Malformed [[link" },
+    ]);
   });
 });
 
