@@ -102,9 +102,29 @@ class TitleGenerationConfig(BaseModel):
     model: Optional[str] = None
 
 
+DEFAULT_INDEX_EXCLUDES = [
+    "node_modules/*", ".venv/*", "venv/*", "__pycache__/*", "dist/*", "build/*",
+    ".next/*", "target/*", ".mypy_cache/*", ".pytest_cache/*", ".ruff_cache/*",
+    "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "poetry.lock", "uv.lock",
+    "go.sum", "Cargo.lock",
+]
+
+
+class WorkspaceIndexConfig(BaseModel):
+    embed_provider: str = ""
+    embed_model: str = ""
+    vector_size: int = 0
+    qdrant_url: str = ""
+    chunk_chars: int = 1600
+    chunk_overlap: int = 200
+    max_file_bytes: int = 1_000_000
+    exclude: List[str] = DEFAULT_INDEX_EXCLUDES
+
+
 class WorkspaceConfig(BaseModel):
     git_user_name: str = "Mikoshi Agent"
     git_user_email: str = "agent@mikoshi"
+    index: Optional[WorkspaceIndexConfig] = None  # absent = feature off
 
 class SearchConfig(BaseModel):
     searxng_url: str

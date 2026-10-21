@@ -25,6 +25,7 @@ class _StubWorkspaceService:
         self._fail_init = fail_init
         self._files = {}
         self.frontmatter_calls = []
+        self.indexer = None
 
     async def initialize_workspace(self, workspace_id, repo_url, connector_name=None):
         if self._fail_init:

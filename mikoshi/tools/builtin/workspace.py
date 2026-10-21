@@ -10,7 +10,7 @@ from mikoshi.git import GitService, GitTimeout, run_git
 from mikoshi.tools.context import ToolCallContext
 from mikoshi.tools.edit_utils import EditError, apply_edits
 from mikoshi.tools.toolset_handler import ToolSetHandler, tool
-from mikoshi.workspace import walk_files
+from mikoshi.workspace import is_binary_file, walk_files
 
 logger = logging.getLogger(__name__)
 
@@ -69,15 +69,6 @@ def _has_git_repo(root: str) -> bool:
     return os.path.isdir(os.path.join(root, ".git"))
 
 
-def _is_binary(file_path: str) -> bool:
-    try:
-        with open(file_path, "rb") as f:
-            chunk = f.read(8192)
-        return b"\x00" in chunk
-    except Exception:
-        return True
-
-
 def _is_image(file_path: str) -> bool:
     _, ext = os.path.splitext(file_path)
     return ext.lower() in IMAGE_EXTENSIONS
@@ -125,6 +116,28 @@ def _require_workspace(context: ToolCallContext) -> str:
 class WorkspaceTools(ToolSetHandler):
     server_name = WORKSPACE_SERVER_NAME
 
+    async def initialize(self) -> None:
+        await super().initialize()
+        indexer = (
+            self._tool_manager.workspace_index if self._tool_manager else None
+        )
+        if indexer is None or not indexer.enabled:
+            self._tools.pop("search", None)
+
+    def _notify_index_changed(self, context: ToolCallContext, path: str) -> None:
+        indexer = (
+            self._tool_manager.workspace_index if self._tool_manager else None
+        )
+        if indexer:
+            indexer.notify_changed(context.workspace.workspace_id, path)
+
+    def _notify_index_sync(self, context: ToolCallContext) -> None:
+        indexer = (
+            self._tool_manager.workspace_index if self._tool_manager else None
+        )
+        if indexer:
+            indexer.notify_sync(context.workspace.workspace_id)
+
     @tool(
         description="Read the contents of a file. Supports text files with optional line-based offset/limit, and image files (returns base64).",
         parameters={
@@ -165,7 +178,7 @@ class WorkspaceTools(ToolSetHandler):
         if _is_image(full_path):
             return self._read_image(full_path, path)
 
-        if _is_binary(full_path):
+        if is_binary_file(full_path):
             mime_type, _ = mimetypes.guess_type(full_path)
             size = os.path.getsize(full_path)
             return f"Binary file: {path} ({mime_type or 'unknown'}, {size} bytes). Use bash to inspect."
@@ -245,6 +258,7 @@ class WorkspaceTools(ToolSetHandler):
             line_count = content.count("\n") + (
                 1 if content and not content.endswith("\n") else 0
             )
+            self._notify_index_changed(context, path)
             return _workspace_result(
                 f"Wrote {len(content)} bytes ({line_count} lines) to {path}",
                 paths=[path],
@@ -320,6 +334,7 @@ class WorkspaceTools(ToolSetHandler):
             msg = f"Applied {len(edits)} edit(s) to {path} ({old_lines} → {new_lines} lines)"
             if warnings:
                 msg += "\n" + "\n".join(f"Note: {w}" for w in warnings)
+            self._notify_index_changed(context, path)
             return _workspace_result(msg, paths=[path])
 
         except EditError as e:
@@ -409,7 +424,7 @@ class WorkspaceTools(ToolSetHandler):
         for fpath in files:
             if match_count >= limit:
                 break
-            if _is_binary(fpath):
+            if is_binary_file(fpath):
                 continue
 
             try:
@@ -596,6 +611,57 @@ class WorkspaceTools(ToolSetHandler):
 
         return output
 
+    @tool(
+        description=(
+            "Semantic search over workspace files by meaning. Use for finding "
+            "concepts/code when you don't know exact wording; use grep for exact text."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "What to look for by meaning.",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Max chunks to return (default 8).",
+                },
+            },
+            "required": ["query"],
+        },
+    )
+    async def search(
+        self,
+        query: str,
+        context: ToolCallContext,
+        limit: int = 8,
+    ) -> str:
+        _require_workspace(context)
+        indexer = (
+            self._tool_manager.workspace_index if self._tool_manager else None
+        )
+        if indexer is None or not indexer.enabled:
+            return "Error: workspace index not configured."
+
+        try:
+            results = await indexer.search(
+                context.workspace.workspace_id, query, limit
+            )
+        except Exception as e:
+            return f"Error: workspace search failed: {e}"
+
+        if not results:
+            return "No results found."
+
+        entries = []
+        for result in results:
+            snippet = result["text"][:800]
+            entries.append(
+                f"{result['path']}:{result['start_line']} (score {result['score']:.2f})\n{snippet}"
+            )
+        return _truncate_output("\n\n".join(entries))
+
     def _get_git_service(self, context: ToolCallContext) -> GitService:
         root = _require_workspace(context)
         return GitService(root, context.workspace.workspace_id)
@@ -683,6 +749,7 @@ class WorkspaceTools(ToolSetHandler):
         result = await svc.pull(auth_env_vars)
         if not result.success:
             return result.output
+        self._notify_index_sync(context)
         return _workspace_result(result.output)
 
     @tool(

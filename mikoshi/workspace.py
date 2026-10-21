@@ -87,10 +87,26 @@ def walk_files(root: str):
             yield os.path.join(dirpath, filename)
 
 
+def is_binary_file(path: str) -> bool:
+    """Null-byte check on the first 8 KB; unreadable files count as binary."""
+    try:
+        with open(path, "rb") as f:
+            chunk = f.read(8192)
+        return b"\x00" in chunk
+    except OSError:
+        return True
+
+
 class WorkspaceService:
-    def __init__(self, data_dir: str, connectors_config: dict[str, ConnectorsConfig]):
+    def __init__(
+        self,
+        data_dir: str,
+        connectors_config: dict[str, ConnectorsConfig],
+        indexer=None,
+    ):
         self._data_dir = data_dir
         self._connectors_config = connectors_config
+        self.indexer = indexer
         self._workspaces_dir = os.path.join(data_dir, "workspaces")
         os.makedirs(self._workspaces_dir, exist_ok=True)
 
@@ -124,6 +140,8 @@ class WorkspaceService:
 
         if not repo_url:
             logger.info(f"Initialized empty workspace {workspace_id}")
+            if self.indexer:
+                self.indexer.notify_sync(workspace_id)
             return
 
         # Token auth only makes sense for the HTTPS transport; SSH ignores
@@ -149,6 +167,8 @@ class WorkspaceService:
             raise WorkspaceError(f"Git clone failed: {stderr.strip()}")
 
         logger.info(f"Initialized workspace {workspace_id} from {repo_url}")
+        if self.indexer:
+            self.indexer.notify_sync(workspace_id)
 
     def get_workspace_path(self, workspace_id: str) -> str:
         root = self._workspace_root(workspace_id)
@@ -163,6 +183,8 @@ class WorkspaceService:
         if os.path.exists(root):
             shutil.rmtree(root, ignore_errors=True)
             logger.info(f"Deleted workspace files for {workspace_id}")
+        if self.indexer:
+            self.indexer.notify_workspace_deleted(workspace_id)
 
     def get_file_tree(self, workspace_id: str, path: str = "") -> FileNode:
         root = self.get_workspace_path(workspace_id)
@@ -235,6 +257,9 @@ class WorkspaceService:
         with open(full_path, "w", encoding="utf-8") as f:
             f.write(content)
 
+        if self.indexer:
+            self.indexer.notify_changed(workspace_id, path)
+
     def delete_file(self, workspace_id: str, path: str):
         root = self.get_workspace_path(workspace_id)
         full_path = os.path.realpath(os.path.join(root, path))
@@ -243,6 +268,8 @@ class WorkspaceService:
             raise WorkspaceFileNotFoundError(f"File not found: {path}")
         os.remove(full_path)
         _remove_empty_parents(full_path, root)
+        if self.indexer:
+            self.indexer.notify_deleted(workspace_id, path)
 
     def rename_file(self, workspace_id: str, old_path: str, new_path: str) -> str:
         root = self.get_workspace_path(workspace_id)
@@ -255,6 +282,9 @@ class WorkspaceService:
         os.makedirs(os.path.dirname(new_full), exist_ok=True)
         os.rename(old_full, new_full)
         _remove_empty_parents(old_full, root)
+        if self.indexer:
+            self.indexer.notify_deleted(workspace_id, old_path)
+            self.indexer.notify_changed(workspace_id, new_path)
         return new_path
 
     def list_files_flat(self, workspace_id: str) -> List[str]:

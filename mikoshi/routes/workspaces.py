@@ -258,6 +258,10 @@ async def git_commit(request: Request, workspace_id: str, body: GitCommitRequest
 async def git_pull(request: Request, workspace_id: str):
     svc, auth_env_vars = await _build_git_service(request, workspace_id)
     result = await svc.pull(auth_env_vars)
+    if result.success:
+        workspace_service = _get_workspace_service(request)
+        if workspace_service.indexer:
+            workspace_service.indexer.notify_sync(workspace_id)
     return {"success": result.success, "output": result.output}
 
 

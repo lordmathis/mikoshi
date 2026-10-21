@@ -114,3 +114,36 @@ class TestRealtimePath:
         kwargs = native.chat.completions.create.await_args.kwargs
         assert "service_tier" not in kwargs
         assert "extra_body" not in kwargs
+
+
+class TestCreateEmbedding:
+    @pytest.mark.asyncio
+    async def test_batch_input_returns_vectors_in_index_order(self):
+        native = MagicMock()
+        native.embeddings.create = AsyncMock(
+            return_value=SimpleNamespace(
+                data=[
+                    SimpleNamespace(index=1, embedding=[0.2, 0.2]),
+                    SimpleNamespace(index=0, embedding=[0.1, 0.1]),
+                ]
+            )
+        )
+        client = OpenAIClient(native)
+
+        result = await client.create_embedding("emb", ["a", "b"])
+
+        assert result == [[0.1, 0.1], [0.2, 0.2]]
+
+    @pytest.mark.asyncio
+    async def test_str_input_returns_single_vector(self):
+        native = MagicMock()
+        native.embeddings.create = AsyncMock(
+            return_value=SimpleNamespace(
+                data=[SimpleNamespace(index=0, embedding=[0.3, 0.3])]
+            )
+        )
+        client = OpenAIClient(native)
+
+        result = await client.create_embedding("emb", "a")
+
+        assert result == [0.3, 0.3]

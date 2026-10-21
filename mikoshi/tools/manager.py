@@ -67,12 +67,14 @@ class ToolManager:
         app_config: AppConfig,
         provider_registry: ProviderRegistry,
         db: Optional[Database] = None,
+        workspace_index=None,
     ):
         self._server_map: Dict[str, ToolHandler] = {}
 
         self._app_config = app_config
         self._provider_registry = provider_registry
         self._db = db
+        self.workspace_index = workspace_index
 
         self._data_dir = app_config.data_dir
         self._tools_dir = app_config.plugins.tools_dir

@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -14,6 +15,7 @@ from mikoshi.routes.upload_utils import remove_upload_dir
 from mikoshi.skills import SkillRegistry
 from mikoshi.tools.manager import ToolManager
 from mikoshi.workspace import WorkspaceService
+from mikoshi.workspace_index import WorkspaceIndexer
 
 logger = logging.getLogger(__name__)
 
@@ -60,12 +62,22 @@ async def lifespan(app: FastAPI):
     provider_registry = ProviderRegistry(app_config.providers)
     app.state.provider_registry = provider_registry
 
+    # Initialize workspace index (no-op unless workspace.index is configured)
+    workspace_index = None
+    if app_config.workspace.index:
+        workspace_index = WorkspaceIndexer(
+            app_config.workspace.index,
+            os.path.join(app_config.data_dir, "workspaces"),
+            provider_registry,
+        )
+
     # Initialize and start tool manager
     try:
         tool_manager = ToolManager(
             app_config=app_config,
             provider_registry=provider_registry,
             db=database,
+            workspace_index=workspace_index,
         )
         await tool_manager.start()
         app.state.tool_manager = tool_manager
@@ -96,6 +108,7 @@ async def lifespan(app: FastAPI):
     workspace_service = WorkspaceService(
         data_dir=app_config.data_dir,
         connectors_config=app_config.connectors,
+        indexer=workspace_index,
     )
     app.state.workspace_service = workspace_service
 
@@ -126,6 +139,11 @@ async def lifespan(app: FastAPI):
     # Start orphan file cleanup task
     cleanup_task = asyncio.create_task(_orphan_file_cleanup_task(app))
 
+    # Bootstrap workspace indexes (one-shot full scan per workspace)
+    startup_sync_task = None
+    if workspace_index:
+        startup_sync_task = asyncio.create_task(workspace_index.sync_all())
+
     yield
 
     # Drain in-flight requests before shutting down. Bounded: SSE streams
@@ -143,6 +161,13 @@ async def lifespan(app: FastAPI):
     except asyncio.CancelledError:
         pass
 
+    if startup_sync_task:
+        startup_sync_task.cancel()
+        try:
+            await startup_sync_task
+        except asyncio.CancelledError:
+            pass
+
     # Shutdown: Clean up resources
     logger.info("Shutting down server...")
 
@@ -150,6 +175,12 @@ async def lifespan(app: FastAPI):
         await tool_manager.stop()
     except Exception as e:
         logger.error(f"Error during tool manager shutdown: {e}", exc_info=True)
+
+    if workspace_index:
+        try:
+            await workspace_index.close()
+        except Exception as e:
+            logger.error(f"Error during workspace index shutdown: {e}", exc_info=True)
 
     try:
         await connector_registry.close()

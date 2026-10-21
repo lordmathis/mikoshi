@@ -12,6 +12,13 @@ logger = logging.getLogger(__name__)
 class BashTools(ToolSetHandler):
     server_name = "bash"
 
+    def _notify_workspace_index(self, context: ToolCallContext) -> None:
+        if not context.workspace or not self._tool_manager:
+            return
+        indexer = self._tool_manager.workspace_index
+        if indexer:
+            indexer.notify_sync(context.workspace.workspace_id)
+
     @tool(
         description="Execute a bash command in the workspace directory. Requires user approval before execution.",
         parameters={
@@ -56,6 +63,7 @@ class BashTools(ToolSetHandler):
             except asyncio.TimeoutError:
                 process.kill()
                 await process.wait()
+                self._notify_workspace_index(context)
                 return {
                     "success": False,
                     "error": f"Command timed out after {timeout} seconds",
@@ -85,6 +93,7 @@ class BashTools(ToolSetHandler):
             else:
                 logger.info(f"Bash command succeeded: {command}")
 
+            self._notify_workspace_index(context)
             return result
 
         except Exception as e:

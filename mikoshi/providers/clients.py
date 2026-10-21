@@ -73,15 +73,18 @@ class LLMClient(ABC):
         """
         return []
 
-    async def create_embedding(self, model: str, input: str) -> Optional[List[float]]:
+    async def create_embedding(
+        self, model: str, input: str | List[str]
+    ) -> Optional[List[float] | List[List[float]]]:
         """Create an embedding vector for the input text.
 
         Args:
             model: Embedding model identifier
-            input: Text to embed
+            input: Text to embed, or a list of texts for batch embedding
 
         Returns:
-            Embedding vector, or None if the provider does not support embeddings.
+            A single vector for str input (or None if unsupported), or a
+            list of vectors — one per input, in input order — for list input.
         """
         return None
 
@@ -170,13 +173,19 @@ class OpenAIClient(LLMClient):
             return status
         return "completed" if response.choices else "in_progress"
 
-    async def create_embedding(self, model: str, input: str) -> Optional[List[float]]:
-        """Create an embedding vector using the OpenAI-compatible embeddings API."""
-        with start_embedding_span(model, input):
+    async def create_embedding(
+        self, model: str, input: str | List[str]
+    ) -> Optional[List[float] | List[List[float]]]:
+        """Create embedding vector(s) using the OpenAI-compatible API."""
+        span_text = input if isinstance(input, str) else f"[{len(input)} texts]"
+        with start_embedding_span(model, span_text):
             response = await self.client.embeddings.create(model=model, input=input)
-            if not response.data:
-                return None
-            return response.data[0].embedding
+            data = sorted(response.data, key=lambda d: d.index)
+            if isinstance(input, str):
+                if not data:
+                    return None
+                return data[0].embedding
+            return [d.embedding for d in data]
 
 
 class AnthropicClient(LLMClient):
