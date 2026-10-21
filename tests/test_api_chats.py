@@ -200,7 +200,7 @@ class TestCreateChat:
 
     @pytest.mark.asyncio
     async def test_create_with_custom_title_and_workspace(self, client, db):
-        ws = db.create_workspace(name="ws", repo_url="https://x.com/repo")
+        ws = db.create_workspace(name="ws", repo_url="https://example.com/repo")
         resp = await client.post(
             "/api/chats",
             json={"config": _chat_config(), "title": "My Chat", "workspace_id": ws.id},
@@ -239,7 +239,7 @@ class TestListChats:
     async def test_workspace_id_param_filters(self, client, db):
         from sqlalchemy import text
 
-        ws = db.create_workspace(name="ws", repo_url="https://x.com/repo")
+        ws = db.create_workspace(name="ws", repo_url="https://example.com/repo")
         db.create_chat(title="bound", workspace_id=ws.id)
         db.create_chat(title="unbound")
 

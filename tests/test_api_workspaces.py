@@ -173,7 +173,7 @@ class TestDeleteWorkspace:
 
     @pytest.mark.asyncio
     async def test_delete_cascades_linked_chats(self, client, db):
-        ws = db.create_workspace(name="ws", repo_url="https://x.com/repo")
+        ws = db.create_workspace(name="ws", repo_url="https://example.com/repo")
         chat = db.create_chat(workspace_id=ws.id)
         await client.delete(f"/api/workspaces/{ws.id}")
         assert db.get_chat(chat.id) is None
@@ -187,7 +187,7 @@ class TestDeleteWorkspace:
 class TestFileRead:
     @pytest.mark.asyncio
     async def test_text_file_returns_plain_text(self, client, db):
-        ws = db.create_workspace(name="ws", repo_url="https://x.com/repo")
+        ws = db.create_workspace(name="ws", repo_url="https://example.com/repo")
         svc = client._transport.app.state.workspace_service
         svc._files[(ws.id, "readme.md")] = (b"Hello world", "text/markdown")
         resp = await client.get(f"/api/workspaces/{ws.id}/files/readme.md")
@@ -197,7 +197,7 @@ class TestFileRead:
 
     @pytest.mark.asyncio
     async def test_binary_file_returns_response_with_media_type(self, client, db):
-        ws = db.create_workspace(name="ws", repo_url="https://x.com/repo")
+        ws = db.create_workspace(name="ws", repo_url="https://example.com/repo")
         svc = client._transport.app.state.workspace_service
         svc._files[(ws.id, "img.png")] = (b"\x89PNG\r\n", "image/png")
         resp = await client.get(f"/api/workspaces/{ws.id}/files/img.png")
@@ -206,7 +206,7 @@ class TestFileRead:
 
     @pytest.mark.asyncio
     async def test_json_file_returns_plain_text(self, client, db):
-        ws = db.create_workspace(name="ws", repo_url="https://x.com/repo")
+        ws = db.create_workspace(name="ws", repo_url="https://example.com/repo")
         svc = client._transport.app.state.workspace_service
         svc._files[(ws.id, "data.json")] = (b'{"key": 1}', "application/json")
         resp = await client.get(f"/api/workspaces/{ws.id}/files/data.json")
@@ -217,7 +217,7 @@ class TestFileRead:
 class TestFileWrite:
     @pytest.mark.asyncio
     async def test_write_file(self, client, db):
-        ws = db.create_workspace(name="ws", repo_url="https://x.com/repo")
+        ws = db.create_workspace(name="ws", repo_url="https://example.com/repo")
         resp = await client.put(
             f"/api/workspaces/{ws.id}/files/test.txt",
             json={"content": "hello"},
@@ -229,7 +229,7 @@ class TestFileWrite:
 class TestFileDelete:
     @pytest.mark.asyncio
     async def test_delete_file(self, client, db):
-        ws = db.create_workspace(name="ws", repo_url="https://x.com/repo")
+        ws = db.create_workspace(name="ws", repo_url="https://example.com/repo")
         svc = client._transport.app.state.workspace_service
         svc._files[(ws.id, "del.txt")] = (b"x", "text/plain")
         resp = await client.delete(f"/api/workspaces/{ws.id}/files/del.txt")
@@ -240,7 +240,7 @@ class TestFileDelete:
 class TestFileRename:
     @pytest.mark.asyncio
     async def test_rename_returns_new_path(self, client, db):
-        ws = db.create_workspace(name="ws", repo_url="https://x.com/repo")
+        ws = db.create_workspace(name="ws", repo_url="https://example.com/repo")
         svc = client._transport.app.state.workspace_service
         svc._files[(ws.id, "old.txt")] = (b"x", "text/plain")
         resp = await client.patch(
@@ -254,7 +254,7 @@ class TestFileRename:
 class TestFileTree:
     @pytest.mark.asyncio
     async def test_returns_tree(self, client, db):
-        ws = db.create_workspace(name="ws", repo_url="https://x.com/repo")
+        ws = db.create_workspace(name="ws", repo_url="https://example.com/repo")
         resp = await client.get(f"/api/workspaces/{ws.id}/tree")
         assert resp.status_code == 200
         data = resp.json()
@@ -264,7 +264,7 @@ class TestFileTree:
 class TestListFiles:
     @pytest.mark.asyncio
     async def test_returns_files_list(self, client, db):
-        ws = db.create_workspace(name="ws", repo_url="https://x.com/repo")
+        ws = db.create_workspace(name="ws", repo_url="https://example.com/repo")
         svc = client._transport.app.state.workspace_service
         svc._files[(ws.id, "a.txt")] = (b"a", "text/plain")
         svc._files[(ws.id, "b.txt")] = (b"b", "text/plain")
@@ -276,7 +276,7 @@ class TestListFiles:
 class TestFrontmatter:
     @pytest.mark.asyncio
     async def test_returns_files_with_glob(self, client, db):
-        ws = db.create_workspace(name="ws", repo_url="https://x.com/repo")
+        ws = db.create_workspace(name="ws", repo_url="https://example.com/repo")
         resp = await client.get(
             f"/api/workspaces/{ws.id}/frontmatter",
             params={"glob": "specs/**/*.md"},
@@ -290,7 +290,7 @@ class TestFrontmatter:
 
     @pytest.mark.asyncio
     async def test_default_glob(self, client, db):
-        ws = db.create_workspace(name="ws", repo_url="https://x.com/repo")
+        ws = db.create_workspace(name="ws", repo_url="https://example.com/repo")
         await client.get(f"/api/workspaces/{ws.id}/frontmatter")
         svc = client._transport.app.state.workspace_service
         assert svc.frontmatter_calls == [(ws.id, "**/*")]
@@ -304,7 +304,7 @@ class TestFrontmatter:
 class TestGitEndpoints:
     @pytest.mark.asyncio
     async def test_git_status(self, client, db):
-        ws = db.create_workspace(name="ws", repo_url="https://x.com/repo")
+        ws = db.create_workspace(name="ws", repo_url="https://example.com/repo")
         mock_status = GitStatus(branch="main", staged=1, unstaged=0, untracked=2)
         with patch("mikoshi.routes.workspaces.GitService") as MockGit:
             MockGit.return_value.status = AsyncMock(return_value=mock_status)
@@ -317,7 +317,7 @@ class TestGitEndpoints:
 
     @pytest.mark.asyncio
     async def test_git_commit_uses_app_config(self, client, db, app_config):
-        ws = db.create_workspace(name="ws", repo_url="https://x.com/repo")
+        ws = db.create_workspace(name="ws", repo_url="https://example.com/repo")
         mock_result = GitResult(success=True, output="committed")
         with patch("mikoshi.routes.workspaces.GitService") as MockGit:
             MockGit.return_value.commit = AsyncMock(return_value=mock_result)
@@ -335,7 +335,7 @@ class TestGitEndpoints:
 
     @pytest.mark.asyncio
     async def test_git_pull(self, client, db):
-        ws = db.create_workspace(name="ws", repo_url="https://x.com/repo")
+        ws = db.create_workspace(name="ws", repo_url="https://example.com/repo")
         mock_result = GitResult(success=True, output="already up to date")
         with patch("mikoshi.routes.workspaces.GitService") as MockGit:
             MockGit.return_value.pull = AsyncMock(return_value=mock_result)
@@ -346,7 +346,7 @@ class TestGitEndpoints:
 
     @pytest.mark.asyncio
     async def test_git_push(self, client, db):
-        ws = db.create_workspace(name="ws", repo_url="https://x.com/repo")
+        ws = db.create_workspace(name="ws", repo_url="https://example.com/repo")
         mock_result = GitResult(success=False, output="rejected")
         with patch("mikoshi.routes.workspaces.GitService") as MockGit:
             MockGit.return_value.push = AsyncMock(return_value=mock_result)
@@ -357,7 +357,7 @@ class TestGitEndpoints:
     @pytest.mark.asyncio
     async def test_git_pull_builds_https_auth_env(self, client, db):
         ws = db.create_workspace(
-            name="ws", repo_url="https://x.com/repo", connector="github"
+            name="ws", repo_url="https://example.com/repo", connector="github"
         )
         svc = client._transport.app.state.workspace_service
         svc._tokens = {"github": "tok"}
