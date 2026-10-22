@@ -2,6 +2,11 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useSidebar } from "../use-sidebar.ts";
 
+interface StoredSidebarState {
+  activeTab: string;
+  activeWorkspaceId: string | null;
+}
+
 describe("useSidebar", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -18,7 +23,7 @@ describe("useSidebar", () => {
 
     act(() => result.current.setActiveTab("data"));
 
-    const stored = JSON.parse(localStorage.getItem("mikoshi-sidebar")!);
+    const stored = JSON.parse(localStorage.getItem("mikoshi-sidebar")!) as StoredSidebarState;
     expect(stored.activeTab).toBe("data");
     expect(result.current.activeTab).toBe("data");
   });
@@ -47,7 +52,7 @@ describe("useSidebar", () => {
 
     act(() => result.current.setActiveWorkspace("ws-42"));
 
-    const stored = JSON.parse(localStorage.getItem("mikoshi-sidebar")!);
+    const stored = JSON.parse(localStorage.getItem("mikoshi-sidebar")!) as StoredSidebarState;
     expect(stored.activeWorkspaceId).toBe("ws-42");
   });
 
@@ -60,7 +65,7 @@ describe("useSidebar", () => {
     const { result } = renderHook(() => useSidebar());
     act(() => result.current.setActiveWorkspace(null));
 
-    const stored = JSON.parse(localStorage.getItem("mikoshi-sidebar")!);
+    const stored = JSON.parse(localStorage.getItem("mikoshi-sidebar")!) as StoredSidebarState;
     expect(stored.activeWorkspaceId).toBeNull();
   });
 });

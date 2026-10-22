@@ -67,7 +67,8 @@ describe("useConversations", () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     act(() => result.current.loadMore());
-    await waitFor(() => expect(listChats).toHaveBeenLastCalledWith(20, 20, null));
+    await waitFor(() => expect(result.current.conversations).toHaveLength(39));
+    expect(listChats).toHaveBeenLastCalledWith(20, 20, null);
 
     expect(result.current.conversations).toHaveLength(39);
     expect(result.current.conversations.filter((c) => c.id === "a-19")).toHaveLength(1);
