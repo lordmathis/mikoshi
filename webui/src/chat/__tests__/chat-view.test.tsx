@@ -6,7 +6,7 @@ import { api, type Chat, type ChatWithMessages, type Workspace } from "../../lib
 const now = new Date().toISOString();
 
 function node(id: string, name: string): Workspace {
-  return { id, name, repo_url: null, connector: null, created_at: now, updated_at: now };
+  return { id, name, repo_url: null, connector: null, default_agent: null, created_at: now, updated_at: now };
 }
 
 const NODE_A = node("ws-a", "Alpha");

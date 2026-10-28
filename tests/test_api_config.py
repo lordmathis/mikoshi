@@ -32,6 +32,16 @@ def _provider(model_ids=None, error=None, preferred_model=None):
     return provider
 
 
+def _agent_class():
+    cls = MagicMock()
+    cls.system_prompt = "agent prompt"
+    cls.tool_servers = ["workspace"]
+    cls.max_iterations = 10
+    cls.temperature = 0.3
+    cls.max_tokens = 4096
+    return cls
+
+
 class TestListModels:
     @pytest.mark.asyncio
     async def test_lists_agents_and_provider_models(self):
@@ -96,3 +106,83 @@ class TestListModels:
 
         ids = [m["id"] for m in resp.json()["data"]]
         assert ids == ["ok:m1"]
+
+
+class TestDefaultChat:
+    def _make_app(self, model_registry, agent_manager=None):
+        app = FastAPI()
+        app.include_router(config_router, prefix="/api")
+        app.state.model_registry = model_registry
+        app.state.provider_registry = _registry()
+        if agent_manager is not None:
+            app.state.agent_manager = agent_manager
+        return app
+
+    def _agent_manager(self, resolved):
+        am = MagicMock()
+        am.resolve_default_agent_name.return_value = resolved
+        return am
+
+    @pytest.mark.asyncio
+    async def test_agent_manager_resolves_workspace_default(self):
+        registry = _registry(agent_names=["workout", "ws-default"])
+        registry.get_agent_class.return_value = _agent_class()
+        app = self._make_app(registry, agent_manager=self._agent_manager("workout"))
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            resp = await client.get(
+                "/api/config/default-chat", params={"workspace_id": "ws-1"}
+            )
+
+        body = resp.json()
+        assert body["model"] == "workout"
+        assert body["system_prompt"] == "agent prompt"
+        assert body["tool_servers"] == ["workspace"]
+        assert body["model_params"]["max_iterations"] == 10
+
+    @pytest.mark.asyncio
+    async def test_resolver_receives_workspace_id(self):
+        registry = _registry()
+        registry.get_agent_class.return_value = _agent_class()
+        am = self._agent_manager("workout")
+        app = self._make_app(registry, agent_manager=am)
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            await client.get(
+                "/api/config/default-chat", params={"workspace_id": "ws-1"}
+            )
+
+        am.resolve_default_agent_name.assert_called_once_with("ws-1")
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_registry_without_agent_manager(self):
+        registry = _registry()
+        registry.get_default_agent_name.return_value = "ws-default"
+        registry.get_agent_class.return_value = _agent_class()
+        app = self._make_app(registry)
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            resp = await client.get(
+                "/api/config/default-chat", params={"workspace_id": "ws-1"}
+            )
+
+        assert resp.json()["model"] == "ws-default"
+        registry.get_default_agent_name.assert_called_once_with(workspace=True)
+
+    @pytest.mark.asyncio
+    async def test_no_default_returns_null_model(self):
+        registry = _registry()
+        app = self._make_app(registry, agent_manager=self._agent_manager(None))
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            resp = await client.get("/api/config/default-chat")
+
+        assert resp.json() == {"model": None}

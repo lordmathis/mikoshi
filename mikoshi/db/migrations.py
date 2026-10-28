@@ -13,6 +13,7 @@ def run_migrations(engine):
         _migrate_file_source_column(conn)
         _migrate_chat_workspace_id_column(conn)
         _migrate_workspace_repo_url_nullable(conn)
+        _migrate_workspace_default_agent_column(conn)
         _migrate_chat_skills_column(conn)
         _migrate_message_phase_column(conn)
         conn.commit()
@@ -152,3 +153,15 @@ def _migrate_workspace_repo_url_nullable(conn):
     conn.execute(text("ALTER TABLE _workspaces_new RENAME TO workspaces"))
     conn.execute(text("PRAGMA foreign_keys=ON"))
     logger.info("Column repo_url is now nullable in workspaces table.")
+
+
+def _migrate_workspace_default_agent_column(conn):
+    inspector = inspect(conn)
+    columns = [col["name"] for col in inspector.get_columns("workspaces")]
+
+    if "default_agent" not in columns:
+        logger.info("Adding default_agent column to workspaces table...")
+        conn.execute(text("ALTER TABLE workspaces ADD COLUMN default_agent TEXT"))
+        logger.info("Column default_agent added to workspaces table.")
+    else:
+        logger.debug("Column default_agent already exists in workspaces table.")

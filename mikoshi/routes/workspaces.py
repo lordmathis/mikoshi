@@ -17,6 +17,12 @@ class CreateWorkspaceRequest(BaseModel):
     name: str
     repo_url: Optional[str] = None
     connector: Optional[str] = None
+    default_agent: Optional[str] = None
+
+
+class UpdateWorkspaceRequest(BaseModel):
+    name: Optional[str] = None
+    default_agent: Optional[str] = None
 
 
 class WriteFileRequest(BaseModel):
@@ -37,6 +43,7 @@ def _serialize_workspace(workspace) -> dict:
         "name": workspace.name,
         "repo_url": workspace.repo_url,
         "connector": workspace.connector,
+        "default_agent": workspace.default_agent,
         "created_at": format_timestamp(workspace.created_at),
         "updated_at": format_timestamp(workspace.updated_at),
     }
@@ -56,13 +63,31 @@ def _require_workspace(database, workspace_id):
     return workspace
 
 
+def _validate_agent_name(request: Request, agent_name: str):
+    agent_registry = getattr(request.app.state, "model_registry", None)
+    if agent_registry is None:
+        return
+    if not agent_registry.get_agent_class(agent_name):
+        valid = ", ".join(sorted(agent_registry.list_agent_names()))
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown agent '{agent_name}'. Available agents: {valid}",
+        )
+
+
 @router.post("")
 async def create_workspace(request: Request, body: CreateWorkspaceRequest):
     database = request.app.state.database
     workspace_service = _get_workspace_service(request)
 
+    if body.default_agent is not None:
+        _validate_agent_name(request, body.default_agent)
+
     workspace = database.create_workspace(
-        name=body.name, repo_url=body.repo_url, connector=body.connector
+        name=body.name,
+        repo_url=body.repo_url,
+        connector=body.connector,
+        default_agent=body.default_agent,
     )
 
     try:
@@ -91,6 +116,22 @@ async def get_workspace(request: Request, workspace_id: str):
     database = request.app.state.database
     workspace = _require_workspace(database, workspace_id)
     return _serialize_workspace(workspace)
+
+
+@router.patch("/{workspace_id}")
+async def update_workspace(
+    request: Request, workspace_id: str, body: UpdateWorkspaceRequest
+):
+    database = request.app.state.database
+    _require_workspace(database, workspace_id)
+
+    updates = body.model_dump(exclude_unset=True)
+
+    if updates.get("default_agent") is not None:
+        _validate_agent_name(request, updates["default_agent"])
+
+    updated = database.update_workspace(workspace_id, **updates)
+    return _serialize_workspace(updated)
 
 
 @router.get("/{workspace_id}/tree")

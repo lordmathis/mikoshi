@@ -28,6 +28,7 @@ class Workspace(Base):
     repo_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     local_path: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     connector: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    default_agent: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=utcnow, onupdate=utcnow

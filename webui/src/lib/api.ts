@@ -175,6 +175,7 @@ export interface Workspace {
   name: string;
   repo_url: string | null;
   connector: string | null;
+  default_agent: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -543,9 +544,16 @@ class ApiClient {
     return this.request(`/workspaces/${id}`);
   }
 
-  async createWorkspace(data: { name: string; repo_url?: string | null; connector?: string }): Promise<Workspace> {
+  async createWorkspace(data: { name: string; repo_url?: string | null; connector?: string; default_agent?: string | null }): Promise<Workspace> {
     return this.request('/workspaces', {
       method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateWorkspace(id: string, data: { name?: string; default_agent?: string | null }): Promise<Workspace> {
+    return this.request(`/workspaces/${id}`, {
+      method: 'PATCH',
       body: JSON.stringify(data),
     });
   }

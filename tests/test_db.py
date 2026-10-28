@@ -417,6 +417,12 @@ class TestWorkspaceCRUD:
         )
         assert ws.connector == "forgejo"
 
+    def test_create_workspace_with_default_agent(self, db):
+        ws = db.create_workspace(
+            "proj", "https://github.com/x/proj", default_agent="workout"
+        )
+        assert db.get_workspace(ws.id).default_agent == "workout"
+
     def test_list_workspaces(self, db):
         db.create_workspace("a", "https://a.com")
         db.create_workspace("b", "https://b.com")
@@ -441,6 +447,54 @@ class TestWorkspaceCRUD:
         chat = db.create_chat(workspace_id=ws.id)
         found = db.get_workspace_by_chat(chat.id)
         assert found.id == ws.id
+
+    def test_update_workspace_sets_and_clears_default_agent(self, db):
+        ws = db.create_workspace("proj", "https://github.com/x/proj")
+        updated = db.update_workspace(ws.id, default_agent="workout")
+        assert updated.default_agent == "workout"
+        cleared = db.update_workspace(ws.id, default_agent=None)
+        assert cleared.default_agent is None
+
+    def test_update_workspace_preserves_untouched_fields(self, db):
+        ws = db.create_workspace(
+            "proj", "https://github.com/x/proj", default_agent="workout"
+        )
+        updated = db.update_workspace(ws.id, name="renamed")
+        assert updated.name == "renamed"
+        assert updated.default_agent == "workout"
+
+    def test_update_workspace_not_found(self, db):
+        assert db.update_workspace("nonexistent", name="x") is None
+
+
+class TestMigrations:
+    def test_default_agent_column_added_to_pre_migration_db(self, tmp_dir):
+        from sqlalchemy import create_engine
+
+        path = os.path.join(tmp_dir, "old.db")
+        engine = create_engine(f"sqlite:///{path}")
+        with engine.connect() as conn:
+            conn.execute(
+                text(
+                    "CREATE TABLE workspaces ("
+                    "id VARCHAR PRIMARY KEY, name VARCHAR, repo_url VARCHAR, "
+                    "local_path VARCHAR, connector VARCHAR, "
+                    "created_at DATETIME, updated_at DATETIME)"
+                )
+            )
+            conn.execute(text("INSERT INTO workspaces (id, name) VALUES ('w1', 'old')"))
+            conn.commit()
+        engine.dispose()
+
+        database = Database(path)
+        try:
+            ws = database.get_workspace("w1")
+            assert ws.name == "old"
+            assert ws.default_agent is None
+            database.update_workspace("w1", default_agent="workout")
+            assert database.get_workspace("w1").default_agent == "workout"
+        finally:
+            database.close()
 
 
 class TestTimestamps:

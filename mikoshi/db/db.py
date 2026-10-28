@@ -518,13 +518,37 @@ class Database:
         return ids
 
     def create_workspace(
-        self, name: str, repo_url: Optional[str] = None, connector: Optional[str] = None
+        self,
+        name: str,
+        repo_url: Optional[str] = None,
+        connector: Optional[str] = None,
+        default_agent: Optional[str] = None,
     ) -> Workspace:
         with self.SessionLocal() as session:
             workspace = Workspace(
-                id=str(uuid.uuid4()), name=name, repo_url=repo_url, connector=connector
+                id=str(uuid.uuid4()),
+                name=name,
+                repo_url=repo_url,
+                connector=connector,
+                default_agent=default_agent,
             )
             session.add(workspace)
+            session.commit()
+            session.refresh(workspace)
+            return workspace
+
+    def update_workspace(self, workspace_id: str, **kwargs) -> Optional[Workspace]:
+        """Update workspace fields. An explicitly passed None clears the field;
+        omitting a field leaves it untouched."""
+        with self.SessionLocal() as session:
+            workspace = session.get(Workspace, workspace_id)
+            if not workspace:
+                return None
+
+            for key, value in kwargs.items():
+                if hasattr(workspace, key):
+                    setattr(workspace, key, value)
+
             session.commit()
             session.refresh(workspace)
             return workspace

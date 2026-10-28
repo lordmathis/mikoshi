@@ -108,10 +108,17 @@ async def list_agents(request: Request):
 async def get_default_chat_config(request: Request, workspace_id: Optional[str] = None):
     """
     Get the default agent plugin (the one with default=True).
-    When workspace_id is provided, prefers WorkspaceAgentPlugin defaults.
+    When workspace_id is provided, prefers WorkspaceAgentPlugin defaults
+    and any default_agent configured on the workspace.
     """
     agent_registry = request.app.state.model_registry
-    default_name = agent_registry.get_default_agent_name(workspace=bool(workspace_id))
+    agent_manager = getattr(request.app.state, "agent_manager", None)
+    if agent_manager:
+        default_name = agent_manager.resolve_default_agent_name(workspace_id)
+    else:
+        default_name = agent_registry.get_default_agent_name(
+            workspace=bool(workspace_id)
+        )
     if default_name is None:
         return {"model": None}
 

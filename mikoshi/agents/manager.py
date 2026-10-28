@@ -191,6 +191,16 @@ class AgentManager:
             agent.post_init()
         return agent
 
+    def resolve_default_agent_name(self, workspace_id: Optional[str]) -> Optional[str]:
+        """Workspace-configured default agent if set and still registered,
+        else the registry default for the chat's context."""
+        if workspace_id:
+            workspace = self.db.get_workspace(workspace_id)
+            configured = workspace.default_agent if workspace else None
+            if configured and self.agent_registry.get_agent_class(configured):
+                return configured
+        return self.agent_registry.get_default_agent_name(workspace=bool(workspace_id))
+
     def _hydrate(self, chat_id: str, config: dict) -> BaseAgent:
         """Instantiate agent from config dict without persisting."""
         chat = self.db.get_chat(chat_id)
@@ -198,9 +208,7 @@ class AgentManager:
 
         model = config.get("model")
         if not model:
-            model = self.agent_registry.get_default_agent_name(
-                workspace=bool(workspace_id)
-            )
+            model = self.resolve_default_agent_name(workspace_id)
 
         if not model:
             raise ValueError("Model is required and no default agent found")

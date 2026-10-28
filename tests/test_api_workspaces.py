@@ -20,6 +20,17 @@ class _StubAgentManager:
         self._agents.pop(chat_id, None)
 
 
+class _StubAgentRegistry:
+    def __init__(self, names):
+        self._names = set(names)
+
+    def get_agent_class(self, name):
+        return object() if name in self._names else None
+
+    def list_agent_names(self):
+        return sorted(self._names)
+
+
 class _StubWorkspaceService:
     def __init__(self, fail_init=False):
         self._fail_init = fail_init
@@ -78,6 +89,7 @@ async def client(db, app_config):
     app.state.database = db
     app.state.workspace_service = _StubWorkspaceService()
     app.state.agent_manager = _StubAgentManager()
+    app.state.model_registry = _StubAgentRegistry(names=["workout"])
     app.state.app_config = app_config
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
@@ -142,6 +154,24 @@ class TestCreateWorkspace:
         assert data["name"] == "research-only"
         assert data["repo_url"] is None
 
+    @pytest.mark.asyncio
+    async def test_create_with_default_agent(self, client, db):
+        resp = await client.post(
+            "/api/workspaces",
+            json=_create_workspace_payload(default_agent="workout"),
+        )
+        assert resp.status_code == 200
+        assert resp.json()["default_agent"] == "workout"
+
+    @pytest.mark.asyncio
+    async def test_create_with_unknown_agent_rejected(self, client, db):
+        resp = await client.post(
+            "/api/workspaces",
+            json=_create_workspace_payload(default_agent="bogus"),
+        )
+        assert resp.status_code == 400
+        assert "bogus" in resp.json()["detail"]
+
 
 class TestListWorkspaces:
     @pytest.mark.asyncio
@@ -158,6 +188,58 @@ class TestGetWorkspace:
     @pytest.mark.asyncio
     async def test_not_found(self, client):
         resp = await client.get("/api/workspaces/nonexistent")
+        assert resp.status_code == 404
+
+
+class TestUpdateWorkspace:
+    @pytest.mark.asyncio
+    async def test_set_default_agent(self, client, db):
+        ws_id = db.create_workspace("ws", "https://example.com/repo").id
+        resp = await client.patch(
+            f"/api/workspaces/{ws_id}", json={"default_agent": "workout"}
+        )
+        assert resp.status_code == 200
+        assert resp.json()["default_agent"] == "workout"
+        assert db.get_workspace(ws_id).default_agent == "workout"
+
+    @pytest.mark.asyncio
+    async def test_null_clears_default_agent(self, client, db):
+        ws = db.create_workspace(
+            "ws", "https://example.com/repo", default_agent="workout"
+        )
+        resp = await client.patch(
+            f"/api/workspaces/{ws.id}", json={"default_agent": None}
+        )
+        assert resp.status_code == 200
+        assert resp.json()["default_agent"] is None
+        assert db.get_workspace(ws.id).default_agent is None
+
+    @pytest.mark.asyncio
+    async def test_absent_key_leaves_default_agent(self, client, db):
+        ws = db.create_workspace(
+            "ws", "https://example.com/repo", default_agent="workout"
+        )
+        resp = await client.patch(f"/api/workspaces/{ws.id}", json={"name": "renamed"})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["name"] == "renamed"
+        assert body["default_agent"] == "workout"
+
+    @pytest.mark.asyncio
+    async def test_unknown_agent_rejected(self, client, db):
+        ws_id = db.create_workspace("ws", "https://example.com/repo").id
+        resp = await client.patch(
+            f"/api/workspaces/{ws_id}", json={"default_agent": "bogus"}
+        )
+        assert resp.status_code == 400
+        assert "bogus" in resp.json()["detail"]
+        assert db.get_workspace(ws_id).default_agent is None
+
+    @pytest.mark.asyncio
+    async def test_not_found(self, client):
+        resp = await client.patch(
+            "/api/workspaces/nonexistent", json={"default_agent": "workout"}
+        )
         assert resp.status_code == 404
 
 

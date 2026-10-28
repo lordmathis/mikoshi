@@ -273,3 +273,117 @@ class TestAgentRegistryDefault:
         r = self._make_registry({"plain": PlainDefault, "ws": WsDefault})
         assert r.get_default_agent_name(workspace=True) == "ws"
         assert r.get_default_agent_name(workspace=False) == "plain"
+
+
+class TestResolveDefaultAgentName:
+    def _make_manager(self, classes, workspace):
+        registry = object.__new__(AgentRegistry)
+        registry._agent_classes = classes
+        m = _manager(agent_registry=registry)
+        m.db.get_workspace.return_value = workspace
+        return m
+
+    def _classes(self):
+        from mikoshi.agents.workspace import WorkspaceAgentPlugin
+
+        class WorkoutAgent:
+            default = False
+
+        class WsDefault(WorkspaceAgentPlugin):
+            default = True
+
+        class PlainDefault:
+            default = True
+
+        return {"workout": WorkoutAgent, "ws": WsDefault, "plain": PlainDefault}
+
+    def test_workspace_configured_agent_wins(self):
+        m = self._make_manager(self._classes(), MagicMock(default_agent="workout"))
+        assert m.resolve_default_agent_name("ws-1") == "workout"
+
+    def test_stale_configured_agent_falls_back(self):
+        m = self._make_manager(self._classes(), MagicMock(default_agent="removed"))
+        assert m.resolve_default_agent_name("ws-1") == "ws"
+
+    def test_workspace_without_config_uses_registry_default(self):
+        m = self._make_manager(self._classes(), MagicMock(default_agent=None))
+        assert m.resolve_default_agent_name("ws-1") == "ws"
+
+    def test_workspace_row_missing_falls_back(self):
+        m = self._make_manager(self._classes(), None)
+        assert m.resolve_default_agent_name("ws-1") == "ws"
+
+    def test_no_workspace_id_uses_non_workspace_default(self):
+        m = self._make_manager(self._classes(), MagicMock(default_agent="workout"))
+        assert m.resolve_default_agent_name(None) == "plain"
+
+
+class TestHydrateWorkspaceDefault:
+    def test_workspace_chat_without_model_uses_workspace_configured_agent(self):
+        m = _manager()
+        m.db.get_chat.return_value = MagicMock(workspace_id="ws-1")
+        m.db.get_workspace.return_value = MagicMock(
+            default_agent="workout", connector=None
+        )
+        mock_cls = MagicMock()
+        m.agent_registry.get_agent_class.return_value = mock_cls
+        m.provider_registry.get_provider.return_value = MagicMock()
+
+        agent = m._hydrate("c1", {})
+
+        assert agent is mock_cls.return_value
+        m.agent_registry.get_default_agent_name.assert_not_called()
+
+
+class TestWorkspaceDefaultEndToEnd:
+    def test_new_chat_uses_workspace_default_agent(self, tmp_dir):
+        from mikoshi.db.db import Database
+
+        class WorkoutAgent:
+            default = False
+            provider_id = "openai"
+            model_id = "gpt-4"
+            system_prompt = "log workouts"
+            tool_servers = []
+            temperature = None
+            max_tokens = None
+            context_window = None
+            max_iterations = 5
+
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+
+        class WsDefault:
+            default = True
+
+        db = Database(":memory:")
+        try:
+            ws = db.create_workspace("workouts", default_agent="workout")
+            chat = db.create_chat(workspace_id=ws.id)
+
+            registry = object.__new__(AgentRegistry)
+            registry._agent_classes = {"workout": WorkoutAgent, "ws": WsDefault}
+
+            m = AgentManager(
+                db=db,
+                provider_registry=MagicMock(),
+                agent_registry=registry,
+                tool_manager=MagicMock(),
+                data_dir=tmp_dir,
+                workspace_config=MagicMock(),
+            )
+
+            # Same flow as the UI: resolve the default, create the chat with it.
+            agent = m.create(chat.id, {"model": m.resolve_default_agent_name(ws.id)})
+
+            assert isinstance(agent, WorkoutAgent)
+            assert agent.kwargs["workspace_id"] == ws.id
+            assert db.get_chat(chat.id).model == "workout"
+
+            # Restart: hydration resolves the persisted per-chat agent, so the
+            # chat is unaffected even if the workspace default changes later.
+            m.remove(chat.id)
+            db.update_workspace(ws.id, default_agent="other")
+            assert isinstance(m.get(chat.id), WorkoutAgent)
+        finally:
+            db.close()
