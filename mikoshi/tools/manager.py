@@ -108,6 +108,16 @@ class ToolManager:
     def get_provider(self, name: str) -> Provider | None:
         return self._provider_registry.get_provider(name)
 
+    def set_chat_title(self, chat_id: str, title: str) -> None:
+        """Set a chat title from a tool plugin. Only applies while the title
+        is still the default, so manual renames and generated titles win."""
+        title = (title or "").strip()
+        if not title or self._db is None:
+            return
+        chat = self._db.get_chat(chat_id)
+        if chat and chat.title in (None, "", "Untitled Chat"):
+            self._db.update_chat(chat_id, title=title)
+
     def bind_agent_manager(self, agent_manager) -> None:
         """Late-bind the AgentManager into the subagents toolset: ToolManager
         starts before AgentManager exists."""
