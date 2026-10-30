@@ -98,9 +98,16 @@ class TestSaveUploadFileSanitization:
         monkeypatch.chdir(tmp_path)
         file_obj = save_upload_file(_FakeDB(), "../../evil.txt", b"x")
 
-        expected_dir = os.path.join(tmp_path, "uploads", file_obj.id)
-        assert os.path.dirname(file_obj.file_path) == expected_dir
+        expected_path = os.path.join(tmp_path, "uploads", file_obj.id, "data")
+        assert file_obj.file_path == expected_path
+        assert os.path.exists(file_obj.file_path)
         assert file_obj.filename == "evil.txt"
+
+    def test_client_filename_never_used_on_disk(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        file_obj = save_upload_file(_FakeDB(), "notes.txt", b"x")
+
+        assert os.listdir(os.path.dirname(file_obj.file_path)) == ["data"]
 
     def test_backslash_and_empty_fallback(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)

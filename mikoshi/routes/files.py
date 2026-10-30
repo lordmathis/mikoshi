@@ -68,6 +68,6 @@ async def delete_file(request: Request, file_id: str):
         raise HTTPException(status_code=400, detail="Cannot delete an attached file")
 
     db.delete_file(file_id)
-    remove_upload_dir(request.app.state.app_config.uploads_dir, file_id)
+    remove_upload_dir(request.app.state.app_config.uploads_dir, file_obj.id)
 
     return {"status": "success"}

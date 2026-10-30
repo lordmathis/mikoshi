@@ -67,7 +67,7 @@ def save_upload_file(
     upload_dir = upload_dir_path(uploads_root, file_id)
     os.makedirs(upload_dir, exist_ok=True)
 
-    file_path = os.path.join(upload_dir, filename)
+    file_path = os.path.join(upload_dir, "data")
 
     if isinstance(content, str):
         content = content.encode("utf-8")

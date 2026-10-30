@@ -52,12 +52,24 @@ class TestStaticContainment:
             "/..%2Fsecret.txt",
             "/%2e%2e/secret.txt",
             "/..%2f..%2fsecret.txt",
+            "/index.html%00",
         ],
     )
     async def test_encoded_dot_segments_rejected(self, static_app, path):
         response = await _get(static_app, path)
         assert response.status_code == 404
         assert "SECRET" not in response.text
+
+    @pytest.mark.asyncio
+    async def test_sibling_directory_with_shared_prefix_rejected(
+        self, static_app, tmp_path
+    ):
+        sibling = tmp_path / "dist-sibling"
+        sibling.mkdir()
+        (sibling / "sib.txt").write_text("SIB")
+        response = await _get(static_app, "/..%2Fdist-sibling%2Fsib.txt")
+        assert response.status_code == 404
+        assert "SIB" not in response.text
 
     @pytest.mark.asyncio
     async def test_symlink_inside_dist_pointing_out_rejected(self, static_app, tmp_path):

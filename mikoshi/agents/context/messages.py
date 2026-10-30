@@ -145,7 +145,7 @@ def process_user_message(db: Database, msg) -> ChatCompletionMessageParam:
         try:
             with open(attachment.file_path, "r", encoding="utf-8") as f:
                 file_content = f.read()
-            filename = os.path.basename(attachment.file_path)
+            filename = attachment.filename
             content_text += f"\n\n--- Content of {filename} ---\n{file_content}"
         except Exception as e:
             logger.error(f"Failed to read attachment {attachment.file_path}: {e}")
@@ -161,7 +161,7 @@ def process_user_message(db: Database, msg) -> ChatCompletionMessageParam:
         try:
             with open(attachment.file_path, "rb") as f:
                 img_data = base64.b64encode(f.read()).decode()
-            ext = os.path.splitext(attachment.file_path)[1].lower().lstrip(".")
+            ext = os.path.splitext(attachment.filename)[1].lower().lstrip(".")
             image_format = "jpeg" if ext in ("jpg", "jpeg") else ext or "jpeg"
             content_parts.append(
                 {

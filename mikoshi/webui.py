@@ -1,4 +1,5 @@
 import logging
+import os
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -106,6 +107,7 @@ def setup_webui(app: FastAPI):
         return
 
     webui_dist = webui_dist.resolve()
+    dist_root = str(webui_dist)
 
     @app.get("/{full_path:path}")
     async def serve_static(full_path: str, request: Request):
@@ -116,13 +118,15 @@ def setup_webui(app: FastAPI):
                 index_path, request, "text/html", {"Cache-Control": "no-cache"}
             )
 
-        if ".." in full_path or full_path.startswith(("/", "\\")):
+        if "\x00" in full_path:
             raise HTTPException(status_code=404, detail="File not found")
 
-        file_path = (webui_dist / full_path).resolve()
-        if not file_path.is_relative_to(webui_dist):
+        resolved = os.path.realpath(os.path.join(dist_root, full_path))
+        if not resolved.startswith(dist_root + os.sep):
             raise HTTPException(status_code=404, detail="File not found")
-        if file_path.exists() and file_path.is_file():
+
+        file_path = Path(resolved)
+        if file_path.is_file():
             cache_control = _cache_control(full_path, file_path)
             return _serve_with_compression(
                 file_path,
