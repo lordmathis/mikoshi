@@ -116,8 +116,9 @@ def setup_webui(app: FastAPI):
                 index_path, request, "text/html", {"Cache-Control": "no-cache"}
             )
 
-        # Starlette hands us percent-decoded dot-segments; resolve and
-        # contain before serving anything.
+        if ".." in full_path or full_path.startswith(("/", "\\")):
+            raise HTTPException(status_code=404, detail="File not found")
+
         file_path = (webui_dist / full_path).resolve()
         if not file_path.is_relative_to(webui_dist):
             raise HTTPException(status_code=404, detail="File not found")

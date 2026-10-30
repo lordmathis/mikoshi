@@ -36,3 +36,7 @@ All styling tokens are centralized in `webui/src/index.css`. Do not hardcode col
 ## Backwards compatibility
 
 There is no need for maintaining backwards compatibility. Prefer proper long-term solutions even if they might introduce breaking changes. The only deployment is [homelab](https://github.com/lordmathis/homelab). Check `mikoshi/plugins` path in the homelab repo if your changes affect any of the plugins and highlight them.
+
+## Comments
+
+Do not write narrative comments. Do not write comments that just repeat what the code does. The only allowed comment is a one-liner that explains a non-trivial detail. No comments is the goal.

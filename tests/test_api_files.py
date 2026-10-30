@@ -7,7 +7,12 @@ from fastapi import HTTPException
 from starlette.datastructures import Headers
 
 from mikoshi.routes import files as files_module
-from mikoshi.routes.upload_utils import read_upload_body, save_upload_file
+from mikoshi.routes.upload_utils import (
+    read_upload_body,
+    remove_upload_dir,
+    save_upload_file,
+    upload_dir_path,
+)
 
 
 class _FakeDB:
@@ -104,6 +109,29 @@ class TestSaveUploadFileSanitization:
         assert os.path.dirname(file_obj.file_path) == os.path.join(
             tmp_path, "uploads", file_obj.id
         )
+
+    @pytest.mark.parametrize("name", ["..", "."])
+    def test_dot_segment_filename_rejected(self, name):
+        with pytest.raises(HTTPException):
+            save_upload_file(_FakeDB(), name, b"x")
+
+
+class TestUploadDirPath:
+    def test_valid_id_is_joined(self):
+        fid = "d3b07384-d9a0-4e9f-8b3e-2c7a1b9f0e12"
+        assert upload_dir_path("uploads", fid) == os.path.join("uploads", fid)
+
+    @pytest.mark.parametrize(
+        "bad",
+        ["../../evil", "foo/bar", "..", ".", "", "/etc/passwd"],
+    )
+    def test_traversal_ids_rejected(self, bad):
+        with pytest.raises(ValueError):
+            upload_dir_path("uploads", bad)
+
+    def test_remove_upload_dir_rejects_traversal(self):
+        with pytest.raises(ValueError):
+            remove_upload_dir("uploads", "../../evil")
 
 
 class TestUploadSizeLimit:

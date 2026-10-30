@@ -15,7 +15,11 @@ MAX_UPLOAD_BYTES = 100 * 1024 * 1024
 
 
 def upload_dir_path(uploads_root: str, file_id: str) -> str:
-    return os.path.join(uploads_root, file_id)
+    """Join uploads_root with file_id, refusing path traversal."""
+    safe_id = os.path.basename(file_id)
+    if safe_id != file_id or safe_id in ("", ".", ".."):
+        raise ValueError(f"invalid file id: {file_id!r}")
+    return os.path.join(uploads_root, safe_id)
 
 
 def remove_upload_dir(uploads_root: str, file_id: str) -> None:
@@ -26,12 +30,10 @@ def remove_upload_dir(uploads_root: str, file_id: str) -> None:
 
 
 def sanitize_filename(filename: str | None) -> str:
-    """Strip any directory components from a client-supplied filename.
-
-    Multipart filenames are attacker-controlled; joining them unchecked
-    into the upload path allows `../../` writes outside the upload dir.
-    """
+    """Strip any directory components from a client-supplied filename."""
     name = os.path.basename((filename or "").replace("\\", "/"))
+    if name in (".", ".."):
+        raise HTTPException(status_code=400, detail="Invalid filename")
     return name or "unnamed"
 
 
