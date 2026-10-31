@@ -35,9 +35,19 @@ function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === "AbortError";
 }
 
+function errorMessage(content: string, sequence: number): Message {
+  return {
+    id: `error-${Date.now()}`,
+    role: "error",
+    content,
+    sequence,
+    created_at: new Date().toISOString(),
+  };
+}
+
 export function useMessages(
   chatId: string | undefined,
-  onWorkspaceChange?: (paths: string[]) => void,
+  onWorkspaceChange?: (paths: string[]) => void | Promise<void>,
   onChatRenamed?: (chatId: string, title: string) => void
 ) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -142,7 +152,7 @@ export function useMessages(
         if (msg.role === "tool") {
           const change = tryParseWorkspaceChange(msg.content);
           if (change) {
-            onWorkspaceChange?.(change.paths);
+            void onWorkspaceChange?.(change.paths);
           }
         }
       } else if (event.type === "tool_approval_request") {
@@ -171,16 +181,7 @@ export function useMessages(
       } else if (event.type === "error") {
         const errMsg = (event.data as { message: string }).message;
         console.error('[Messages] error event:', errMsg);
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: `error-${Date.now()}`,
-            role: "error",
-            content: errMsg,
-            sequence: prev.length,
-            created_at: new Date().toISOString(),
-          },
-        ]);
+        setMessages((prev) => [...prev, errorMessage(errMsg, prev.length)]);
       }
     },
     [onWorkspaceChange, onChatRenamed]
@@ -193,7 +194,7 @@ export function useMessages(
       setPendingApprovals({});
       setLoadError(null);
       setLoadedChatId(undefined);
-      loadDefaultSettings();
+      void loadDefaultSettings();
       return;
     }
     const abortController = beginStream();
@@ -209,18 +210,17 @@ export function useMessages(
       setIsLoading(!cached);
       await reloadMessages();
       setIsLoading(false);
-      if (chatIdRef.current !== chatId || abortController.signal.aborted) return;
-      const { active } = await api.getStreamStatus(chatId);
-      if (chatIdRef.current !== chatId || abortController.signal.aborted) return;
-      if (!active) return;
-      setIsSending(true);
       try {
+        if (chatIdRef.current !== chatId || abortController.signal.aborted) return;
+        const { active } = await api.getStreamStatus(chatId);
+        if (chatIdRef.current !== chatId || abortController.signal.aborted) return;
+        if (!active) return;
+        setIsSending(true);
         for await (const event of api.subscribeStream(chatId, abortController.signal)) {
           handleEvent(event);
         }
       } catch (e) {
-        if (isAbortError(e)) return;
-        console.error("[Messages] stream reconnect error:", e);
+        if (!isAbortError(e)) console.error("[Messages] stream reconnect error:", e);
       } finally {
         setIsSending(false);
         if (streamAbortRef.current === abortController) {
@@ -228,7 +228,7 @@ export function useMessages(
         }
       }
     };
-    fetchInitial();
+    void fetchInitial();
     return () => abortController.abort();
   }, [chatId, reloadMessages, loadDefaultSettings, handleEvent, beginStream]);
 
@@ -279,8 +279,10 @@ export function useMessages(
     } catch (error) {
       if (isAbortError(error) || chatIdRef.current !== chatId) return;
       console.error('[Messages] send() ERROR:', error);
-      setMessages((prev) => prev.filter((m) => m.id !== tempId));
-      throw error;
+      setMessages((prev) => [
+        ...prev.filter((m) => m.id !== tempId),
+        errorMessage(error instanceof Error ? error.message : "Failed to send message", prev.length),
+      ]);
     } finally {
       console.debug('[Messages] send() finally — setting isSending=false');
       setIsSending(false);
@@ -301,7 +303,13 @@ export function useMessages(
         handleEvent(event);
       }
     } catch (error) {
-      if (!isAbortError(error) && chatIdRef.current === chatId) throw error;
+      if (!isAbortError(error) && chatIdRef.current === chatId) {
+        console.error('[Messages] retry() ERROR:', error);
+        setMessages((prev) => [
+          ...prev,
+          errorMessage(error instanceof Error ? error.message : "Failed to retry", prev.length),
+        ]);
+      }
     } finally {
       setIsSending(false);
       if (streamAbortRef.current === controller) {
@@ -321,7 +329,13 @@ export function useMessages(
         handleEvent(event);
       }
     } catch (error) {
-      if (!isAbortError(error) && chatIdRef.current === chatId) throw error;
+      if (!isAbortError(error) && chatIdRef.current === chatId) {
+        console.error('[Messages] edit() ERROR:', error);
+        setMessages((prev) => [
+          ...prev,
+          errorMessage(error instanceof Error ? error.message : "Failed to edit message", prev.length),
+        ]);
+      }
     } finally {
       setIsSending(false);
       if (streamAbortRef.current === controller) {

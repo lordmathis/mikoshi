@@ -54,7 +54,7 @@ export function ChatView() {
       await workspaces.refreshTree();
       const currentPath = currentFilePathRef.current;
       if (currentPath && paths.includes(currentPath)) {
-        refreshCurrentFileRef.current();
+        void refreshCurrentFileRef.current();
       }
     },
     [workspaces.refreshTree]
@@ -128,10 +128,10 @@ export function ChatView() {
     isSending: messages.isSending,
     onSendComplete: () => {
       files.clearAll();
-      conversations.refresh();
+      void conversations.refresh();
     },
     onEditComplete: () => {
-      conversations.refresh();
+      void conversations.refresh();
     },
   });
 
@@ -140,13 +140,55 @@ export function ChatView() {
 
   const handleRetry = useCallback(async () => {
     await messages.retry();
-    conversations.refresh();
+    void conversations.refresh();
   }, [messages.retry, conversations.refresh]);
 
   const handleBranch = useCallback(async (messageId: string) => {
-    const id = await conversations.branchConversation(currentConversationIdRef.current!, messageId);
-    navigate(id);
+    const currentId = currentConversationIdRef.current;
+    if (!currentId) return;
+    try {
+      const id = await conversations.branchConversation(currentId, messageId);
+      navigate(id);
+    } catch (error) {
+      console.error("Failed to branch conversation:", error);
+      alert(`Failed to branch conversation: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
   }, [conversations.branchConversation, navigate]);
+
+  const handleNewConversation = useCallback(async () => {
+    try {
+      const id = await conversations.createConversation(
+        undefined,
+        sidebar.activeWorkspaceId
+      );
+      navigate(id);
+      closeSidebarOnMobile();
+    } catch (error) {
+      console.error("Failed to create conversation:", error);
+      alert(error instanceof Error ? error.message : "Failed to create conversation");
+    }
+  }, [conversations.createConversation, sidebar.activeWorkspaceId, navigate, closeSidebarOnMobile]);
+
+  const handleDeleteConversation = useCallback(async (id: string) => {
+    try {
+      await conversations.deleteConversation(id);
+      if (chatId === id) navigate(null, { replace: true });
+    } catch (error) {
+      console.error("Failed to delete conversation:", error);
+      alert(`Failed to delete conversation: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  }, [conversations.deleteConversation, chatId, navigate]);
+
+  const handleDeleteWorkspace = useCallback(async (id: string) => {
+    try {
+      await workspaces.deleteWorkspace(id);
+    } catch (error) {
+      console.error("Failed to delete workspace:", error);
+      alert(`Failed to delete workspace: ${error instanceof Error ? error.message : "Unknown error"}`);
+      return;
+    }
+    void conversations.refresh();
+  }, [workspaces.deleteWorkspace, conversations.refresh]);
 
   const handleFileUploadClick = () => {
     fileInputRef.current?.click();
@@ -171,18 +213,8 @@ export function ChatView() {
           navigate(id);
           closeSidebarOnMobile();
         }}
-        onNewConversation={async () => {
-          const id = await conversations.createConversation(
-            undefined,
-            sidebar.activeWorkspaceId
-          );
-          navigate(id);
-          closeSidebarOnMobile();
-        }}
-        onDeleteConversation={async (id) => {
-          await conversations.deleteConversation(id);
-          if (chatId === id) navigate(null, { replace: true });
-        }}
+        onNewConversation={() => void handleNewConversation()}
+        onDeleteConversation={(id) => void handleDeleteConversation(id)}
         hasMore={conversations.hasMore}
         onLoadMore={conversations.loadMore}
         isLoading={conversations.isLoading}
@@ -198,17 +230,14 @@ export function ChatView() {
         onWorkspaceTreeUpdate={workspaces.updateTree}
         activeFilePath={filePreview.filePath}
         onFileClick={(path) => {
-          filePreview.openFile(path);
+          void filePreview.openFile(path);
           closeSidebarOnMobile();
         }}
         onFileDeleted={filePreview.handleFileDeleted}
         onFileRenamed={filePreview.handleFileRenamed}
         activeWorkspaceHasRepo={workspaces.activeWorkspaceHasRepo}
         onNewWorkspace={() => setIsCreateNodeOpen(true)}
-        onDeleteWorkspace={async (id) => {
-          await workspaces.deleteWorkspace(id);
-          conversations.refresh();
-        }}
+        onDeleteWorkspace={(id) => void handleDeleteWorkspace(id)}
         onClearFilter={() => {
           workspaces.clearFilter();
           filePreview.closePreview();
@@ -237,14 +266,14 @@ export function ChatView() {
                 onClose={filePreview.closePreview}
                 workspaceId={sidebar.activeWorkspaceId}
                 fileIndex={workspaces.fileIndex}
-                onFileClick={filePreview.openFile}
+                onFileClick={(path) => void filePreview.openFile(path)}
                 mode={filePreview.mode}
                 setMode={filePreview.setMode}
                 editContent={filePreview.editContent}
                 setEditContent={filePreview.setEditContent}
                 isDirty={filePreview.isDirty}
                 isSaving={filePreview.isSaving}
-                onSave={filePreview.saveFile}
+                onSave={() => void filePreview.saveFile()}
                 chatHidden={chatHidden}
                 onToggleChat={() => setChatHidden((hidden) => !hidden)}
               />
@@ -273,7 +302,7 @@ export function ChatView() {
               isEditingMode={chatInput.isEditingMode}
               onInputChange={chatInput.setInputValue}
               onCancelEdit={chatInput.cancelEdit}
-              onSend={chatInput.handleSend}
+              onSend={() => void chatInput.handleSend()}
               onKeyDown={chatInput.handleKeyDown}
               isSending={messages.isSending}
               isUploadingFiles={files.isUploading}
@@ -282,8 +311,8 @@ export function ChatView() {
               onSettingsChange={messages.setChatSettings}
               uploadedFiles={files.uploadedFiles}
               connectorEntries={files.connectorEntries}
-              onRemoveFile={files.removeFile}
-              onRemoveConnectorEntry={files.removeConnectorEntry}
+              onRemoveFile={(fileId) => void files.removeFile(fileId)}
+              onRemoveConnectorEntry={(connectorId, resourceId) => void files.removeConnectorEntry(connectorId, resourceId)}
               onEditConnectorEntry={(connectorId, resourceId) => {
                 const entry = files.connectorEntries.find(
                   (e) => e.connectorId === connectorId && e.resourceId === resourceId
@@ -294,11 +323,11 @@ export function ChatView() {
               }}
               onFileUploadClick={handleFileUploadClick}
               onConnectorDialogOpen={connectorDialog.openNew}
-              onChatUpdated={conversations.refresh}
+              onChatUpdated={() => void conversations.refresh()}
               textareaRef={chatInput.textareaRef}
               fileInputRef={fileInputRef}
               onFileChange={(e) => {
-                if (e.target.files) files.uploadFiles(Array.from(e.target.files));
+                if (e.target.files) void files.uploadFiles(Array.from(e.target.files));
               }}
               workspaceFiles={Array.from(workspaces.fileIndex.values())}
               hasWorkspace={!!sidebar.activeWorkspaceId}
@@ -315,7 +344,7 @@ export function ChatView() {
         editingEntry={connectorDialog.editingEntry ?? undefined}
         onFilesAdded={(entry) => {
           if (connectorDialog.editingEntry) {
-            files.updateConnectorEntry(
+            void files.updateConnectorEntry(
               connectorDialog.editingEntry.connectorId,
               connectorDialog.editingEntry.resourceId,
               entry

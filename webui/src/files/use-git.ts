@@ -17,7 +17,7 @@ export function useGit(workspaceId: string | null) {
 
   useEffect(() => {
     if (workspaceId) {
-      refresh();
+      void refresh();
     } else {
       setStatus(null);
     }
@@ -31,6 +31,9 @@ export function useGit(workspaceId: string | null) {
         const result = await api.gitCommit(workspaceId, message);
         await refresh();
         return result;
+      } catch (error) {
+        console.error("Git commit failed:", error);
+        return { success: false, output: error instanceof Error ? error.message : "Commit failed" };
       } finally {
         setIsLoading(false);
       }
@@ -45,6 +48,9 @@ export function useGit(workspaceId: string | null) {
       const result = await api.gitPull(workspaceId);
       await refresh();
       return result;
+    } catch (error) {
+      console.error("Git pull failed:", error);
+      return { success: false, output: error instanceof Error ? error.message : "Pull failed" };
     } finally {
       setIsLoading(false);
     }
@@ -57,6 +63,9 @@ export function useGit(workspaceId: string | null) {
       const result = await api.gitPush(workspaceId);
       await refresh();
       return result;
+    } catch (error) {
+      console.error("Git push failed:", error);
+      return { success: false, output: error instanceof Error ? error.message : "Push failed" };
     } finally {
       setIsLoading(false);
     }

@@ -77,7 +77,7 @@ export function CreateNodeDialog({ open, onOpenChange, onCreated }: CreateNodeDi
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 py-4">
+        <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4 py-4">
           <div className="space-y-2">
             <Label htmlFor="node-name">Name</Label>
             <Input

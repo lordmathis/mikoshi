@@ -15,7 +15,7 @@ export function Mermaid({ chart }: MermaidProps) {
   useEffect(() => {
     let cancelled = false;
 
-    (async () => {
+    void (async () => {
       try {
         const mermaid = (await import("mermaid")).default;
         if (!initialized) {

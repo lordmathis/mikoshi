@@ -78,7 +78,8 @@ export function useVoiceRecording() {
       };
 
       mediaRecorder.onerror = (event) => {
-        const error = event.error || new Error('Recording failed');
+        const raw: unknown = event.error;
+        const error = raw instanceof Error ? raw : new Error('Recording failed');
         setState({
           isRecording: false,
           isProcessing: false,

@@ -98,7 +98,7 @@ export function ChatInput({
         console.error('Failed to load skills:', error);
       }
     };
-    loadSkills();
+    void loadSkills();
   }, []);
 
   useEffect(() => {
@@ -367,7 +367,7 @@ export function ChatInput({
               size="icon"
               variant={isRecording ? "destructive" : "ghost"}
               className="h-10 w-10 lg:h-9 lg:w-9"
-              onClick={handleVoiceRecording}
+              onClick={() => void handleVoiceRecording()}
               disabled={isSending || isProcessing || !currentConversationId}
             >
               {isRecording ? (

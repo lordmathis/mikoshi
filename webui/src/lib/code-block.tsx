@@ -195,7 +195,7 @@ export function CodeBlock({ code, lang }: CodeBlockProps) {
   useEffect(() => {
     let cancelled = false;
 
-    (async () => {
+    void (async () => {
       try {
         const highlighter = await getHighlighter();
         const resolved = await resolveLang(lang);
@@ -240,7 +240,7 @@ export function CodeBlock({ code, lang }: CodeBlockProps) {
         </div>
       )}
       <button
-        onClick={handleCopy}
+        onClick={() => void handleCopy()}
         aria-label="Copy code"
         className="absolute right-2 top-2 p-1.5 cp-cut-6 border border-border bg-cp-surface2 text-cp-text-muted opacity-0 group-hover:opacity-100 transition hover:text-primary hover:border-primary/40"
       >

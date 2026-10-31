@@ -101,7 +101,7 @@ function TreeNode({
 
   const handleRenameKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
-      handleRenameConfirm();
+      void handleRenameConfirm();
     } else if (e.key === "Escape") {
       setIsRenaming(false);
     }
@@ -170,7 +170,7 @@ function TreeNode({
         onDragOver={handleDragOver}
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
+        onDrop={(e) => void handleDrop(e)}
       >
         {isDir ? (
           <button className="flex items-center justify-center w-4 h-4">
@@ -197,7 +197,7 @@ function TreeNode({
             value={renameValue}
             onChange={(e) => setRenameValue(e.target.value)}
             onKeyDown={handleRenameKeyDown}
-            onBlur={handleRenameConfirm}
+            onBlur={() => void handleRenameConfirm()}
             onClick={(e) => e.stopPropagation()}
           />
         ) : (
@@ -215,7 +215,7 @@ function TreeNode({
             {!isDir && (
               <button
                 className="p-0.5 rounded hover:bg-accent/80 [&:hover>svg]:text-accent-foreground"
-                onClick={handleDelete}
+                onClick={(e) => void handleDelete(e)}
                 title="Delete"
               >
                 <Trash2 className="h-3 w-3 text-primary-foreground transition-transform hover:scale-110" />
@@ -328,7 +328,7 @@ export function WorkspaceTree({ tree, activeFilePath, onFileClick, workspaceId, 
 
   const handleNewFileKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
-      handleCreateFile();
+      void handleCreateFile();
     } else if (e.key === "Escape") {
       setIsCreating(false);
       setNewFileName("");
@@ -354,20 +354,23 @@ export function WorkspaceTree({ tree, activeFilePath, onFileClick, workspaceId, 
     }
   };
 
+  const submitCommit = async (msg: string) => {
+    const result = await git.commit(msg);
+    if (result.success) {
+      setFlashBtn("commit");
+      await onRefreshTree();
+    } else {
+      setShakeBtn("commit");
+    }
+  };
+
   const handleCommitKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       const msg = commitMessage.trim();
       if (!msg) return;
       setIsCommitting(false);
       setCommitMessage("");
-      git.commit(msg).then((result) => {
-        if (result.success) {
-          setFlashBtn("commit");
-          onRefreshTree();
-        } else {
-          setShakeBtn("commit");
-        }
-      });
+      void submitCommit(msg);
     } else if (e.key === "Escape") {
       setIsCommitting(false);
       setCommitMessage("");
@@ -376,6 +379,23 @@ export function WorkspaceTree({ tree, activeFilePath, onFileClick, workspaceId, 
 
   const btnClass = (id: string) =>
     `p-1 rounded hover:bg-accent transition-colors [&:hover>svg]:text-accent-foreground ${flashBtn === id ? "cp-flash-success" : ""} ${shakeBtn === id ? "cp-shake-error" : ""}`;
+
+  const handleRootDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsRootDragOver(false);
+    if (!workspaceId) return;
+    const srcPath = e.dataTransfer.getData("text/plain");
+    if (!srcPath) return;
+    const fileName = srcPath.split("/").pop()!;
+    if (fileName === srcPath) return;
+    try {
+      const result = await api.renameWorkspaceFile(workspaceId, srcPath, fileName);
+      onFileRenamed(srcPath, result.new_path);
+      await onRefreshTree();
+    } catch (err) {
+      console.error("Failed to move file:", err);
+    }
+  };
 
   if (!localTree) {
     return <EmptyState>No files loaded</EmptyState>;
@@ -393,22 +413,7 @@ export function WorkspaceTree({ tree, activeFilePath, onFileClick, workspaceId, 
           setIsRootDragOver(false);
         }
       }}
-      onDrop={async (e) => {
-        e.preventDefault();
-        setIsRootDragOver(false);
-        if (!workspaceId) return;
-        const srcPath = e.dataTransfer.getData("text/plain");
-        if (!srcPath) return;
-        const fileName = srcPath.split("/").pop()!;
-        if (fileName === srcPath) return;
-        try {
-          const result = await api.renameWorkspaceFile(workspaceId, srcPath, fileName);
-          onFileRenamed(srcPath, result.new_path);
-          await onRefreshTree();
-        } catch (err) {
-          console.error("Failed to move file:", err);
-        }
-      }}
+      onDrop={(e) => void handleRootDrop(e)}
     >
       <div className="flex items-center px-1 pb-1 gap-0.5 border-b border-primary/6">
         <button
@@ -430,7 +435,7 @@ export function WorkspaceTree({ tree, activeFilePath, onFileClick, workspaceId, 
             </button>
             <button
               className={btnClass("pull")}
-              onClick={handleGitPull}
+              onClick={() => void handleGitPull()}
               disabled={git.isLoading}
               title={git.status ? `Pull (branch: ${git.status.branch})` : "Pull"}
             >
@@ -442,7 +447,7 @@ export function WorkspaceTree({ tree, activeFilePath, onFileClick, workspaceId, 
             </button>
             <button
               className={btnClass("push")}
-              onClick={handleGitPush}
+              onClick={() => void handleGitPush()}
               disabled={git.isLoading}
               title={git.status ? `Push (branch: ${git.status.branch})` : "Push"}
             >
@@ -498,7 +503,7 @@ export function WorkspaceTree({ tree, activeFilePath, onFileClick, workspaceId, 
           level={0}
           activeFilePath={activeFilePath}
           onFileClick={onFileClick}
-          onLoadChildren={loadChildren}
+          onLoadChildren={(path) => void loadChildren(path)}
           loadingPaths={loadingPaths}
           onRefreshTree={onRefreshTree}
           onFileDeleted={onFileDeleted}

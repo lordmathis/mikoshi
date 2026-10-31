@@ -70,7 +70,7 @@ function ConnectorDialogBody({
     pathSelection.toggleSelect(path, isDir, connectorData.treeRoot);
 
   const handleApplyFilter = () => {
-    connectorData.applyFilter(
+    void connectorData.applyFilter(
       handleToggleSelect,
       connectorData.treeRoot,
       pathSelection.isPathSelected,
@@ -80,7 +80,7 @@ function ConnectorDialogBody({
 
   useEffect(() => {
     if (connectorData.inputMode === "select" && connectorData.resources.length === 0 && connectorData.selectedConnector) {
-      connectorData.loadResources();
+      void connectorData.loadResources();
     }
   }, [connectorData.inputMode, connectorData.selectedConnector, connectorData.resources.length]);
 
@@ -135,8 +135,8 @@ function ConnectorDialogBody({
             resources={connectorData.resources}
             isLoadingResources={connectorData.isLoadingResources}
             isLoadingTree={connectorData.isLoadingTree}
-            onResourceSelect={connectorData.handleResourceSelect}
-            onLinkPaste={connectorData.handleLinkPaste}
+            onResourceSelect={(resource) => void connectorData.handleResourceSelect(resource)}
+            onLinkPaste={(link) => void connectorData.handleLinkPaste(link)}
           />
 
           {connectorData.error && (
@@ -153,7 +153,7 @@ function ConnectorDialogBody({
                   expandedPaths={connectorData.expandedPaths}
                   onToggleSelect={handleToggleSelect}
                   onToggleExpand={connectorData.toggleExpand}
-                  onLoadChildren={connectorData.loadChildren}
+                  onLoadChildren={(path) => void connectorData.loadChildren(path)}
                   loadingPaths={connectorData.loadingPaths}
                   isPathSelected={pathSelection.isPathSelected}
                   isPathExcluded={pathSelection.isPathExcluded}
@@ -201,7 +201,7 @@ function ConnectorDialogBody({
           <Button variant="outline" onClick={handleClose} disabled={connectorData.isAdding}>
             Cancel
           </Button>
-          <Button onClick={handleAdd} disabled={connectorData.isAdding || pathSelection.selectedPaths.size === 0 || !chatId}>
+          <Button onClick={() => void handleAdd()} disabled={connectorData.isAdding || pathSelection.selectedPaths.size === 0 || !chatId}>
             {connectorData.isAdding ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

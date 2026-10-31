@@ -258,18 +258,18 @@ export function useConnectorData(
       }
     };
 
-    estimateTokens();
+    void estimateTokens();
   }, [includedPaths, excludedPaths, inputMode, selectedResource, resourceLink, selectedConnector]);
 
   // Load connectors on mount
   useEffect(() => {
-    loadConnectors();
+    void loadConnectors();
   }, []);
 
   // Load resources when connector changes
   useEffect(() => {
     if (selectedConnector) {
-      loadResources();
+      void loadResources();
     }
   }, [selectedConnector]);
 

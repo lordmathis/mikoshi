@@ -126,7 +126,7 @@ export function ChatSettingsDialog({
 
     setIsLoadingModels(true);
     setIsLoadingTools(true);
-    loadDialogData();
+    void loadDialogData();
 
     return () => {
       cancelled = true;
@@ -465,7 +465,7 @@ export function ChatSettingsDialog({
           <Button variant="outline" onClick={handleCancel}>
             Cancel
           </Button>
-          <Button onClick={handleSave}>Save Changes</Button>
+          <Button onClick={() => void handleSave()}>Save Changes</Button>
         </div>
       </DialogContent>
     </Dialog>

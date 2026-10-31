@@ -11,6 +11,8 @@ export function useChatFiles() {
     try {
       const uploaded = await api.uploadFiles(files);
       setUploadedFiles((prev) => [...prev, ...uploaded]);
+    } catch (error) {
+      console.error("Failed to upload files:", error);
     } finally {
       setIsUploading(false);
     }
