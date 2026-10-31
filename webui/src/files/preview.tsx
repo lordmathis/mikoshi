@@ -1,4 +1,6 @@
-import ReactMarkdown from "react-markdown";
+import type { ComponentProps } from "react";
+import ReactMarkdown, { type Components, type ExtraProps } from "react-markdown";
+import type { PluggableList } from "unified";
 import remarkMath from "remark-math";
 import rehypeMathjax from "rehype-mathjax";
 import { Loader2, X, File } from "lucide-react";
@@ -130,11 +132,11 @@ export function Preview({ filePath, fileContent, isLoading, onClose, workspaceId
   const fileName = filePath.split("/").pop() || filePath;
   const isMd = isMarkdownFile(filePath);
 
-  const remarkPlugins: any[] = [...REMARK_PLUGINS, remarkMath, remarkWikiLinks];
+  const remarkPlugins: PluggableList = [...REMARK_PLUGINS, remarkMath, remarkWikiLinks];
 
-  const components: Record<string, React.ComponentType<any>> = {
+  const components: Components = {
     ...markdownComponents,
-    img: ({ src, alt }: any) => {
+    img: ({ src, alt, node: _node }: ComponentProps<'img'> & ExtraProps) => {
       if (!src) return null;
       if (!src.startsWith("http") && !src.startsWith("data:")) {
         const dir = filePath?.includes("/") ? filePath.substring(0, filePath.lastIndexOf("/") + 1) : "";
@@ -142,7 +144,7 @@ export function Preview({ filePath, fileContent, isLoading, onClose, workspaceId
       }
       return <img src={src} alt={alt} className="max-w-full h-auto rounded" />;
     },
-    a: ({ href, children }: any) => {
+    a: ({ href, children, node: _node }: ComponentProps<'a'> & ExtraProps) => {
       if (href?.startsWith("wiki-image://")) {
         const target = decodeURIComponent(href.replace("wiki-image://", ""));
         const resolved = workspaceId ? resolveTarget(target, fileIndex) : null;

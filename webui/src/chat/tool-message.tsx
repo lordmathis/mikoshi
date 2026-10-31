@@ -2,21 +2,21 @@ import { Wrench, ShieldCheck, Check, X } from "lucide-react";
 import { cn } from "../lib/utils.ts";
 import { useState, useMemo, memo } from "react";
 import ReactMarkdown from "react-markdown";
-import type { Message, PendingApproval } from "../lib/api.ts";
+import { isWorkspaceChange, type Message, type PendingApproval } from "../lib/api.ts";
 import { cyanMarkdownComponents, REMARK_PLUGINS } from "../lib/markdown-components.tsx";
 import { CornerTriangle, MessageAvatar, Scanlines } from "./message-atoms.tsx";
 
 interface ToolMessageProps {
   message: Message;
   pendingApproval?: PendingApproval | null;
-  onApprove?: (messageId: string, scope: "once" | "always") => void;
-  onDeny?: (messageId: string) => void;
+  onApprove?: (messageId: string, scope: "once" | "always") => void | Promise<void>;
+  onDeny?: (messageId: string) => void | Promise<void>;
 }
 
 function extractDisplayContent(content: string): string {
   try {
-    const parsed = JSON.parse(content);
-    if (parsed && parsed.__workspace === true && typeof parsed.summary === "string") {
+    const parsed: unknown = JSON.parse(content);
+    if (isWorkspaceChange(parsed)) {
       return parsed.summary;
     }
   } catch {}
@@ -134,13 +134,13 @@ export const ToolMessage = memo(function ToolMessage({
 
 interface ApprovalControlsProps {
   toolName: string;
-  args?: Record<string, any>;
+  args?: Record<string, unknown>;
   resolving: "once" | "always" | "deny" | null;
-  onApprove: (scope: "once" | "always") => void;
-  onDeny: () => void;
+  onApprove: (scope: "once" | "always") => void | Promise<void>;
+  onDeny: () => void | Promise<void>;
 }
 
-function formatToolArguments(args: Record<string, any>): string {
+function formatToolArguments(args: Record<string, unknown>): string {
   return Object.entries(args)
     .map(([key, value]) =>
       typeof value === "string" ? `${key}: ${value}` : `${key}: ${JSON.stringify(value)}`
@@ -175,7 +175,7 @@ function ApprovalControls({ toolName, args, resolving, onApprove, onDeny }: Appr
       )}
       <div className="flex flex-wrap gap-2">
         <button
-          onClick={() => onApprove("once")}
+          onClick={() => void onApprove("once")}
           disabled={resolving !== null}
           className="flex items-center gap-1.5 cp-label px-3 py-1.5 cp-cut-8 transition-colors disabled:opacity-50"
           style={{
@@ -187,7 +187,7 @@ function ApprovalControls({ toolName, args, resolving, onApprove, onDeny }: Appr
           <span>{resolving === "once" ? "…" : "Allow"}</span>
         </button>
         <button
-          onClick={() => onApprove("always")}
+          onClick={() => void onApprove("always")}
           disabled={resolving !== null}
           className="flex items-center gap-1.5 cp-label px-3 py-1.5 cp-cut-8 border transition-colors disabled:opacity-50"
           style={{
@@ -200,7 +200,7 @@ function ApprovalControls({ toolName, args, resolving, onApprove, onDeny }: Appr
           <span>{resolving === "always" ? "…" : "Always allow"}</span>
         </button>
         <button
-          onClick={onDeny}
+          onClick={() => void onDeny()}
           disabled={resolving !== null}
           className="flex items-center gap-1.5 cp-label px-3 py-1.5 cp-cut-8 border transition-colors disabled:opacity-50"
           style={{

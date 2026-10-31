@@ -11,7 +11,7 @@ interface IconButtonTooltipProps {
   icon: ReactNode;
   label: string;
   srLabel: string;
-  onClick: () => void;
+  onClick: () => void | Promise<void>;
   disabled?: boolean;
   iconClassName?: string;
 }
@@ -32,7 +32,7 @@ export function IconButtonTooltip({
             variant="ghost"
             size="sm"
             className="h-9 w-9 p-0 lg:h-8 lg:w-8"
-            onClick={onClick}
+            onClick={() => void onClick()}
             disabled={disabled}
           >
             <span className={iconClassName}>{icon}</span>

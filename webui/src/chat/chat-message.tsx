@@ -16,9 +16,9 @@ import { markdownComponents, REMARK_PLUGINS } from "../lib/markdown-components.t
 
 interface ChatMessageProps {
   message: Message;
-  onBranch?: (messageId: string) => void;
-  onRetry?: () => void;
-  onEdit?: () => void;
+  onBranch?: (messageId: string) => void | Promise<void>;
+  onRetry?: () => void | Promise<void>;
+  onEdit?: () => void | Promise<void>;
   isLastUserMessage?: boolean;
 }
 

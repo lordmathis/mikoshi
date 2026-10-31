@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { api, type ChatWithMessages, type Message, type FileResource, type PendingApproval, type ChatRenamedEvent, ApiError } from "../lib/api.ts";
+import { api, isWorkspaceChange, type ChatWithMessages, type Message, type FileResource, type PendingApproval, type ChatRenamedEvent, ApiError } from "../lib/api.ts";
 import { type ChatSettings } from "./chat-settings-dialog.tsx";
 import { localCache } from "../lib/local-cache.ts";
 import { notifications } from "../lib/notifications.ts";
@@ -23,9 +23,9 @@ function tryParseWorkspaceChange(
   content: string,
 ): { paths: string[] } | null {
   try {
-    const parsed = JSON.parse(content);
-    if (parsed && parsed.__workspace === true) {
-      return { paths: parsed.paths ?? [] };
+    const parsed: unknown = JSON.parse(content);
+    if (isWorkspaceChange(parsed)) {
+      return { paths: parsed.paths };
     }
   } catch {}
   return null;
@@ -179,7 +179,7 @@ export function useMessages(
             content: errMsg,
             sequence: prev.length,
             created_at: new Date().toISOString(),
-          } as Message,
+          },
         ]);
       }
     },

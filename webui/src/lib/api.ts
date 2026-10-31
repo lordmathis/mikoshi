@@ -48,7 +48,7 @@ export interface Message {
   reasoning_content?: string | null;
   tool_calls?: Array<{
     name: string;
-    arguments: Record<string, any>;
+    arguments: Record<string, unknown>;
   }> | null;
   tool_call_id?: string | null;
   sequence: number;
@@ -69,11 +69,22 @@ export interface WorkspaceChangeResult {
   paths: string[];
 }
 
+export function isWorkspaceChange(value: unknown): value is WorkspaceChangeResult {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    v.__workspace === true &&
+    typeof v.summary === "string" &&
+    Array.isArray(v.paths) &&
+    v.paths.every((p) => typeof p === "string")
+  );
+}
+
 export interface PendingApproval {
   id: string;
   message_id: string | null;
   tool_name: string;
-  arguments: Record<string, any>;
+  arguments: Record<string, unknown>;
   created_at: string | null;
 }
 
@@ -81,7 +92,7 @@ export interface ApprovalRequestEvent {
   approval_id: string;
   message_id: string;
   tool_name: string;
-  arguments: Record<string, any>;
+  arguments: Record<string, unknown>;
 }
 
 export interface ChatRenamedEvent {
@@ -102,7 +113,6 @@ export interface ModelParams {
 
 export interface ChatWithMessages extends Chat {
   messages: Message[];
-  tool_servers?: any;
   model_params?: ModelParams;
 }
 
@@ -142,7 +152,7 @@ export interface ToolServer {
 export interface Tool {
   name: string;
   description: string;
-  parameters?: any;
+  parameters: Record<string, unknown>;
 }
 
 export interface Connector {
@@ -254,9 +264,11 @@ class ApiClient {
       reloadOnSessionExpiry();
     }
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: response.statusText }));
+      const body = (await response.json().catch(() => ({
+        detail: response.statusText,
+      }))) as { detail?: string };
       throw new ApiError(
-        error.detail || `HTTP ${response.status}: ${response.statusText}`,
+        body.detail || `HTTP ${response.status}: ${response.statusText}`,
         response.status
       );
     }
@@ -278,7 +290,7 @@ class ApiClient {
 
     await this.assertOk(response);
 
-    return response.json();
+    return response.json() as Promise<T>;
   }
 
   // Chat endpoints
@@ -367,7 +379,8 @@ class ApiClient {
             try {
               const event = JSON.parse(jsonStr) as StreamEvent;
               eventCount++;
-              console.debug('[SSE] event #%d:', eventCount, event.type, event.type === 'message' ? (event.data as any)?.role : '');
+              const role = event.type === 'message' && 'role' in event.data ? event.data.role : '';
+              console.debug('[SSE] event #%d:', eventCount, event.type, role);
               yield event;
               if (event.type === 'done') {
                 console.debug('[SSE] done event received, total events:', eventCount);
@@ -470,7 +483,7 @@ class ApiClient {
 
     await this.assertOk(response);
 
-    return response.json();
+    return response.json() as Promise<FileResource[]>;
   }
 
   async deleteFile(fileId: string): Promise<{ status: string }> {
@@ -520,7 +533,7 @@ class ApiClient {
 
     await this.assertOk(response);
 
-    return response.json();
+    return response.json() as Promise<{ text: string }>;
   }
 
   async generateSpeech(text: string): Promise<Blob> {
