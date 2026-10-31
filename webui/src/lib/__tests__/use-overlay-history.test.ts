@@ -46,10 +46,16 @@ describe("useOverlayHistory", () => {
     expect(onClose).not.toHaveBeenCalled(); // popstate is async
 
     return new Promise<void>((resolve) => {
-      window.addEventListener("popstate", () => {
-        expect(onClose).toHaveBeenCalledOnce();
-        resolve();
-      });
+      window.addEventListener(
+        "popstate",
+        () => {
+          expect(onClose).toHaveBeenCalledOnce();
+          resolve();
+        },
+        // without `once` the listener leaks into later tests and re-asserts
+        // on their popstate events, after restoreAllMocks reset the mock
+        { once: true },
+      );
     });
   });
 
