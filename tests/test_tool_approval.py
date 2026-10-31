@@ -3,7 +3,6 @@ import asyncio
 import pytest
 from unittest.mock import MagicMock
 
-from mikoshi.db.db import Database
 from mikoshi.tools.approval import ToolDeniedError
 from mikoshi.tools.context import ToolCallContext
 from mikoshi.tools.toolset_handler import ToolSetHandler, tool

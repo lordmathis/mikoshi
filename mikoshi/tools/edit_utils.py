@@ -60,7 +60,7 @@ def _find_unique_match(haystack: str, needle: str) -> int:
     second = haystack.find(needle, idx + 1)
     if second >= 0:
         raise EditError(
-            f"oldText matches multiple times in file. Provide more surrounding context to make it unique."
+            "oldText matches multiple times in file. Provide more surrounding context to make it unique."
         )
     return idx
 
@@ -78,7 +78,7 @@ def _apply_edits_in_space(content: str, edits: list[dict]) -> str:
         idx = _find_unique_match(content, old_text)
         if idx < 0:
             raise EditError(
-                f"oldText not found in file. Make sure the text matches exactly."
+                "oldText not found in file. Make sure the text matches exactly."
             )
 
         matches.append((idx, idx + len(old_text), new_text))

@@ -1,16 +1,9 @@
-import pytest
 
 from mikoshi.config import (
-    AppConfig,
-    ConnectorsConfig,
     ConnectorType,
-    LoggingConfig,
-    MCPConfig,
     MCPType,
-    PluginConfig,
     ProviderConfig,
     ProviderType,
-    ServerConfig,
     load_config,
 )
 

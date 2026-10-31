@@ -6,7 +6,7 @@ from fastapi.responses import PlainTextResponse, Response
 from pydantic import BaseModel
 
 from mikoshi.git import GitService
-from mikoshi.routes.schemas import format_timestamp, serialize_chat
+from mikoshi.routes.schemas import format_timestamp
 from mikoshi.workspace import WorkspaceError
 
 router = APIRouter(prefix="/workspaces")

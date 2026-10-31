@@ -237,7 +237,6 @@ class TestListChats:
 
     @pytest.mark.asyncio
     async def test_workspace_id_param_filters(self, client, db):
-        from sqlalchemy import text
 
         ws = db.create_workspace(name="ws", repo_url="https://example.com/repo")
         db.create_chat(title="bound", workspace_id=ws.id)

@@ -19,15 +19,11 @@ from mikoshi.agents.context.messages import (
 from mikoshi.agents.context.skills import apply_skill_context, build_skill_context
 from mikoshi.agents.streaming import STREAM_DONE, FilteredQueue, StreamEvent, error_event
 from mikoshi.config import WorkspaceConfig
-from mikoshi.db.db import Database
 from mikoshi.db.models import Message
 from mikoshi.observability import observe, start_tool_span
-from mikoshi.providers.provider import Provider
-from mikoshi.skills.registry import SkillRegistry
 from mikoshi.tools.approval import ToolDeniedError
 from mikoshi.tools.context import ToolCallContext, WorkspaceContext
-from mikoshi.tools.manager import ToolManager, normalize_tool
-from mikoshi.workspace import WorkspaceService
+from mikoshi.tools.manager import normalize_tool
 
 logger = logging.getLogger(__name__)
 

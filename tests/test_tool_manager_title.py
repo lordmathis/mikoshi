@@ -1,6 +1,5 @@
 from unittest.mock import MagicMock
 
-import pytest
 
 from mikoshi.config import AppConfig
 from mikoshi.db import Database
