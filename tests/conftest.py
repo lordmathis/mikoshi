@@ -5,7 +5,7 @@ import pytest
 from unittest.mock import MagicMock
 
 from mikoshi.config import AppConfig
-from mikoshi.db import Database
+from mikoshi.db.db import Database
 from mikoshi.tools.manager import ToolManager
 from mikoshi.tools.toolset_handler import ToolSetHandler
 

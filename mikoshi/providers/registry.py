@@ -1,7 +1,7 @@
 from typing import Dict
 
 from mikoshi.config import ProviderConfig
-from mikoshi.providers import Provider
+from mikoshi.providers.provider import Provider
 
 
 class ProviderRegistry:

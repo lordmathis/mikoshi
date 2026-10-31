@@ -205,6 +205,7 @@ class TestFileReadWrite:
     def test_write_creates_parent_dirs(self, ws):
         root = _create_workspace(ws)
         ws.write_file("test-ws", "deep/nested/dir/file.txt", "content")
+        assert os.path.isfile(os.path.join(root, "deep/nested/dir/file.txt"))
         assert ws.read_file("test-ws", "deep/nested/dir/file.txt") == "content"
 
     def test_write_traversal_blocked(self, ws):

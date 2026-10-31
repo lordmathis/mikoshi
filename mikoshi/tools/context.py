@@ -3,7 +3,7 @@ import os
 from dataclasses import dataclass
 from typing import Awaitable, Callable, Optional
 
-from mikoshi.providers import Provider
+from mikoshi.providers.provider import Provider
 
 
 @dataclass(frozen=True)

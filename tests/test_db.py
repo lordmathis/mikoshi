@@ -233,9 +233,9 @@ class TestMessages:
 class TestBranch:
     def test_branch_copies_messages_up_to_target(self, db):
         chat = db.create_chat()
-        m1 = db.save_message(chat.id, "user", "A")
+        db.save_message(chat.id, "user", "A")
         m2 = db.save_message(chat.id, "assistant", "B")
-        m3 = db.save_message(chat.id, "user", "C")
+        db.save_message(chat.id, "user", "C")
         db.save_message(chat.id, "assistant", "D")
 
         branched = db.branch_chat(chat.id, m2.id, new_title="Branched")
@@ -280,7 +280,7 @@ class TestBranch:
     def test_branch_message_wrong_chat(self, db):
         chat1 = db.create_chat()
         chat2 = db.create_chat()
-        m1 = db.save_message(chat1.id, "user", "hi")
+        db.save_message(chat1.id, "user", "hi")
         m2 = db.save_message(chat2.id, "user", "yo")
         assert db.branch_chat(chat1.id, m2.id) is None
 
@@ -479,10 +479,13 @@ class TestMigrations:
         database = Database(path)
         try:
             ws = database.get_workspace("w1")
+            assert ws is not None
             assert ws.name == "old"
             assert ws.default_agent is None
             database.update_workspace("w1", default_agent="workout")
-            assert database.get_workspace("w1").default_agent == "workout"
+            ws = database.get_workspace("w1")
+            assert ws is not None
+            assert ws.default_agent == "workout"
         finally:
             database.close()
 

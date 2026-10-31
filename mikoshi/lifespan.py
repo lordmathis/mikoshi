@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from mikoshi.agents import AgentManager, AgentRegistry
 from mikoshi.config import AppConfig
 from mikoshi.connectors.registry import ConnectorRegistry
-from mikoshi.db import Database
+from mikoshi.db.db import Database
 from mikoshi.middleware import InFlightRequests
 from mikoshi.providers.registry import ProviderRegistry
 from mikoshi.routes.upload_utils import remove_upload_dir

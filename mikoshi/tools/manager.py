@@ -8,7 +8,8 @@ from typing import Any, Dict, List, Optional
 from mikoshi.config import AppConfig, resolve_connector_token
 from mikoshi.db.db import Database
 from mikoshi.plugins import discover_plugins
-from mikoshi.providers import Provider, ProviderRegistry
+from mikoshi.providers.provider import Provider
+from mikoshi.providers.registry import ProviderRegistry
 from mikoshi.storage import get_persistent_storage
 from mikoshi.tools.approval import PendingApproval, ToolDeniedError
 from mikoshi.tools.context import ToolCallContext
