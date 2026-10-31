@@ -41,7 +41,14 @@ export function ChatView() {
 
   const sidebar = useSidebar();
   const conversations = useConversations(sidebar.activeWorkspaceId);
+  const {
+    refresh: refreshConversations,
+    createConversation,
+    deleteConversation,
+    branchConversation,
+  } = conversations;
   const workspaces = useWorkspaces(sidebar);
+  const { refreshTree, deleteWorkspace } = workspaces;
   const filePreview = usePreview(sidebar.activeWorkspaceId);
 
   const currentFilePathRef = useRef(filePreview.filePath);
@@ -51,13 +58,13 @@ export function ChatView() {
 
   const handleWorkspaceChange = useCallback(
     async (paths: string[]) => {
-      await workspaces.refreshTree();
+      await refreshTree();
       const currentPath = currentFilePathRef.current;
       if (currentPath && paths.includes(currentPath)) {
         void refreshCurrentFileRef.current();
       }
     },
-    [workspaces.refreshTree]
+    [refreshTree]
   );
 
   const messages = useMessages(
@@ -138,26 +145,27 @@ export function ChatView() {
   const currentConversationIdRef = useRef(currentConversationId);
   currentConversationIdRef.current = currentConversationId;
 
+  const retry = messages.retry;
   const handleRetry = useCallback(async () => {
-    await messages.retry();
-    void conversations.refresh();
-  }, [messages.retry, conversations.refresh]);
+    await retry();
+    void refreshConversations();
+  }, [retry, refreshConversations]);
 
   const handleBranch = useCallback(async (messageId: string) => {
     const currentId = currentConversationIdRef.current;
     if (!currentId) return;
     try {
-      const id = await conversations.branchConversation(currentId, messageId);
+      const id = await branchConversation(currentId, messageId);
       navigate(id);
     } catch (error) {
       console.error("Failed to branch conversation:", error);
       alert(`Failed to branch conversation: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
-  }, [conversations.branchConversation, navigate]);
+  }, [branchConversation, navigate]);
 
   const handleNewConversation = useCallback(async () => {
     try {
-      const id = await conversations.createConversation(
+      const id = await createConversation(
         undefined,
         sidebar.activeWorkspaceId
       );
@@ -167,28 +175,28 @@ export function ChatView() {
       console.error("Failed to create conversation:", error);
       alert(error instanceof Error ? error.message : "Failed to create conversation");
     }
-  }, [conversations.createConversation, sidebar.activeWorkspaceId, navigate, closeSidebarOnMobile]);
+  }, [createConversation, sidebar.activeWorkspaceId, navigate, closeSidebarOnMobile]);
 
   const handleDeleteConversation = useCallback(async (id: string) => {
     try {
-      await conversations.deleteConversation(id);
+      await deleteConversation(id);
       if (chatId === id) navigate(null, { replace: true });
     } catch (error) {
       console.error("Failed to delete conversation:", error);
       alert(`Failed to delete conversation: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
-  }, [conversations.deleteConversation, chatId, navigate]);
+  }, [deleteConversation, chatId, navigate]);
 
   const handleDeleteWorkspace = useCallback(async (id: string) => {
     try {
-      await workspaces.deleteWorkspace(id);
+      await deleteWorkspace(id);
     } catch (error) {
       console.error("Failed to delete workspace:", error);
       alert(`Failed to delete workspace: ${error instanceof Error ? error.message : "Unknown error"}`);
       return;
     }
-    void conversations.refresh();
-  }, [workspaces.deleteWorkspace, conversations.refresh]);
+    void refreshConversations();
+  }, [deleteWorkspace, refreshConversations]);
 
   const handleFileUploadClick = () => {
     fileInputRef.current?.click();

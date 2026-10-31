@@ -106,6 +106,7 @@ export function Editor({ content, onContentChange, onSave }: EditorProps) {
   const viewRef = useRef<EditorView | null>(null);
   const onContentChangeRef = useRef(onContentChange);
   const onSaveRef = useRef(onSave);
+  const initialContentRef = useRef(content);
 
   onContentChangeRef.current = onContentChange;
   onSaveRef.current = onSave;
@@ -114,7 +115,7 @@ export function Editor({ content, onContentChange, onSave }: EditorProps) {
     if (!containerRef.current) return;
 
     const state = EditorState.create({
-      doc: content,
+      doc: initialContentRef.current,
       extensions: [
         markdown(),
         cyberpunkTheme,

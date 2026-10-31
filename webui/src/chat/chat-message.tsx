@@ -83,10 +83,12 @@ export const ChatMessage = memo(function ChatMessage({ message, onBranch, onRetr
     
     for (const file of message.files) {
       const key = file.source ?? null;
-      if (!filesBySource.has(key)) {
-        filesBySource.set(key, []);
+      let group = filesBySource.get(key);
+      if (!group) {
+        group = [];
+        filesBySource.set(key, group);
       }
-      filesBySource.get(key)!.push(file);
+      group.push(file);
     }
     
     for (const [source, files] of filesBySource) {

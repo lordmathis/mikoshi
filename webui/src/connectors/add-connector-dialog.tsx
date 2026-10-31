@@ -78,11 +78,13 @@ function ConnectorDialogBody({
     );
   };
 
+  const { inputMode, resources, selectedConnector, loadResources } = connectorData;
+
   useEffect(() => {
-    if (connectorData.inputMode === "select" && connectorData.resources.length === 0 && connectorData.selectedConnector) {
-      void connectorData.loadResources();
+    if (inputMode === "select" && resources.length === 0 && selectedConnector) {
+      void loadResources();
     }
-  }, [connectorData.inputMode, connectorData.selectedConnector, connectorData.resources.length]);
+  }, [inputMode, selectedConnector, resources.length, loadResources]);
 
   const includedCount = Array.from(pathSelection.selectedPaths).filter(p => !p.startsWith("!")).length;
 

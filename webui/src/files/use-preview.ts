@@ -76,7 +76,7 @@ export function usePreview(workspaceId: string | null) {
       setMode("preview");
       setEditContent(null);
     }
-  }, []);
+  }, [setMode]);
 
   const handleFileRenamed = useCallback((oldPath: string, newPath: string) => {
     if (filePathRef.current === oldPath) {
@@ -90,7 +90,7 @@ export function usePreview(workspaceId: string | null) {
     setFileContent(null);
     setMode("preview");
     setEditContent(null);
-  }, []);
+  }, [setMode]);
 
   return {
     filePath,

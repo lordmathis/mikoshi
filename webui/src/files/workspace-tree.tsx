@@ -141,7 +141,7 @@ function TreeNode({
     const srcPath = e.dataTransfer.getData("text/plain");
     if (!srcPath || srcPath === node.path) return;
     if (node.path !== "" && srcPath.startsWith(node.path + "/")) return;
-    const fileName = srcPath.split("/").pop()!;
+    const fileName = srcPath.split("/").pop() ?? srcPath;
     const newPath = node.path ? `${node.path}/${fileName}` : fileName;
     if (newPath === srcPath) return;
     try {
@@ -386,7 +386,7 @@ export function WorkspaceTree({ tree, activeFilePath, onFileClick, workspaceId, 
     if (!workspaceId) return;
     const srcPath = e.dataTransfer.getData("text/plain");
     if (!srcPath) return;
-    const fileName = srcPath.split("/").pop()!;
+    const fileName = srcPath.split("/").pop() ?? srcPath;
     if (fileName === srcPath) return;
     try {
       const result = await api.renameWorkspaceFile(workspaceId, srcPath, fileName);

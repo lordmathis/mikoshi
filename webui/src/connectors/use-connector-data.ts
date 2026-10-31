@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { api, type ConnectorResource, type FileNode, type Connector, type FileResource } from "../lib/api.ts";
 import { fetchAllFilePaths, matchesPatterns } from "../lib/connector-utils.ts";
 
@@ -17,6 +17,21 @@ const sortTree = (node: FileNode): FileNode => {
     return { ...node, children: sortChildren(node.children).map(sortTree) };
   }
   return node;
+};
+
+const parseConnectorLink = (link: string): string | null => {
+  try {
+    const match = link.match(/github\.com[:/]([^/]+\/[^/\s.]+)/);
+    if (match) {
+      return match[1].replace(/\.git$/, "");
+    }
+    if (/^[^/]+\/[^/]+$/.test(link.trim())) {
+      return link.trim();
+    }
+    return null;
+  } catch {
+    return null;
+  }
 };
 
 export function useConnectorData(
@@ -44,37 +59,25 @@ export function useConnectorData(
   const [filterPattern, setFilterPattern] = useState("");
   const [isApplyingFilter, setIsApplyingFilter] = useState(false);
 
-  const parseConnectorLink = (link: string): string | null => {
-    try {
-      const match = link.match(/github\.com[:/]([^/]+\/[^/\s.]+)/);
-      if (match) {
-        return match[1].replace(/\.git$/, "");
-      }
-      if (/^[^/]+\/[^/]+$/.test(link.trim())) {
-        return link.trim();
-      }
-      return null;
-    } catch {
-      return null;
-    }
-  };
+  const selectedConnectorRef = useRef(selectedConnector);
+  selectedConnectorRef.current = selectedConnector;
 
-  const getResourceIdentifier = (): string => {
+  const getResourceIdentifier = useCallback((): string => {
     if (inputMode === "select") {
       return selectedResource;
     } else {
       const parsed = parseConnectorLink(resourceLink);
       return parsed || "";
     }
-  };
+  }, [inputMode, selectedResource, resourceLink]);
 
-  const loadConnectors = async () => {
+  const loadConnectors = useCallback(async () => {
     try {
       setIsLoadingConnectors(true);
       setError("");
       const response = await api.listConnectors();
       setConnectors(response.connectors);
-      if (response.connectors.length > 0 && !selectedConnector) {
+      if (response.connectors.length > 0 && !selectedConnectorRef.current) {
         setSelectedConnector(response.connectors[0].name);
       }
     } catch (err) {
@@ -82,9 +85,9 @@ export function useConnectorData(
     } finally {
       setIsLoadingConnectors(false);
     }
-  };
+  }, []);
 
-  const loadResources = async () => {
+  const loadResources = useCallback(async () => {
     if (!selectedConnector) return;
     try {
       setIsLoadingResources(true);
@@ -96,7 +99,7 @@ export function useConnectorData(
     } finally {
       setIsLoadingResources(false);
     }
-  };
+  }, [selectedConnector]);
 
   const loadChildren = async (path: string) => {
     const resource = getResourceIdentifier();
@@ -259,19 +262,17 @@ export function useConnectorData(
     };
 
     void estimateTokens();
-  }, [includedPaths, excludedPaths, inputMode, selectedResource, resourceLink, selectedConnector]);
+  }, [includedPaths, excludedPaths, selectedConnector, getResourceIdentifier]);
 
   // Load connectors on mount
   useEffect(() => {
     void loadConnectors();
-  }, []);
+  }, [loadConnectors]);
 
   // Load resources when connector changes
   useEffect(() => {
-    if (selectedConnector) {
-      void loadResources();
-    }
-  }, [selectedConnector]);
+    void loadResources();
+  }, [loadResources]);
 
   return {
     inputMode,

@@ -51,7 +51,7 @@ function parseLinkTarget(linkTarget: string, raw: string): WikiSegment {
   const withoutDisplay = linkTarget.split("|")[0];
   const target = withoutDisplay.split("#")[0];
   const displayOverride = linkTarget.split("|")[1];
-  const label = displayOverride || withoutDisplay.split("/").pop()!;
+  const label = displayOverride || withoutDisplay.split("/").pop() || withoutDisplay;
   return { kind: "link", target, label, raw };
 }
 

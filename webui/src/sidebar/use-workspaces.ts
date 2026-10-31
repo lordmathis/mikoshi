@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { api, type FileNode } from "../lib/api.ts";
-import { useSidebar } from "./use-sidebar.ts";
+import type { useSidebar } from "./use-sidebar.ts";
 
 type SidebarApi = ReturnType<typeof useSidebar>;
 
@@ -11,6 +11,7 @@ interface WorkspaceSummary {
 }
 
 export function useWorkspaces(sidebar: SidebarApi) {
+  const { setActiveWorkspace, setActiveTab } = sidebar;
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
   const [workspacesLoading, setWorkspacesLoading] = useState(true);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -36,7 +37,7 @@ export function useWorkspaces(sidebar: SidebarApi) {
     api.getWorkspaceFileList(sidebar.activeWorkspaceId).then((files) => {
       const index = new Map<string, string>();
       for (const filePath of files) {
-        const fileName = filePath.split("/").pop()!;
+        const fileName = filePath.split("/").pop() ?? filePath;
         const key = fileName.toLowerCase();
         if (!index.has(key)) {
           index.set(key, filePath);
@@ -71,11 +72,11 @@ export function useWorkspaces(sidebar: SidebarApi) {
   }, []);
 
   const selectWorkspace = useCallback((id: string | null) => {
-    sidebar.setActiveWorkspace(id);
+    setActiveWorkspace(id);
     if (id) {
-      sidebar.setActiveTab("data");
+      setActiveTab("data");
     }
-  }, [sidebar]);
+  }, [setActiveWorkspace, setActiveTab]);
 
   const workspaceCreated = useCallback((ws: { id: string }) => {
     refresh();
@@ -86,15 +87,15 @@ export function useWorkspaces(sidebar: SidebarApi) {
     await api.deleteWorkspace(id);
     refresh();
     if (activeWorkspaceIdRef.current === id) {
-      sidebar.setActiveWorkspace(null);
+      setActiveWorkspace(null);
       resetTree();
     }
-  }, [refresh, resetTree, sidebar]);
+  }, [refresh, resetTree, setActiveWorkspace]);
 
   const clearFilter = useCallback(() => {
-    sidebar.setActiveWorkspace(null);
+    setActiveWorkspace(null);
     resetTree();
-  }, [resetTree, sidebar]);
+  }, [resetTree, setActiveWorkspace]);
 
   const activeWorkspaceHasRepo = !!workspaces.find(
     (w) => w.id === sidebar.activeWorkspaceId

@@ -56,6 +56,7 @@ export default tseslint.config(
         },
       ],
       'no-duplicate-imports': 'error',
+      'no-empty': ['error', { allowEmptyCatch: true }],
       'no-unused-vars': 'off',
 
       // React rules
