@@ -28,6 +28,14 @@ function renderChatInput(overrides: Partial<Parameters<typeof useChatInput>[0]> 
   );
 }
 
+function keyEvent(key: string, shiftKey = false): KeyboardEvent<HTMLTextAreaElement> {
+  return {
+    key,
+    shiftKey,
+    preventDefault: vi.fn(),
+  } as unknown as KeyboardEvent<HTMLTextAreaElement>;
+}
+
 describe("useChatInput", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -101,13 +109,7 @@ describe("useChatInput", () => {
     const { result } = renderChatInput({ onSend });
 
     act(() => result.current.setInputValue("hello"));
-    act(() =>
-      result.current.handleKeyDown({
-        key: "Enter",
-        shiftKey: false,
-        preventDefault: vi.fn(),
-      } as any)
-    );
+    act(() => result.current.handleKeyDown(keyEvent("Enter")));
     await act(() => Promise.resolve());
 
     expect(onSend).toHaveBeenCalled();
@@ -118,13 +120,7 @@ describe("useChatInput", () => {
     const { result } = renderChatInput({ onSend });
 
     act(() => result.current.setInputValue("hello"));
-    act(() =>
-      result.current.handleKeyDown({
-        key: "Enter",
-        shiftKey: true,
-        preventDefault: vi.fn(),
-      } as any)
-    );
+    act(() => result.current.handleKeyDown(keyEvent("Enter", true)));
     await act(() => Promise.resolve());
 
     expect(onSend).not.toHaveBeenCalled();
@@ -233,13 +229,7 @@ describe("useChatInput", () => {
       const { result } = renderChatInput({ onSend });
 
       act(() => result.current.setInputValue("hello"));
-      act(() =>
-        result.current.handleKeyDown({
-          key: "Enter",
-          shiftKey: false,
-          preventDefault: vi.fn(),
-        } as unknown as KeyboardEvent<HTMLTextAreaElement>)
-      );
+      act(() => result.current.handleKeyDown(keyEvent("Enter")));
       await act(() => Promise.resolve());
 
       expect(onSend).not.toHaveBeenCalled();

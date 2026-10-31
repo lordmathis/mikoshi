@@ -71,7 +71,7 @@ describe("useMessages", () => {
 
     const { result, rerender } = renderHook(
       ({ id }) => useMessages(id),
-      { initialProps: { id: "chat-a" as string | undefined } }
+      { initialProps: { id: "chat-a" } }
     );
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -97,15 +97,15 @@ describe("useMessages", () => {
     // Old chat's stream is aborted and its events must not bleed into chat-b
     const signal = streamMessage.mock.calls[0][2]!;
     expect(signal.aborted).toBe(true);
-    await act(async () => {
+    act(() => {
       manual.push({ type: "message", data: message("a-reply", "assistant", "old chat reply") });
     });
-    expect(result.current.messages.map((m) => m.id)).toEqual(["b1"]);
 
     await act(async () => {
       manual.end();
       await sendPromise;
     });
+    expect(result.current.messages.map((m) => m.id)).toEqual(["b1"]);
   });
 
   it("chat_renamed updates the chat title and notifies the caller", async () => {
@@ -117,7 +117,7 @@ describe("useMessages", () => {
 
     const { result } = renderHook(
       ({ id }) => useMessages(id, undefined, onChatRenamed),
-      { initialProps: { id: "chat-a" as string | undefined } }
+      { initialProps: { id: "chat-a" } }
     );
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
@@ -129,10 +129,10 @@ describe("useMessages", () => {
       expect(result.current.messages.some((m) => m.content === "hello")).toBe(true)
     );
 
-    await act(async () => {
+    act(() => {
       manual.push({ type: "chat_renamed", data: { chat_id: "chat-a", title: "Hello Plan" } });
     });
-    expect(result.current.chat?.title).toBe("Hello Plan");
+    await waitFor(() => expect(result.current.chat?.title).toBe("Hello Plan"));
     expect(onChatRenamed).toHaveBeenCalledWith("chat-a", "Hello Plan");
 
     await act(async () => {
@@ -149,7 +149,7 @@ describe("useMessages", () => {
     });
 
     const { result } = renderHook(({ id }) => useMessages(id), {
-      initialProps: { id: "chat-a" as string | undefined },
+      initialProps: { id: "chat-a" },
     });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
@@ -158,9 +158,12 @@ describe("useMessages", () => {
       sendPromise = result.current.send("hello", []);
     });
 
-    await act(async () => {
+    act(() => {
       manual.push({ type: "message", data: message("reply", "assistant", "the answer") });
     });
+    await waitFor(() =>
+      expect(result.current.messages.some((m) => m.id === "reply")).toBe(true)
+    );
     expect(notify).not.toHaveBeenCalled();
 
     await act(async () => {
@@ -178,7 +181,7 @@ describe("useMessages", () => {
     });
 
     const { result } = renderHook(({ id }) => useMessages(id), {
-      initialProps: { id: "chat-a" as string | undefined },
+      initialProps: { id: "chat-a" },
     });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
@@ -187,7 +190,7 @@ describe("useMessages", () => {
       sendPromise = result.current.send("hello", []);
     });
 
-    await act(async () => {
+    act(() => {
       manual.push({
         type: "tool_approval_request",
         data: {
@@ -198,7 +201,9 @@ describe("useMessages", () => {
         },
       });
     });
-    expect(notify).toHaveBeenCalledWith("chat-a", "Tool approval needed: shell");
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith("chat-a", "Tool approval needed: shell")
+    );
 
     await act(async () => {
       manual.end();

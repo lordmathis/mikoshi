@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { remarkWikiLinks, resolveTarget, parseWikiLinks } from "../remark-wiki-links";
-import type { Root } from "mdast";
+import type { Content, Root, Text } from "mdast";
 
 function makeTree(text: string): Root {
   return {
@@ -22,15 +22,15 @@ function applyPlugin(tree: Root): Root {
 
 function collectLinks(tree: Root) {
   const links: Array<{ url: string; text: string }> = [];
-  function walk(node: any) {
+  function walk(node: Content | Root) {
     if (node.type === "link") {
       const text = node.children
-        ?.filter((c: any) => c.type === "text")
-        .map((c: any) => c.value)
+        .filter((child): child is Text => child.type === "text")
+        .map((child) => child.value)
         .join("");
-      links.push({ url: node.url, text: text ?? "" });
+      links.push({ url: node.url, text });
     }
-    if (node.children) node.children.forEach(walk);
+    if ("children" in node) node.children.forEach(walk);
   }
   walk(tree);
   return links;
@@ -38,9 +38,9 @@ function collectLinks(tree: Root) {
 
 function collectTexts(tree: Root) {
   const texts: string[] = [];
-  function walk(node: any) {
+  function walk(node: Content | Root) {
     if (node.type === "text") texts.push(node.value);
-    if (node.children) node.children.forEach(walk);
+    if ("children" in node) node.children.forEach(walk);
   }
   walk(tree);
   return texts;

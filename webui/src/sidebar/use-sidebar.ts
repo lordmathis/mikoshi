@@ -1,21 +1,30 @@
 import { useState, useCallback } from "react";
 
-type SidebarTab = "sessions" | "nodes" | "data";
+const TABS = ["sessions", "nodes", "data"] as const;
+type SidebarTab = (typeof TABS)[number];
 
 interface SidebarState {
   activeTab: SidebarTab;
   activeWorkspaceId: string | null;
 }
 
+function isSidebarTab(value: unknown): value is SidebarTab {
+  return typeof value === "string" && (TABS as readonly string[]).includes(value);
+}
+
 function loadState(): SidebarState {
   try {
     const raw = localStorage.getItem("mikoshi-sidebar");
     if (raw) {
-      const parsed = JSON.parse(raw);
-      return {
-        activeTab: parsed.activeTab || "sessions",
-        activeWorkspaceId: parsed.activeWorkspaceId || null,
-      };
+      const parsed: unknown = JSON.parse(raw);
+      if (typeof parsed === "object" && parsed !== null) {
+        const stored = parsed as Record<string, unknown>;
+        return {
+          activeTab: isSidebarTab(stored.activeTab) ? stored.activeTab : "sessions",
+          activeWorkspaceId:
+            typeof stored.activeWorkspaceId === "string" ? stored.activeWorkspaceId : null,
+        };
+      }
     }
   } catch {}
   return { activeTab: "sessions", activeWorkspaceId: null };
