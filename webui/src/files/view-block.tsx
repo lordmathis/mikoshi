@@ -276,7 +276,7 @@ function TableView({
               <td className="px-3 py-2 text-sm border border-cp-text-muted/10">
                 <a
                   href="#"
-                  className="text-foreground underline decoration-foreground/30 hover:decoration-foreground/70"
+                  className="text-cp-cyan underline decoration-cp-cyan/40 hover:decoration-cp-cyan"
                   title={entry.path}
                   onClick={(e) => {
                     e.preventDefault();
@@ -311,6 +311,12 @@ function TableView({
   );
 }
 
+const LANE_ACCENTS = [
+  { text: "text-cp-yellow/70", dot: "bg-cp-yellow/80" },
+  { text: "text-cp-cyan/70", dot: "bg-cp-cyan/80" },
+  { text: "text-cp-red/70", dot: "bg-cp-red/80" },
+];
+
 function KanbanView({
   rows,
   groupBy,
@@ -327,10 +333,12 @@ function KanbanView({
 
   return (
     <div className="overflow-x-auto p-3 flex gap-4 items-start">
-      {laneData.map((lane) => (
+      {laneData.map((lane, i) => (
         <div key={lane.label} data-lane={lane.label} className="w-56 shrink-0">
-          <div className="cp-label mb-2 px-1 text-foreground/50" style={{ fontSize: "10px" }}>
-            {lane.label} · {lane.rows.length}
+          <div className="cp-label mb-2 px-1 flex items-center gap-1.5" style={{ fontSize: "10px" }}>
+            <span className={`inline-block w-1.5 h-1.5 ${LANE_ACCENTS[i % LANE_ACCENTS.length].dot}`} />
+            <span className={LANE_ACCENTS[i % LANE_ACCENTS.length].text}>{lane.label}</span>
+            <span className="text-foreground/30">· {lane.rows.length}</span>
           </div>
           <div className="flex flex-col gap-2">
             {lane.rows.map((entry) => (
@@ -340,7 +348,7 @@ function KanbanView({
               >
                 <a
                   href="#"
-                  className="text-sm text-foreground underline decoration-foreground/30 hover:decoration-foreground/70"
+                  className="text-sm text-cp-cyan underline decoration-cp-cyan/40 hover:decoration-cp-cyan"
                   title={entry.path}
                   onClick={(e) => {
                     e.preventDefault();
