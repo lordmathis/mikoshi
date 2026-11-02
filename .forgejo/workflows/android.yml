@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     container:
-      image: cimg/android:2026.10
+      image: cimg/android:2026.10-node
     defaults:
       run:
         working-directory: webui
