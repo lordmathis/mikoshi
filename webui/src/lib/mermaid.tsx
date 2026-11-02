@@ -75,7 +75,7 @@ export function Mermaid({ chart }: MermaidProps) {
 
   if (!svg) {
     return (
-      <div className="mb-4 flex justify-center py-6 text-xs text-[var(--color-cp-text-muted)] uppercase tracking-widest">
+      <div className="mb-4 flex justify-center py-6 text-xs text-foreground/70 uppercase tracking-widest">
         Rendering diagram...
       </div>
     );

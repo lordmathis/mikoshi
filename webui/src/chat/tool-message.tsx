@@ -90,8 +90,7 @@ export const ToolMessage = memo(function ToolMessage({
           <>
             <button
               onClick={() => setShowToolResult(!showToolResult)}
-              className="flex items-center gap-2 cp-label transition-colors max-lg:min-h-[36px]"
-              style={{ color: 'var(--color-cp-text-muted)' }}
+              className="flex items-center gap-2 cp-label text-foreground/70 hover:text-foreground transition-colors max-lg:min-h-[36px]"
             >
               <Wrench className="h-3.5 w-3.5" />
               <span>{showToolResult ? "Hide" : "Show"} result</span>

@@ -189,21 +189,21 @@ function ViewDisplay({ query, workspaceId, onFileClick }: { query: string } & Vi
 
   if (entries === null) {
     return (
-      <div className="mb-4 flex justify-center py-6 text-xs text-[var(--color-cp-text-muted)] uppercase tracking-widest">
+      <div className="mb-4 flex justify-center py-6 text-xs text-foreground/70 uppercase tracking-widest">
         Querying workspace...
       </div>
     );
   }
 
   return (
-    <div className="mb-4 cp-cut-6 border border-cp-text-muted/20 bg-cp-surface3">
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-cp-text-muted/10">
-        <span className="cp-label text-foreground/40" style={{ fontSize: "10px" }}>
+    <div className="mb-4 cp-cut-6 border border-cp-border bg-cp-surface3">
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-border">
+        <span className="cp-label text-foreground/70" style={{ fontSize: "10px" }}>
           View · {rows.length} {rows.length === 1 ? "file" : "files"}
         </span>
         {/* Agent edits to other workspace files don't re-render an open view; manual refresh is the v1 answer. */}
         <button
-          className="text-foreground/40 hover:text-foreground/80"
+          className="text-foreground/70 hover:text-foreground"
           title="Refresh"
           onClick={() => setRefreshTick((t) => t + 1)}
         >
@@ -211,7 +211,7 @@ function ViewDisplay({ query, workspaceId, onFileClick }: { query: string } & Vi
         </button>
       </div>
       {rows.length === 0 ? (
-        <div className="px-3 py-6 text-center cp-label opacity-40 italic">No files match</div>
+        <div className="px-3 py-6 text-center cp-label opacity-60 italic">No files match</div>
       ) : kanban ? (
         <KanbanView
           rows={rows}
@@ -254,16 +254,16 @@ function TableView({
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full border-collapse border border-cp-text-muted/20">
-        <thead className="bg-cp-text-muted/5">
+      <table className="w-full border-collapse border border-cp-border">
+        <thead className="bg-foreground/5">
           <tr>
-            <th className="px-3 py-2 text-left text-sm font-bold text-foreground border border-cp-text-muted/20">
+            <th className="px-3 py-2 text-left text-sm font-bold text-foreground border border-border">
               File
             </th>
             {columns.map((column) => (
               <th
                 key={column}
-                className="px-3 py-2 text-left text-sm font-bold text-foreground border border-cp-text-muted/20"
+                className="px-3 py-2 text-left text-sm font-bold text-foreground border border-border"
               >
                 {column}
               </th>
@@ -272,8 +272,8 @@ function TableView({
         </thead>
         <tbody>
           {rows.map((entry) => (
-            <tr key={entry.path} className="even:bg-cp-text-muted/3">
-              <td className="px-3 py-2 text-sm border border-cp-text-muted/10">
+            <tr key={entry.path} className="even:bg-foreground/5">
+              <td className="px-3 py-2 text-sm border border-border">
                 <a
                   href="#"
                   className="text-cp-cyan underline decoration-cp-cyan/40 hover:decoration-cp-cyan"
@@ -284,7 +284,7 @@ function TableView({
                   }}
                 >
                   {dirname(entry.path) && (
-                    <span className="text-[var(--color-cp-text-muted)]">
+                    <span className="text-foreground">
                       {dirname(entry.path)}/
                     </span>
                   )}
@@ -294,12 +294,12 @@ function TableView({
               {columns.map((column) => (
                 <td
                   key={column}
-                  className="px-3 py-2 text-sm text-foreground/80 font-mono border border-cp-text-muted/10"
+                  className="px-3 py-2 text-sm text-foreground/90 font-mono border border-border"
                 >
                   {column in entry.frontmatter ? (
                     formatValue(entry.frontmatter[column])
                   ) : (
-                    <span className="text-foreground/25">—</span>
+                    <span className="text-foreground/40">—</span>
                   )}
                 </td>
               ))}
@@ -310,12 +310,6 @@ function TableView({
     </div>
   );
 }
-
-const LANE_ACCENTS = [
-  { text: "text-cp-yellow/70", dot: "bg-cp-yellow/80" },
-  { text: "text-cp-cyan/70", dot: "bg-cp-cyan/80" },
-  { text: "text-cp-red/70", dot: "bg-cp-red/80" },
-];
 
 function KanbanView({
   rows,
@@ -333,18 +327,17 @@ function KanbanView({
 
   return (
     <div className="overflow-x-auto p-3 flex gap-4 items-start">
-      {laneData.map((lane, i) => (
+      {laneData.map((lane) => (
         <div key={lane.label} data-lane={lane.label} className="w-56 shrink-0">
-          <div className="cp-label mb-2 px-1 flex items-center gap-1.5" style={{ fontSize: "10px" }}>
-            <span className={`inline-block w-1.5 h-1.5 ${LANE_ACCENTS[i % LANE_ACCENTS.length].dot}`} />
-            <span className={LANE_ACCENTS[i % LANE_ACCENTS.length].text}>{lane.label}</span>
-            <span className="text-foreground/30">· {lane.rows.length}</span>
+          <div className="cp-label mb-2 px-1 flex items-baseline gap-1.5">
+            <span className="text-cp-yellow">{lane.label}</span>
+            <span className="text-foreground/60">· {lane.rows.length}</span>
           </div>
           <div className="flex flex-col gap-2">
             {lane.rows.map((entry) => (
               <div
                 key={entry.path}
-                className="cp-cut-6 cp-hover-card border bg-cp-surface2 px-2.5 py-2"
+                className="cp-cut-6 cp-hover-user border bg-cp-surface2 px-2.5 py-2"
               >
                 <a
                   href="#"
@@ -358,7 +351,7 @@ function KanbanView({
                   {basename(entry.path)}
                 </a>
                 {dirname(entry.path) && (
-                  <div className="text-xs font-mono text-[var(--color-cp-text-muted)]">
+                  <div className="text-xs font-mono text-foreground">
                     {dirname(entry.path)}/
                   </div>
                 )}
