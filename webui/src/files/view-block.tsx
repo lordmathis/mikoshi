@@ -198,12 +198,12 @@ function ViewDisplay({ query, workspaceId, onFileClick }: { query: string } & Vi
   return (
     <div className="mb-4 cp-cut-6 border border-cp-text-muted/20 bg-cp-surface3">
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-cp-text-muted/10">
-        <span className="cp-label text-cp-cyan/60" style={{ fontSize: "10px" }}>
+        <span className="cp-label text-foreground/40" style={{ fontSize: "10px" }}>
           View · {rows.length} {rows.length === 1 ? "file" : "files"}
         </span>
         {/* Agent edits to other workspace files don't re-render an open view; manual refresh is the v1 answer. */}
         <button
-          className="text-cp-cyan/50 hover:text-cp-cyan"
+          className="text-foreground/40 hover:text-foreground/80"
           title="Refresh"
           onClick={() => setRefreshTick((t) => t + 1)}
         >
@@ -276,7 +276,7 @@ function TableView({
               <td className="px-3 py-2 text-sm border border-cp-text-muted/10">
                 <a
                   href="#"
-                  className="text-cp-cyan underline decoration-cp-cyan/40 hover:decoration-cp-cyan"
+                  className="text-foreground underline decoration-foreground/30 hover:decoration-foreground/70"
                   title={entry.path}
                   onClick={(e) => {
                     e.preventDefault();
@@ -329,18 +329,18 @@ function KanbanView({
     <div className="overflow-x-auto p-3 flex gap-4 items-start">
       {laneData.map((lane) => (
         <div key={lane.label} data-lane={lane.label} className="w-56 shrink-0">
-          <div className="cp-label mb-2 px-1 text-cp-cyan/60" style={{ fontSize: "10px" }}>
+          <div className="cp-label mb-2 px-1 text-foreground/50" style={{ fontSize: "10px" }}>
             {lane.label} · {lane.rows.length}
           </div>
           <div className="flex flex-col gap-2">
             {lane.rows.map((entry) => (
               <div
                 key={entry.path}
-                className="cp-cut-6 cp-hover-tool border bg-cp-surface2 px-2.5 py-2"
+                className="cp-cut-6 cp-hover-card border bg-cp-surface2 px-2.5 py-2"
               >
                 <a
                   href="#"
-                  className="text-sm text-cp-cyan underline decoration-cp-cyan/40 hover:decoration-cp-cyan"
+                  className="text-sm text-foreground underline decoration-foreground/30 hover:decoration-foreground/70"
                   title={entry.path}
                   onClick={(e) => {
                     e.preventDefault();

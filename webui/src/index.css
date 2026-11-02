@@ -151,6 +151,14 @@ body {
   border-color: rgb(var(--cp-rgb-cyan) / 0.4);
 }
 
+.cp-hover-card {
+  border-color: rgb(var(--cp-rgb-text-muted) / 0.15);
+  transition: border-color 0.15s;
+}
+.cp-hover-card:hover {
+  border-color: rgb(var(--cp-rgb-text-muted) / 0.35);
+}
+
 .typing-area {
   border-color: rgba(245, 216, 0, 0.3);
   border-bottom: 2px solid var(--color-cp-yellow);
