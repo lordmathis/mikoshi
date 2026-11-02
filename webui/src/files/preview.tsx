@@ -30,7 +30,7 @@ function isMarkdownFile(path: string): boolean {
 function UnresolvedWiki({ children }: { children: React.ReactNode }) {
   return (
     <span
-      style={{ color: "rgb(var(--cp-rgb-yellow) / 0.5)", background: "rgb(var(--cp-rgb-yellow) / 0.06)", padding: "0 3px", borderRadius: "3px", fontSize: "0.9em" }}
+      style={{ color: "rgb(var(--cp-rgb-yellow) / 0.8)", background: "rgb(var(--cp-rgb-yellow) / 0.08)", padding: "0 3px", borderRadius: "3px", fontSize: "0.9em" }}
     >
       {children}
     </span>
@@ -82,22 +82,10 @@ export function FrontmatterPanel({ metadata, workspaceId, fileIndex, onFileClick
   if (entries.length === 0) return null;
 
   return (
-    <div
-      className="mb-5 cp-cut-6 border"
-      style={{
-        borderColor: "rgb(var(--cp-rgb-yellow) / 0.15)",
-        background: "rgb(var(--cp-rgb-yellow) / 0.03)",
-      }}
-    >
-      <div
-        className="px-3 py-1.5 border-b flex items-center gap-1.5"
-        style={{ borderColor: "rgb(var(--cp-rgb-yellow) / 0.1)" }}
-      >
-        <span
-          className="inline-block w-1.5 h-1.5"
-          style={{ background: "var(--color-cp-yellow)", opacity: 0.6 }}
-        />
-        <span className="cp-label text-primary/50" style={{ fontSize: "10px" }}>
+    <div className="mb-5 cp-cut-6 border border-cp-border bg-cp-surface3">
+      <div className="px-3 py-1.5 border-b border-border flex items-center gap-1.5">
+        <span className="inline-block w-1.5 h-1.5 bg-cp-yellow" />
+        <span className="cp-label text-foreground/70" style={{ fontSize: "10px" }}>
           Metadata
         </span>
       </div>
@@ -105,13 +93,13 @@ export function FrontmatterPanel({ metadata, workspaceId, fileIndex, onFileClick
         {entries.map(([key, value]) => (
           <div key={key} className="flex items-baseline gap-2 text-sm">
             <span
-              className="shrink-0 font-mono text-primary/70"
+              className="shrink-0 font-mono text-primary"
               style={{ fontSize: "12px" }}
             >
               {key}
             </span>
-            <span className="text-foreground/25">:</span>
-            <span className="text-foreground/60 font-mono break-all" style={{ fontSize: "12px" }}>
+            <span className="text-foreground/50">:</span>
+            <span className="text-foreground font-mono break-all" style={{ fontSize: "12px" }}>
               <WikiLinkValue
                 text={formatValue(value)}
                 workspaceId={workspaceId}
