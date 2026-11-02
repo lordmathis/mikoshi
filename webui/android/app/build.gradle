@@ -15,7 +15,7 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         // CI injects the run number so successive installs update in place.
-        versionCode(System.getenv("APK_VERSION_CODE") ?: "1").toInteger()
+        versionCode Integer.parseInt(System.getenv("APK_VERSION_CODE") ?: "1")
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
