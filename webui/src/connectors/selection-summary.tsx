@@ -19,12 +19,12 @@ export function SelectionSummary({ selectedPaths, tokenEstimate, isEstimatingTok
         {excludedCount > 0 && ` (${excludedCount} excluded)`}
       </span>
       {isEstimatingTokens ? (
-        <span className="text-muted-foreground flex items-center gap-1.5">
+        <span className="text-foreground/70 flex items-center gap-1.5">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
           Estimating tokens...
         </span>
       ) : tokenEstimate !== null ? (
-        <span className="text-muted-foreground">~{tokenEstimate.toLocaleString()} tokens</span>
+        <span className="text-foreground/70">~{tokenEstimate.toLocaleString()} tokens</span>
       ) : null}
     </div>
   );

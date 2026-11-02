@@ -263,7 +263,7 @@ export function ChatInput({
               }}
               icon={<Zap className="h-3.5 w-3.5 text-primary/60" />}
               label={chatSettings.enabledTools.map((t) => getToolLabel(t)).join(", ")}
-              labelClassName="cp-label text-muted-foreground"
+              labelClassName="cp-label text-foreground/70"
             />
           )}
         </div>
@@ -299,7 +299,7 @@ export function ChatInput({
               onHover={(i) => fileMention.setSelectedIndex?.(i)}
               renderItem={(filePath, isSelected) => (
                 <>
-                  <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <FileText className="h-4 w-4 text-foreground/70 shrink-0" />
                   <span
                     className={`truncate font-medium ${isSelected ? "text-primary" : ""}`}
                     style={{ letterSpacing: "0.04em" }}
@@ -319,7 +319,7 @@ export function ChatInput({
               onHover={(i) => skillMention.setSelectedIndex?.(i)}
               renderItem={(skill, isSelected) => (
                 <>
-                  <Slash className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <Slash className="h-4 w-4 text-foreground/70 shrink-0" />
                   <span
                     className={`truncate font-medium ${isSelected ? "text-primary" : ""}`}
                     style={{ letterSpacing: "0.04em" }}
@@ -398,7 +398,7 @@ export function ChatInput({
           </div>
         </div>
 
-        <p className="mt-2 cp-label text-muted-foreground">
+        <p className="mt-2 cp-label text-foreground/70">
           Enter to transmit / Shift+Enter for new line
         </p>
       </div>

@@ -249,7 +249,7 @@ export function ChatSettingsDialog({
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-foreground/70">
               Applies a preset for system prompt, tools, and model. Everything can be overridden below.
             </p>
           </div>
@@ -321,7 +321,7 @@ export function ChatSettingsDialog({
                 className="min-h-[120px] resize-none"
                 rows={6}
               />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-foreground/70">
                 The system prompt sets the behavior and context for the AI
                 assistant.
               </p>
@@ -354,7 +354,7 @@ export function ChatSettingsDialog({
                     }}
                     placeholder="5"
                   />
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-foreground/70">
                     Maximum tool call iterations
                   </p>
                 </div>
@@ -380,7 +380,7 @@ export function ChatSettingsDialog({
                     }}
                     placeholder="Default"
                   />
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-foreground/70">
                     Randomness (0-2, lower = focused)
                   </p>
                 </div>
@@ -404,7 +404,7 @@ export function ChatSettingsDialog({
                     }}
                     placeholder="Default"
                   />
-                   <p className="text-xs text-muted-foreground">
+                   <p className="text-xs text-foreground/70">
                      Maximum response length
                    </p>
                  </div>
@@ -417,17 +417,17 @@ export function ChatSettingsDialog({
             expanded={toolsExpanded}
             onToggle={() => setToolsExpanded(!toolsExpanded)}
             headerExtra={
-              <span className="text-xs text-muted-foreground">
+              <span className="text-xs text-foreground/70">
                 ({localSettings.enabledTools.length} enabled)
               </span>
             }
           >
             {isLoadingTools ? (
-              <div className="rounded-lg border border-border p-4 text-center text-sm text-muted-foreground">
+              <div className="rounded-lg border border-border p-4 text-center text-sm text-foreground/70">
                 Loading available tools...
               </div>
             ) : toolServers.length === 0 ? (
-              <div className="rounded-lg border border-border p-4 text-center text-sm text-muted-foreground">
+              <div className="rounded-lg border border-border p-4 text-center text-sm text-foreground/70">
                 No tool servers available
               </div>
             ) : (
@@ -444,7 +444,7 @@ export function ChatSettingsDialog({
                       >
                         {server.name}
                       </Label>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-sm text-foreground/70">
                         {server.tools.length} tool{server.tools.length !== 1 ? 's' : ''} available ({server.type})
                       </p>
                     </div>

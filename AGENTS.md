@@ -11,9 +11,15 @@ Simple solutions over complex ones
 All styling tokens are centralized in `webui/src/index.css`. Do not hardcode colors, clip-paths, or other design values in components.
 
 **Colors** — Use theme tokens, never raw hex/rgba:
-- Tailwind classes: `bg-primary`, `text-cp-cyan/20`, `border-primary/6`, `bg-cp-surface3`, etc.
+- Tailwind classes: `bg-primary`, `text-cp-cyan`, `border-primary/20`, `bg-cp-surface3`, etc.
 - Inline styles (when needed): `"var(--color-cp-yellow)"`, `"rgb(var(--cp-rgb-yellow) / 0.15)"`
 - If a new color is needed, add it to the `@theme` block in `index.css` first. Add an RGB variant in `:root` if alpha support is needed (e.g. `--cp-rgb-foo: R G B`).
+
+**Brightness** — Cyberpunk is bright, not muted:
+- Readable text is `text-foreground`, `text-foreground/70` or brighter, or a full accent (`text-primary`, `text-cp-cyan`). Never dimmer.
+- No muted grays for text. The `cp-text-muted`, `cp-text-dim`, and `muted-foreground` tokens were removed on purpose — do not reintroduce them. Dark surfaces (`bg-cp-surface*`) are the background, not a text color source.
+- Never stack dimming (e.g. `text-foreground/60 opacity-50`). `opacity-*` below 70 is only for interaction states such as `opacity-0 group-hover:opacity-100` reveals.
+- Borders must be visible: use the border tokens (`border-border`, `border-cp-border`), not custom faint alphas like `border-white/5` or `border-primary/6`.
 
 **Clip-paths** — Use the CSS utility classes, never inline `clipPath`:
 - `cp-cut-{6,8,10,12}` — top-right corner notch

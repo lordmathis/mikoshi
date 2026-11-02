@@ -218,7 +218,7 @@ export const ChatMessage = memo(function ChatMessage({ message, onBranch, onRetr
             
             {showReasoning && (
               <div className="mt-2 border border-border bg-cp-cyan/3 p-3 cp-cut-10">
-                <div className="text-muted-foreground">
+                <div className="text-foreground/70">
                   <ReactMarkdown
                     remarkPlugins={REMARK_PLUGINS}
                     components={markdownComponents}
@@ -233,8 +233,8 @@ export const ChatMessage = memo(function ChatMessage({ message, onBranch, onRetr
         
         {!isUser && message.tool_calls && message.tool_calls.length > 0 && (
           <div className="mb-2">
-            <div className="flex items-start gap-2 cp-label text-muted-foreground">
-              <span className="font-medium text-muted-foreground">TOOLS_USED:</span>
+            <div className="flex items-start gap-2 cp-label text-foreground/70">
+              <span className="font-medium text-foreground/70">TOOLS_USED:</span>
               <div className="flex flex-wrap gap-1.5">
                 {message.tool_calls.map((tool, index) => (
                   <TooltipProvider key={index} delayDuration={300}>

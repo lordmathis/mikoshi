@@ -419,7 +419,7 @@ function ChatHeader({ sidebarOpen, onToggleSidebar, chatTitle }: {
             Mikoshi
           </h1>
           {chatTitle && (
-            <p className="cp-label text-muted-foreground truncate mt-0.5">
+            <p className="cp-label text-foreground/70 truncate mt-0.5">
               {chatTitle}
             </p>
           )}
