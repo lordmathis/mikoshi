@@ -194,8 +194,7 @@ export const ChatMessage = memo(function ChatMessage({ message, onBranch, onRetr
           <div className="mb-2">
             <button
               onClick={() => setShowReasoning(!showReasoning)}
-              className="flex items-center gap-2 cp-label hover:text-foreground transition-colors"
-              style={{ color: 'var(--color-cp-text-muted)' }}
+              className="flex items-center gap-2 cp-label text-foreground/70 hover:text-foreground transition-colors"
             >
               <Brain className="h-3.5 w-3.5" />
               <span>{showReasoning ? "Hide" : "Show"} reasoning</span>
@@ -219,7 +218,7 @@ export const ChatMessage = memo(function ChatMessage({ message, onBranch, onRetr
             
             {showReasoning && (
               <div className="mt-2 border border-border bg-cp-cyan/3 p-3 cp-cut-10">
-                <div className="text-muted-foreground">
+                <div className="text-foreground/70">
                   <ReactMarkdown
                     remarkPlugins={REMARK_PLUGINS}
                     components={markdownComponents}
@@ -234,15 +233,15 @@ export const ChatMessage = memo(function ChatMessage({ message, onBranch, onRetr
         
         {!isUser && message.tool_calls && message.tool_calls.length > 0 && (
           <div className="mb-2">
-            <div className="flex items-start gap-2 cp-label text-muted-foreground">
-              <span className="font-medium text-muted-foreground">TOOLS_USED:</span>
+            <div className="flex items-start gap-2 cp-label text-foreground/70">
+              <span className="font-medium text-foreground/70">TOOLS_USED:</span>
               <div className="flex flex-wrap gap-1.5">
                 {message.tool_calls.map((tool, index) => (
                   <TooltipProvider key={index} delayDuration={300}>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span
-                          className="inline-flex items-center gap-1 border border-cp-text-muted/20 bg-cp-text-muted/5 px-2 py-0.5 text-xs hover:border-cp-text-muted/35 transition-colors cursor-default cp-cut-6"
+                          className="inline-flex items-center gap-1 border border-foreground/20 bg-foreground/5 px-2 py-0.5 text-xs hover:border-foreground/35 transition-colors cursor-default cp-cut-6"
                           style={{
                             color: 'var(--color-cp-text-warm)',
                           }}

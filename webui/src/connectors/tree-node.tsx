@@ -71,13 +71,13 @@ export function TreeNode({
         {isDir ? (
           <Folder className="h-4 w-4 text-blue-500 flex-shrink-0" />
         ) : (
-          <File className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+          <File className="h-4 w-4 text-foreground/70 flex-shrink-0" />
         )}
         <span className="text-sm truncate min-w-0 flex-1" onClick={handleToggle}>
           {node.name}
         </span>
         {!isDir && node.size !== undefined && (
-          <span className="text-xs text-muted-foreground ml-auto">
+          <span className="text-xs text-foreground/70 ml-auto">
             {(node.size / 1024).toFixed(1)} KB
           </span>
         )}

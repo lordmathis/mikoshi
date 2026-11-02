@@ -188,7 +188,7 @@ function TreeNode({
         {isDir ? (
           <Folder className="h-4 w-4 text-blue-500 flex-shrink-0" />
         ) : (
-          <File className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+          <File className="h-4 w-4 text-foreground/70 flex-shrink-0" />
         )}
         {isRenaming ? (
           <input
@@ -462,7 +462,7 @@ export function WorkspaceTree({ tree, activeFilePath, onFileClick, workspaceId, 
       </div>
       {isCommitting && (
         <div className="flex items-center gap-2 py-1 px-2 rounded-md bg-accent/50">
-          <Check className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+          <Check className="h-4 w-4 text-foreground/70 flex-shrink-0" />
           <input
             ref={commitInputRef}
             className="text-sm bg-transparent border-b border-primary outline-none flex-1 min-w-0"
@@ -480,7 +480,7 @@ export function WorkspaceTree({ tree, activeFilePath, onFileClick, workspaceId, 
       )}
       {isCreating && (
         <div className="flex items-center gap-2 py-1 px-2 rounded-md bg-accent/50">
-          <File className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+          <File className="h-4 w-4 text-foreground/70 flex-shrink-0" />
           <input
             ref={newFileInputRef}
             className="text-sm bg-transparent border-b border-primary outline-none flex-1 min-w-0"

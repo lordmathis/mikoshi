@@ -106,7 +106,7 @@ export function SidebarSegmentedControl({
               variant="ghost"
               size="icon"
               onClick={onToggle}
-              className="h-7 w-7 opacity-50 hover:opacity-100"
+              className="h-7 w-7 opacity-70 hover:opacity-100"
             >
               <PanelLeftClose className="h-4 w-4" />
             </Button>
@@ -119,7 +119,7 @@ export function SidebarSegmentedControl({
                 className={`flex-1 py-2.5 text-[10px] font-black uppercase tracking-[0.2em] transition-colors ${
                   activeTab === tab.key
                     ? "text-primary border-b-2 border-primary"
-                    : "text-muted-foreground hover:text-foreground"
+                    : "text-foreground/60 hover:text-foreground"
                 }`}
                 onClick={() => onTabChange(tab.key)}
               >

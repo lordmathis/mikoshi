@@ -131,7 +131,7 @@ export const MessagesList = memo(function MessagesList({
       <div className="mx-auto max-w-3xl px-4 pb-6">
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
-            <div className="cp-label text-muted-foreground uppercase tracking-widest">
+            <div className="cp-label text-foreground/70 uppercase tracking-widest">
               Loading data...
             </div>
           </div>
@@ -151,7 +151,7 @@ export const MessagesList = memo(function MessagesList({
               <p className="cp-label text-foreground mb-2" style={{ color: 'var(--color-cp-yellow)' }}>
                 SYSTEM READY
               </p>
-              <p className="cp-label text-muted-foreground">
+              <p className="cp-label text-foreground/70">
                 {currentConversationId
                   ? "Type a command below to begin transmission"
                   : "Select a session from the sidebar or initialize a new one"}
@@ -210,7 +210,7 @@ export const MessagesList = memo(function MessagesList({
                          // DAEMON
                        </p>
                      </div>
-                     <div className="flex items-center gap-2 cp-label text-muted-foreground">
+                     <div className="flex items-center gap-2 cp-label text-foreground/70">
                        <div className="flex gap-1">
                          <span className="animate-bounce text-foreground" style={{ animationDelay: "0ms" }}>
                            &#9654;

@@ -167,7 +167,7 @@ function ConnectorDialogBody({
           {connectorData.treeRoot && (
             <div className="flex gap-2 items-center">
               <div className="relative flex-1">
-                <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none z-10" />
+                <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-foreground/70 pointer-events-none z-10" />
                 <Input
                   placeholder="Exclude by pattern, comma-separated (e.g. *.lock, uv.lock)"
                   value={connectorData.filterPattern}
@@ -178,7 +178,7 @@ function ConnectorDialogBody({
                 {connectorData.filterPattern && (
                   <button
                     onClick={() => connectorData.setFilterPattern("")}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground z-10"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground/70 hover:text-foreground z-10"
                   >
                     <X className="h-4 w-4" />
                   </button>

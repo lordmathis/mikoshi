@@ -235,14 +235,14 @@ export function CodeBlock({ code, lang }: CodeBlockProps) {
       ) : error ? (
         <pre className="overflow-x-auto p-3 text-sm">{code}</pre>
       ) : (
-        <div className="flex justify-center py-4 text-xs text-cp-text-muted uppercase tracking-widest">
+        <div className="flex justify-center py-4 text-xs text-foreground/70 uppercase tracking-widest">
           Highlighting...
         </div>
       )}
       <button
         onClick={() => void handleCopy()}
         aria-label="Copy code"
-        className="absolute right-2 top-2 p-1.5 cp-cut-6 border border-border bg-cp-surface2 text-cp-text-muted opacity-0 group-hover:opacity-100 transition hover:text-primary hover:border-primary/40"
+        className="absolute right-2 top-2 p-1.5 cp-cut-6 border border-border bg-cp-surface2 text-foreground/70 opacity-0 group-hover:opacity-100 transition hover:text-primary hover:border-primary/40"
       >
         {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
       </button>
