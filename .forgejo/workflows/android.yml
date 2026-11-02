@@ -1,0 +1,54 @@
+# Builds a debug-signed APK with the private domains baked in.
+# Requires repo secrets: MIKOSHI_URL, AUTHENLIA_DOMAIN.
+# GitHub ignores this directory — the workflow only runs on the Forgejo mirror.
+
+name: android
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  debug-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container:
+      image: cimg/android:2025.06
+    defaults:
+      run:
+        working-directory: webui
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ensure Android SDK 36
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platforms;android-36" "build-tools;36.0.0" > /dev/null
+
+      - run: npm ci
+
+      - name: Write capacitor env from secrets
+        run: |
+          {
+            echo "MIKOSHI_URL=$MIKOSHI_URL"
+            echo "AUTHENLIA_DOMAIN=$AUTHENLIA_DOMAIN"
+          } > .env.capacitor
+        env:
+          MIKOSHI_URL: ${{ secrets.MIKOSHI_URL }}
+          AUTHENLIA_DOMAIN: ${{ secrets.AUTHENLIA_DOMAIN }}
+
+      - run: npm run android:sync
+
+      - name: Build debug APK
+        run: npm run android:debug
+        env:
+          APK_VERSION_CODE: ${{ github.run_number }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mikoshi-debug-apk
+          path: webui/android/app/build/outputs/apk/debug/app-debug.apk
