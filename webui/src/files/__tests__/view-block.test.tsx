@@ -183,6 +183,21 @@ describe("ViewBlock", () => {
     expect(laneCardTitles(container, "doing")).toEqual(["t/b.md", "t/c.md", "t/a.md"]);
   });
 
+  it("places cards missing the sort field last regardless of sort direction", async () => {
+    const entries: FrontmatterEntry[] = [
+      { path: "t/a.md", frontmatter: { status: "doing", last_updated: "2026-10-12" } },
+      { path: "t/b.md", frontmatter: { status: "doing", last_updated: "2026-11-01" } },
+      { path: "t/c.md", frontmatter: { status: "doing" } },
+      { path: "t/d.md", frontmatter: { status: "doing", last_updated: null } },
+    ];
+    const { container } = await renderKanban(
+      "display: kanban\ngroup_by: status\nsort: -last_updated",
+      entries
+    );
+
+    expect(laneCardTitles(container, "doing")).toEqual(["t/b.md", "t/a.md", "t/c.md", "t/d.md"]);
+  });
+
   it("calls onFileClick with the full path when a kanban card is clicked", async () => {
     const { container, onFileClick } = await renderKanban(
       "display: kanban\ngroup_by: status",

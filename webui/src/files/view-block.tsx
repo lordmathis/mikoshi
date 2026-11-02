@@ -61,11 +61,6 @@ function validateQuery(query: Record<string, unknown>): string {
 }
 
 function compareValues(a: unknown, b: unknown): number {
-  const aMissing = a === null || a === undefined;
-  const bMissing = b === null || b === undefined;
-  if (aMissing && bMissing) return 0;
-  if (aMissing) return 1;
-  if (bMissing) return -1;
   if (typeof a === "number" && typeof b === "number") return a - b;
   return formatValue(a).localeCompare(formatValue(b));
 }
@@ -77,6 +72,13 @@ function sortRows(entries: FrontmatterEntry[], sortSpec: string | undefined): Fr
   const desc = sortSpec.startsWith("-");
   const field = desc ? sortSpec.slice(1) : sortSpec;
   rows.sort((x, y) => {
+    const xMissing = !(field in x.frontmatter) || x.frontmatter[field] === null;
+    const yMissing = !(field in y.frontmatter) || y.frontmatter[field] === null;
+    // Entries missing the sort field always sink to the bottom, even for descending sorts.
+    if (xMissing || yMissing) {
+      if (xMissing && yMissing) return x.path.localeCompare(y.path);
+      return xMissing ? 1 : -1;
+    }
     const cmp = compareValues(x.frontmatter[field], y.frontmatter[field]);
     if (cmp !== 0) return desc ? -cmp : cmp;
     return x.path.localeCompare(y.path);
@@ -194,23 +196,14 @@ function ViewDisplay({ query, workspaceId, onFileClick }: { query: string } & Vi
   }
 
   return (
-    <div
-      className="mb-4 cp-cut-6 border"
-      style={{
-        borderColor: "rgb(var(--cp-rgb-yellow) / 0.15)",
-        background: "rgb(var(--cp-rgb-yellow) / 0.03)",
-      }}
-    >
-      <div
-        className="flex items-center justify-between px-3 py-1.5 border-b"
-        style={{ borderColor: "rgb(var(--cp-rgb-yellow) / 0.1)" }}
-      >
-        <span className="cp-label text-primary/50" style={{ fontSize: "10px" }}>
+    <div className="mb-4 cp-cut-6 border border-cp-text-muted/20 bg-cp-surface3">
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-cp-text-muted/10">
+        <span className="cp-label text-cp-cyan/60" style={{ fontSize: "10px" }}>
           View · {rows.length} {rows.length === 1 ? "file" : "files"}
         </span>
         {/* Agent edits to other workspace files don't re-render an open view; manual refresh is the v1 answer. */}
         <button
-          className="text-primary/50 hover:text-primary"
+          className="text-cp-cyan/50 hover:text-cp-cyan"
           title="Refresh"
           onClick={() => setRefreshTick((t) => t + 1)}
         >
@@ -261,23 +254,16 @@ function TableView({
 
   return (
     <div className="overflow-x-auto">
-      <table
-        className="w-full border-collapse border"
-        style={{ borderColor: "rgb(var(--cp-rgb-yellow) / 0.2)" }}
-      >
-        <thead style={{ backgroundColor: "rgb(var(--cp-rgb-yellow) / 0.06)" }}>
+      <table className="w-full border-collapse border border-cp-text-muted/20">
+        <thead className="bg-cp-text-muted/5">
           <tr>
-            <th
-              className="px-3 py-2 text-left text-sm font-bold text-foreground"
-              style={{ borderWidth: "1px", borderStyle: "solid", borderColor: "rgb(var(--cp-rgb-yellow) / 0.2)" }}
-            >
+            <th className="px-3 py-2 text-left text-sm font-bold text-foreground border border-cp-text-muted/20">
               File
             </th>
             {columns.map((column) => (
               <th
                 key={column}
-                className="px-3 py-2 text-left text-sm font-bold text-foreground"
-                style={{ borderWidth: "1px", borderStyle: "solid", borderColor: "rgb(var(--cp-rgb-yellow) / 0.2)" }}
+                className="px-3 py-2 text-left text-sm font-bold text-foreground border border-cp-text-muted/20"
               >
                 {column}
               </th>
@@ -286,14 +272,11 @@ function TableView({
         </thead>
         <tbody>
           {rows.map((entry) => (
-            <tr key={entry.path} className="even:bg-primary/3">
-              <td
-                className="px-3 py-2 text-sm"
-                style={{ borderWidth: "1px", borderStyle: "solid", borderColor: "rgb(var(--cp-rgb-yellow) / 0.15)" }}
-              >
+            <tr key={entry.path} className="even:bg-cp-text-muted/3">
+              <td className="px-3 py-2 text-sm border border-cp-text-muted/10">
                 <a
                   href="#"
-                  className="text-primary underline decoration-primary/40 hover:decoration-primary"
+                  className="text-cp-cyan underline decoration-cp-cyan/40 hover:decoration-cp-cyan"
                   title={entry.path}
                   onClick={(e) => {
                     e.preventDefault();
@@ -311,8 +294,7 @@ function TableView({
               {columns.map((column) => (
                 <td
                   key={column}
-                  className="px-3 py-2 text-sm text-foreground/80 font-mono"
-                  style={{ borderWidth: "1px", borderStyle: "solid", borderColor: "rgb(var(--cp-rgb-yellow) / 0.15)" }}
+                  className="px-3 py-2 text-sm text-foreground/80 font-mono border border-cp-text-muted/10"
                 >
                   {column in entry.frontmatter ? (
                     formatValue(entry.frontmatter[column])
@@ -347,19 +329,18 @@ function KanbanView({
     <div className="overflow-x-auto p-3 flex gap-4 items-start">
       {laneData.map((lane) => (
         <div key={lane.label} data-lane={lane.label} className="w-56 shrink-0">
-          <div className="cp-label mb-2 px-1 text-primary/50" style={{ fontSize: "10px" }}>
+          <div className="cp-label mb-2 px-1 text-cp-cyan/60" style={{ fontSize: "10px" }}>
             {lane.label} · {lane.rows.length}
           </div>
           <div className="flex flex-col gap-2">
             {lane.rows.map((entry) => (
               <div
                 key={entry.path}
-                className="cp-cut-6 cp-hover-user border bg-cp-surface2 px-2.5 py-2"
-                style={{ borderColor: "rgb(var(--cp-rgb-yellow) / 0.15)" }}
+                className="cp-cut-6 cp-hover-tool border bg-cp-surface2 px-2.5 py-2"
               >
                 <a
                   href="#"
-                  className="text-sm text-primary underline decoration-primary/40 hover:decoration-primary"
+                  className="text-sm text-cp-cyan underline decoration-cp-cyan/40 hover:decoration-cp-cyan"
                   title={entry.path}
                   onClick={(e) => {
                     e.preventDefault();
