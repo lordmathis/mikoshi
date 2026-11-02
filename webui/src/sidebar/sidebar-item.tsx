@@ -29,7 +29,7 @@ export function SidebarItem({
       className={`group relative flex items-center transition-all duration-200 cursor-pointer border cp-cut-br-8 ${
         isActive
           ? "bg-primary/5 border-primary/30 shadow-[0_0_15px_rgb(var(--cp-rgb-yellow)_/_0.05)]"
-          : "bg-white/[0.02] border-white/5 hover:border-white/10 hover:bg-white/[0.04]"
+          : "bg-white/[0.03] border-white/10 hover:border-white/20 hover:bg-white/[0.05]"
       }`}
       onClick={onClick}
     >
@@ -43,21 +43,21 @@ export function SidebarItem({
         <div className="flex items-center justify-between mb-1">
           <div
             className={`text-[9px] font-bold tracking-widest ${
-              isActive ? "text-cyan" : "text-muted-foreground"
+              isActive ? "text-cyan" : "text-foreground/70"
             }`}
           >
             {sublabel}
           </div>
           <div className="flex items-center gap-2">
             {badge && (
-              <span className="text-[8px] text-primary/50 uppercase">{badge}</span>
+              <span className="text-[8px] text-primary uppercase">{badge}</span>
             )}
             {children}
           </div>
         </div>
         <div
           className={`truncate text-[13px] font-medium tracking-tight ${
-            isActive ? "text-foreground" : "text-foreground/60"
+            isActive ? "text-foreground" : "text-foreground/85"
           }`}
         >
           {label}

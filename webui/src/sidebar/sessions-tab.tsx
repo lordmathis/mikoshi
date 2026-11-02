@@ -71,7 +71,7 @@ export function SessionsTab({
           <Button
             variant="ghost"
             size="icon"
-            className="h-5 w-5 ml-auto opacity-60 hover:opacity-100"
+            className="h-5 w-5 ml-auto opacity-70 hover:opacity-100"
             onClick={onClearFilter}
           >
             <X className="h-3 w-3" />
@@ -100,14 +100,14 @@ export function SessionsTab({
                 onClick={() => onConversationSelect(conversation.id)}
                 onDelete={() => onDeleteConversation(conversation.id)}
               >
-                <span className="text-[8px] text-muted-foreground opacity-50 uppercase">
+                <span className="text-[8px] text-foreground/70 uppercase">
                   {conversation.timestamp}
                 </span>
               </SidebarItem>
             );
           })
         )}
-        <div ref={sentinelRef} className="py-2 text-center cp-label opacity-40">
+        <div ref={sentinelRef} className="py-2 text-center cp-label opacity-70">
           {isLoading && <span className="animate-pulse inline-block">Syncing...</span>}
         </div>
       </div>

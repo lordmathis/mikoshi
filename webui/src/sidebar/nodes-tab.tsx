@@ -38,7 +38,7 @@ export function NodesTab({
 
       <div className="flex-1 overflow-y-auto px-3 pb-6 space-y-2">
         {isLoading ? (
-          <div className="py-12 text-center cp-label opacity-40 animate-pulse">
+          <div className="py-12 text-center cp-label opacity-70 animate-pulse">
             Syncing...
           </div>
         ) : workspaces.length === 0 ? (

@@ -58,7 +58,7 @@ export function DataTab({
   if (isLoading || !isTreeValid) {
     return (
       <div className="py-12 flex items-center justify-center">
-        <Loader2 className="h-5 w-5 animate-spin text-primary/50" />
+        <Loader2 className="h-5 w-5 animate-spin text-primary/70" />
       </div>
     );
   }
