@@ -15,7 +15,7 @@
     "lint:fix": "eslint src --fix",
     "test": "vitest run",
     "test:watch": "vitest",
-    "android:sync": "npm run build && if [ -f .env.capacitor ]; then set -a; . ./.env.capacitor; set +a; fi && npx --yes --package=@capacitor/cli@^8 cap sync android",
+    "android:sync": "CAPACITOR_ANDROID=1 npm run build && if [ -f .env.capacitor ]; then set -a; . ./.env.capacitor; set +a; fi && npx --yes --package=@capacitor/cli@^8 cap sync android",
     "android:debug": "cd android && ./gradlew assembleDebug",
     "android:release": "cd android && ./gradlew assembleRelease"
   },

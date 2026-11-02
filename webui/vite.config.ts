@@ -10,20 +10,23 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
-    // Gzip compression
-    viteCompression({
-      algorithm: 'gzip',
-      ext: '.gz',
-      threshold: 10240, // Only compress files larger than 10kb
-      deleteOriginFile: false // Keep original files
-    }),
-    // Brotli compression
-    viteCompression({
-      algorithm: 'brotliCompress',
-      ext: '.br',
-      threshold: 10240,
-      deleteOriginFile: false
-    }),
+    // Pre-compressed .gz/.br siblings are served by mikoshi's static handler.
+    // On Android they collide in the asset merger
+    // so cap sync builds run without them.
+    ...(process.env.CAPACITOR_ANDROID ? [] : [
+      viteCompression({
+        algorithm: 'gzip',
+        ext: '.gz',
+        threshold: 10240, // Only compress files larger than 10kb
+        deleteOriginFile: false // Keep original files
+      }),
+      viteCompression({
+        algorithm: 'brotliCompress',
+        ext: '.br',
+        threshold: 10240,
+        deleteOriginFile: false
+      }),
+    ]),
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
