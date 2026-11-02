@@ -45,7 +45,8 @@ jobs:
         env:
           APK_VERSION_CODE: ${{ github.run_number }}
 
-      - uses: actions/upload-artifact@v7
+      # v4+ refuses to run on non-github.com servers; Forgejo runners implement the v3 artifact API
+      - uses: https://code.forgejo.org/actions/upload-artifact@v3
         with:
           name: mikoshi-debug-apk
           path: webui/android/app/build/outputs/apk/debug/app-debug.apk
