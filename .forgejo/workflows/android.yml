@@ -1,8 +1,4 @@
-# Builds a debug-signed APK with the private domains baked in.
-# Requires repo secrets: MIKOSHI_URL, AUTHELIA_DOMAIN.
-# GitHub ignores this directory — the workflow only runs on the Forgejo mirror.
-# No SDK setup needed: the cimg/android image below ships platforms/android-36
-# and build-tools/36.0.0 with licenses already accepted.
+# Builds a debug APK
 
 name: android
 
@@ -27,16 +23,6 @@ jobs:
       - uses: actions/checkout@v7
 
       - run: npm ci
-
-      - name: Write capacitor env from secrets
-        run: |
-          {
-            echo "MIKOSHI_URL=$MIKOSHI_URL"
-            echo "AUTHELIA_DOMAIN=$AUTHELIA_DOMAIN"
-          } > .env.capacitor
-        env:
-          MIKOSHI_URL: ${{ secrets.MIKOSHI_URL }}
-          AUTHELIA_DOMAIN: ${{ secrets.AUTHELIA_DOMAIN }}
 
       - run: npm run android:sync
 
