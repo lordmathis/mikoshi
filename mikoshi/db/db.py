@@ -36,6 +36,10 @@ def _serialize_approval(a: PendingToolApproval) -> Dict:
 
 
 class Database:
+    # All methods block the event loop by design (accepted trade-off,
+    # 2026-11-06): single-user SQLite writes are sub-millisecond and the
+    # busy_timeout stall ceiling stays below the SSE ping interval.
+
     def __init__(self, db_path: str):
         self.engine = create_engine(
             f"sqlite:///{db_path}", connect_args={"check_same_thread": False}

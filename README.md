@@ -6,6 +6,10 @@ A flexible chat client with Web UI that integrates multiple AI providers, tools,
 >
 > This is a personal project provided as-is for educational and personal use. No feature requests or support requests will be accepted. Feel free to fork and modify for your own needs.
 
+> **🔒 Security**
+>
+> Mikoshi has **no authentication**. The API and Web UI assume a trusted network: agents can execute shell commands, read and write files, and make network requests from the host. Do not expose a Mikoshi instance to untrusted networks or the public internet.
+
 **Features**:
 - OpenAI-compatible and Anthropic API support
 - Plugin architecture (agents, tools, skills) and MCP integration
