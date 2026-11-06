@@ -69,7 +69,7 @@ export function TreeNode({
           className="data-[state=checked]:bg-primary data-[state=checked]:border-primary"
         />
         {isDir ? (
-          <Folder className="h-4 w-4 text-blue-500 flex-shrink-0" />
+          <Folder className="h-4 w-4 text-cp-blue flex-shrink-0" />
         ) : (
           <File className="h-4 w-4 text-foreground/70 flex-shrink-0" />
         )}

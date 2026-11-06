@@ -77,13 +77,8 @@ class MCPToolHandler(ToolHandler):
 
     async def initialize(self):
         """Connect to the MCP server and register its tools"""
-        logger.info(f"Starting MCPToolHandler with server '{self.server_name}'")
-
         logger.info(
             f"Initializing MCP server '{self.server_name}' (type: {self._config.type})"
-        )
-        logger.debug(
-            f"Server '{self.server_name}' - Command: {self._config.command}, Args: {self._config.args}"
         )
         if self._config.type == MCPType.STDIO:
             server_params = StdioServerParameters(
@@ -113,16 +108,6 @@ class MCPToolHandler(ToolHandler):
 
         logger.info(f"Session initialized successfully for '{self.server_name}'")
         self._session = session
-
-        logger.debug(f"Listing tools for '{self.server_name}'...")
-        tools_result = await asyncio.wait_for(
-            session.list_tools(), timeout=self._timeout
-        )
-        for tool in tools_result.tools:
-            logger.debug(f"Found tool in '{self.server_name}': {tool.name}")
-            logger.debug(f"  Description: {tool.description}")
-            logger.debug(f"  Parameters: {tool.input_schema}")
-        logger.info(f"Successfully initialized MCP server '{self.server_name}'")
 
     async def call_tool(
         self, tool_name: str, arguments: dict, context: ToolCallContext

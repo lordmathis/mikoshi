@@ -10,12 +10,9 @@ export interface UseMentionTriggerReturn<T> {
   show: boolean;
   filteredItems: T[];
   selectedIndex: number;
-  query: string;
-  triggerStart: number;
   handleInputChange: (value: string, cursorPos: number) => void;
   handleKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => boolean;
   insert: (item: T, getInsertText: (item: T) => string) => { text: string; cursorPos: number };
-  close: () => void;
   setSelectedIndex: (index: number) => void;
 }
 
@@ -114,12 +111,9 @@ export function useMentionTrigger<T>({
     show,
     filteredItems,
     selectedIndex,
-    query,
-    triggerStart,
     handleInputChange,
     handleKeyDown,
     insert,
-    close,
     setSelectedIndex,
   };
 }

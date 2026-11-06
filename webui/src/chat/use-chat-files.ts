@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api, type FileResource, type ConnectorEntry } from "../lib/api.ts";
+import { showError } from "../lib/show-error.ts";
 
 export function useChatFiles() {
   const [uploadedFiles, setUploadedFiles] = useState<FileResource[]>([]);
@@ -13,6 +14,7 @@ export function useChatFiles() {
       setUploadedFiles((prev) => [...prev, ...uploaded]);
     } catch (error) {
       console.error("Failed to upload files:", error);
+      showError(`Failed to upload files: ${error instanceof Error ? error.message : "unknown error"}`);
     } finally {
       setIsUploading(false);
     }
@@ -36,6 +38,7 @@ export function useChatFiles() {
           await api.deleteFile(file.id);
         } catch (error) {
           console.error("Failed to delete file:", error);
+          showError(`Failed to clean up file "${file.filename}": ${error instanceof Error ? error.message : "unknown error"}`);
         }
       }
     }
@@ -56,6 +59,7 @@ export function useChatFiles() {
           await api.deleteFile(file.id);
         } catch (error) {
           console.error("Failed to delete file:", error);
+          showError(`Failed to clean up file "${file.filename}": ${error instanceof Error ? error.message : "unknown error"}`);
         }
       }
     }

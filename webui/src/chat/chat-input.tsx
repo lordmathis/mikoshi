@@ -218,19 +218,14 @@ export function ChatInput({
 
   return (
     <div
-      className="sticky bottom-0 z-20 shrink-0 bg-background cp-safe-bottom"
-      style={{ borderTop: "1px solid rgb(var(--cp-rgb-yellow) / 0.15)" }}
+      className="sticky bottom-0 z-20 shrink-0 bg-background cp-safe-bottom cp-chat-input"
     >
       <div className="mx-auto max-w-3xl px-4 py-4 sm:px-6">
         {isEditingMode && (
           <div
-            className="mb-3 flex items-center justify-between border px-3 py-2 cp-cut-10"
-            style={{
-              borderColor: "rgb(var(--cp-rgb-cyan) / 0.3)",
-              background: "rgb(var(--cp-rgb-cyan) / 0.06)",
-            }}
+            className="mb-3 flex items-center justify-between border px-3 py-2 cp-cut-10 cp-banner-edit"
           >
-            <span className="cp-label" style={{ color: 'var(--color-cp-cyan)' }}>Editing message...</span>
+            <span className="cp-label text-cp-cyan">Editing message...</span>
             <Button
               type="button"
               variant="ghost"
@@ -246,21 +241,14 @@ export function ChatInput({
         
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <Chip
-            style={{
-              borderColor: "rgb(var(--cp-rgb-yellow) / 0.15)",
-              background: "rgb(var(--cp-rgb-yellow) / 0.04)",
-            }}
+            className="cp-chip"
             icon={<Bot className="h-3.5 w-3.5 text-primary/60" />}
             label={formatModelLabel(chatSettings.baseModel)}
-            labelClassName="cp-label"
-            labelStyle={{ color: 'var(--color-cp-yellow)' }}
+            labelClassName="cp-label text-cp-yellow"
           />
           {chatSettings.enabledTools.length > 0 && (
             <Chip
-              style={{
-                borderColor: "rgb(var(--cp-rgb-yellow) / 0.15)",
-                background: "rgb(var(--cp-rgb-yellow) / 0.04)",
-              }}
+              className="cp-chip"
               icon={<Zap className="h-3.5 w-3.5 text-primary/60" />}
               label={chatSettings.enabledTools.map((t) => getToolLabel(t)).join(", ")}
               labelClassName="cp-label text-foreground/70"
@@ -283,10 +271,7 @@ export function ChatInput({
             onChange={(e) => handleInputChangeWithMentions(e.target.value)}
             onKeyDown={handleKeyDownWithMentions}
             placeholder="Type command..."
-            className="typing-area min-h-[60px] resize-none pr-32 overflow-y-auto cp-cut-12 font-sans text-base lg:text-sm"
-            style={{
-              background: "var(--color-cp-surface3)",
-            }}
+            className="typing-area min-h-[60px] resize-none pr-32 overflow-y-auto cp-cut-12 font-sans text-base lg:text-sm bg-cp-surface3"
             rows={1}
             disabled={isSending || !currentConversationId}
           />
@@ -296,13 +281,12 @@ export function ChatInput({
               items={fileMention.filteredItems}
               selectedIndex={fileMention.selectedIndex}
               onSelect={handleFileSelect}
-              onHover={(i) => fileMention.setSelectedIndex?.(i)}
+              onHover={(i) => fileMention.setSelectedIndex(i)}
               renderItem={(filePath, isSelected) => (
                 <>
                   <FileText className="h-4 w-4 text-foreground/70 shrink-0" />
                   <span
-                    className={`truncate font-medium ${isSelected ? "text-primary" : ""}`}
-                    style={{ letterSpacing: "0.04em" }}
+                    className={`truncate font-medium tracking-[0.04em] ${isSelected ? "text-primary" : ""}`}
                   >
                     {filePath}
                   </span>
@@ -316,13 +300,12 @@ export function ChatInput({
               items={skillMention.filteredItems}
               selectedIndex={skillMention.selectedIndex}
               onSelect={handleSkillSelect}
-              onHover={(i) => skillMention.setSelectedIndex?.(i)}
+              onHover={(i) => skillMention.setSelectedIndex(i)}
               renderItem={(skill, isSelected) => (
                 <>
                   <Slash className="h-4 w-4 text-foreground/70 shrink-0" />
                   <span
-                    className={`truncate font-medium ${isSelected ? "text-primary" : ""}`}
-                    style={{ letterSpacing: "0.04em" }}
+                    className={`truncate font-medium tracking-[0.04em] ${isSelected ? "text-primary" : ""}`}
                   >
                     {skill.name}
                   </span>
@@ -428,11 +411,7 @@ function FileAttachments({
       {uploadedFiles.map((f, index) => (
         <Chip
           key={`${f.id}-${index}`}
-          className="text-xs"
-          style={{
-            borderColor: "rgb(var(--cp-rgb-yellow) / 0.2)",
-            background: "rgb(var(--cp-rgb-yellow) / 0.06)",
-          }}
+          className="text-xs cp-chip-strong"
           icon={<File className="h-3.5 w-3.5 text-primary/70" />}
           label={f.filename}
           labelClassName="text-primary font-medium"
@@ -456,11 +435,7 @@ function FileAttachments({
         return (
           <Chip
             key={`${entry.connectorId}-${entry.resourceId}`}
-            className="text-xs"
-            style={{
-              borderColor: "rgb(var(--cp-rgb-cyan) / 0.2)",
-              background: "rgb(var(--cp-rgb-cyan) / 0.06)",
-            }}
+            className="text-xs cp-chip-cyan"
             icon={<LinkIcon className="h-3.5 w-3.5 text-[var(--color-cp-cyan)]" />}
             labelClassName="text-[var(--color-cp-cyan)] font-medium"
             label={
@@ -522,10 +497,7 @@ function MentionDropdown<T>({
 }) {
   return (
     <div
-      className="absolute bottom-full left-0 mb-2 w-72 max-w-full border shadow-lg z-50 bg-cp-surface3 cp-cut-x-10"
-      style={{
-        borderColor: "rgb(var(--cp-rgb-yellow) / 0.25)",
-      }}
+      className="absolute bottom-full left-0 mb-2 w-72 max-w-full border shadow-lg z-50 bg-cp-surface3 cp-cut-x-10 cp-mention-menu"
     >
       <div className="max-h-60 overflow-y-auto p-1">
         {items.map((item, index) => (

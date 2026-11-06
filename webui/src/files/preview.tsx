@@ -1,10 +1,9 @@
 import type { ComponentProps } from "react";
-import ReactMarkdown, { type Components, type ExtraProps } from "react-markdown";
+import ReactMarkdown, { defaultUrlTransform, type Components, type ExtraProps } from "react-markdown";
 import type { PluggableList } from "unified";
 import remarkMath from "remark-math";
 import rehypeMathjax from "rehype-mathjax";
-import { Loader2, X, File } from "lucide-react";
-import { Button } from "../ui/button.tsx";
+import { Loader2 } from "lucide-react";
 import { ScrollArea } from "../ui/scroll-area.tsx";
 import { remarkWikiLinks, resolveTarget, parseWikiLinks } from "../lib/remark-wiki-links.ts";
 import { markdownComponents, REMARK_PLUGINS } from "../lib/markdown-components.tsx";
@@ -16,11 +15,9 @@ interface PreviewProps {
   filePath: string | null;
   fileContent: string | null;
   isLoading: boolean;
-  onClose: () => void;
   workspaceId: string | null;
   fileIndex: Map<string, string>;
   onFileClick: (path: string) => void;
-  hideHeader?: boolean;
 }
 
 function isMarkdownFile(path: string): boolean {
@@ -85,7 +82,7 @@ export function FrontmatterPanel({ metadata, workspaceId, fileIndex, onFileClick
     <div className="mb-5 cp-cut-6 border border-cp-border bg-cp-surface3">
       <div className="px-3 py-1.5 border-b border-border flex items-center gap-1.5">
         <span className="inline-block w-1.5 h-1.5 bg-cp-yellow" />
-        <span className="cp-label text-foreground/70" style={{ fontSize: "10px" }}>
+        <span className="cp-label cp-label-sm text-foreground/70">
           Metadata
         </span>
       </div>
@@ -93,13 +90,12 @@ export function FrontmatterPanel({ metadata, workspaceId, fileIndex, onFileClick
         {entries.map(([key, value]) => (
           <div key={key} className="flex items-baseline gap-2 text-sm">
             <span
-              className="shrink-0 font-mono text-primary"
-              style={{ fontSize: "12px" }}
+              className="shrink-0 font-mono text-primary text-xs"
             >
               {key}
             </span>
-            <span className="text-foreground/50">:</span>
-            <span className="text-foreground font-mono break-all" style={{ fontSize: "12px" }}>
+            <span className="text-foreground/70">:</span>
+            <span className="text-foreground font-mono break-all text-xs">
               <WikiLinkValue
                 text={formatValue(value)}
                 workspaceId={workspaceId}
@@ -114,10 +110,9 @@ export function FrontmatterPanel({ metadata, workspaceId, fileIndex, onFileClick
   );
 }
 
-export function Preview({ filePath, fileContent, isLoading, onClose, workspaceId, fileIndex, onFileClick, hideHeader }: PreviewProps) {
+export function Preview({ filePath, fileContent, isLoading, workspaceId, fileIndex, onFileClick }: PreviewProps) {
   if (!filePath) return null;
 
-  const fileName = filePath.split("/").pop() || filePath;
   const isMd = isMarkdownFile(filePath);
 
   const remarkPlugins: PluggableList = [...REMARK_PLUGINS, remarkMath, remarkWikiLinks];
@@ -162,24 +157,7 @@ export function Preview({ filePath, fileContent, isLoading, onClose, workspaceId
   };
 
   return (
-    <div className={hideHeader ? "flex flex-col flex-1 min-h-0" : "flex flex-col h-full overflow-hidden border-r"} style={hideHeader ? undefined : { borderColor: "rgb(var(--cp-rgb-yellow) / 0.1)" }}>
-      {!hideHeader && (
-        <div
-          className="flex items-center justify-between px-4 py-2 shrink-0 border-b"
-          style={{
-            borderColor: "rgb(var(--cp-rgb-yellow) / 0.1)",
-            background: "rgb(var(--cp-rgb-surface3) / 0.95)",
-          }}
-        >
-          <div className="flex items-center gap-2 min-w-0">
-            <File className="h-4 w-4 text-primary/60 flex-shrink-0" />
-            <span className="cp-label text-foreground truncate">{fileName}</span>
-          </div>
-          <Button variant="ghost" size="icon" className="h-7 w-7 opacity-50 hover:opacity-100" onClick={onClose}>
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-      )}
+    <div className="flex flex-col flex-1 min-h-0">
       <ScrollArea className="flex-1 min-h-0">
         <div className="p-6">
           {isLoading ? (
@@ -187,7 +165,7 @@ export function Preview({ filePath, fileContent, isLoading, onClose, workspaceId
               <Loader2 className="h-5 w-5 animate-spin text-primary/50" />
             </div>
           ) : fileContent === null ? (
-            <div className="py-12 text-center cp-label opacity-20 italic">
+            <div className="py-12 text-center cp-label text-destructive italic">
               Failed to load file
             </div>
           ) : isMd ? (
@@ -210,10 +188,11 @@ export function Preview({ filePath, fileContent, isLoading, onClose, workspaceId
                         remarkPlugins={remarkPlugins}
                         rehypePlugins={[rehypeMathjax]}
                         components={components}
-                        urlTransform={(url) => {
-                          if (url.startsWith("wiki://") || url.startsWith("wiki-image://")) return url;
-                          return url;
-                        }}
+                        urlTransform={(url) =>
+                          url.startsWith("wiki://") || url.startsWith("wiki-image://")
+                            ? url
+                            : defaultUrlTransform(url)
+                        }
                       >
                         {mdContent}
                       </ReactMarkdown>

@@ -176,16 +176,6 @@ class TestMessages:
         chat = db.create_chat()
         assert db.get_chat_history(chat.id) == []
 
-    def test_get_messages_from_sequence(self, db):
-        chat = db.create_chat()
-        db.save_message(chat.id, "user", "A")
-        db.save_message(chat.id, "assistant", "B")
-        db.save_message(chat.id, "user", "C")
-        msgs = db.get_messages_from_sequence(chat.id, 2)
-        assert len(msgs) == 2
-        assert msgs[0].content == "B"
-        assert msgs[1].content == "C"
-
     def test_get_last_assistant_message(self, db):
         chat = db.create_chat()
         db.save_message(chat.id, "user", "Q")
@@ -306,17 +296,10 @@ class TestFileLifecycle:
         assert f1.id in result
         assert f2.id in result
 
-    def test_list_pending_files(self, db):
-        db.create_file("a.txt", "/a", "text/plain")
-        db.create_file("b.txt", "/b", "text/plain")
-        pending = db.list_pending_files()
-        assert len(pending) == 2
-
     def test_attach_files(self, db):
         f = db.create_file("a.txt", "/a", "text/plain")
         db.attach_files([f.id])
         assert db.get_file(f.id).status == "attached"
-        assert len(db.list_pending_files()) == 0
 
     def test_delete_file(self, db):
         f = db.create_file("a.txt", "/a", "text/plain")

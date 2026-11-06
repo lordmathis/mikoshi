@@ -16,6 +16,7 @@ import { useWorkspaces } from "../sidebar/use-workspaces.ts";
 import { usePreview } from "../files/use-preview.ts";
 import { useConnectorDialog } from "../connectors/use-connector-dialog.ts";
 import { useOverlayHistory, isDesktopViewport } from "../lib/use-overlay-history.ts";
+import { showError } from "../lib/show-error.ts";
 
 export function ChatView() {
   const [sidebarOpen, setSidebarOpen] = useState(() => isDesktopViewport());
@@ -159,7 +160,7 @@ export function ChatView() {
       navigate(id);
     } catch (error) {
       console.error("Failed to branch conversation:", error);
-      alert(`Failed to branch conversation: ${error instanceof Error ? error.message : "Unknown error"}`);
+      showError(`Failed to branch conversation: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
   }, [branchConversation, navigate]);
 
@@ -173,7 +174,7 @@ export function ChatView() {
       closeSidebarOnMobile();
     } catch (error) {
       console.error("Failed to create conversation:", error);
-      alert(error instanceof Error ? error.message : "Failed to create conversation");
+      showError(error instanceof Error ? error.message : "Failed to create conversation");
     }
   }, [createConversation, sidebar.activeWorkspaceId, navigate, closeSidebarOnMobile]);
 
@@ -183,7 +184,7 @@ export function ChatView() {
       if (chatId === id) navigate(null, { replace: true });
     } catch (error) {
       console.error("Failed to delete conversation:", error);
-      alert(`Failed to delete conversation: ${error instanceof Error ? error.message : "Unknown error"}`);
+      showError(`Failed to delete conversation: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
   }, [deleteConversation, chatId, navigate]);
 
@@ -192,7 +193,7 @@ export function ChatView() {
       await deleteWorkspace(id);
     } catch (error) {
       console.error("Failed to delete workspace:", error);
-      alert(`Failed to delete workspace: ${error instanceof Error ? error.message : "Unknown error"}`);
+      showError(`Failed to delete workspace: ${error instanceof Error ? error.message : "Unknown error"}`);
       return;
     }
     void refreshConversations();
@@ -379,12 +380,7 @@ function ChatHeader({ sidebarOpen, onToggleSidebar, chatTitle }: {
 }) {
   return (
     <div
-      className="sticky top-0 z-20 shrink-0 px-4 py-3 cp-safe-top sm:px-6 overflow-hidden"
-      style={{
-        background: "linear-gradient(180deg, rgb(var(--cp-rgb-surface3) / 0.95) 0%, rgb(var(--cp-rgb-surface3) / 0.8) 100%)",
-        backdropFilter: "blur(8px)",
-        borderBottom: "1px solid rgb(var(--cp-rgb-yellow) / 0.15)",
-      }}
+      className="cp-header sticky top-0 z-20 shrink-0 px-4 py-3 cp-safe-top sm:px-6 overflow-hidden"
     >
       <div className="flex items-center gap-3">
         {!sidebarOpen && (
@@ -413,8 +409,7 @@ function ChatHeader({ sidebarOpen, onToggleSidebar, chatTitle }: {
         )}
         <div className="flex flex-col min-w-0 flex-1">
           <h1
-            className="text-sm font-bold text-primary uppercase tracking-[0.15em]"
-            style={{ fontSize: '16px' }}
+            className="text-base font-bold text-primary uppercase tracking-[0.15em]"
           >
             Mikoshi
           </h1>
@@ -430,7 +425,7 @@ function ChatHeader({ sidebarOpen, onToggleSidebar, chatTitle }: {
             <div className="absolute inset-0 bg-cp-cyan-bright cp-diamond" style={{ animation: 'cp-blink 1.5s ease-in-out infinite' }} />
           </div>
           <span className="cp-label text-cp-cyan-bright/70">SYS</span>
-          <span className="cp-label text-cp-cyan-bright/40">:</span>
+          <span className="cp-label text-cp-cyan-bright/70">:</span>
           <span className="cp-label text-cp-cyan-bright/70">OK</span>
         </div>
       </div>

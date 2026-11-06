@@ -19,7 +19,6 @@ from qdrant_client.models import (
 
 from mikoshi.config import MemoryConfig
 from mikoshi.observability import start_retriever_span
-from mikoshi.tools.context import ToolCallContext
 from mikoshi.tools.toolset_handler import ToolSetHandler, tool
 
 logger = logging.getLogger(__name__)
@@ -138,9 +137,7 @@ class MemoryTools(ToolSetHandler):
             "required": ["text"],
         },
     )
-    async def save_memory(
-        self, text: str, category: Optional[str] = None, context: ToolCallContext = None
-    ) -> Any:
+    async def save_memory(self, text: str, category: Optional[str] = None) -> Any:
         if not self._client:
             return "Error: memory not initialized (check memory config)."
 
@@ -198,7 +195,6 @@ class MemoryTools(ToolSetHandler):
         query: str,
         category: Optional[str] = None,
         limit: int = 5,
-        context: ToolCallContext = None,
     ) -> Any:
         if not self._client:
             return "Error: memory not initialized (check memory config)."

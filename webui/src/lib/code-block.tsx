@@ -2,24 +2,25 @@ import { useEffect, useRef, useState } from "react";
 import { Check, Copy } from "lucide-react";
 import { createHighlighterCore, type HighlighterCore, type LanguageRegistration, type ThemeRegistration } from "shiki/core";
 import { createOnigurumaEngine } from "shiki/engine/oniguruma";
+import { THEME } from "./theme.ts";
 
 const theme: ThemeRegistration = {
   name: "mikoshi-dark",
   type: "dark",
   bg: "transparent",
-  fg: "#f5f5f5",
+  fg: THEME.text,
   settings: [
     {
       scope: ["comment", "punctuation.definition.comment", "string.comment", "markup.quote"],
-      settings: { foreground: "#a89e88", fontStyle: "italic" },
+      settings: { foreground: THEME.warm, fontStyle: "italic" },
     },
     {
       scope: ["string", "string.template", "meta.embedded"],
-      settings: { foreground: "#00d4ff" },
+      settings: { foreground: THEME.cyan },
     },
     {
       scope: ["constant.character.escape"],
-      settings: { foreground: "#00f0ff" },
+      settings: { foreground: THEME.cyanBright },
     },
     {
       scope: [
@@ -28,7 +29,7 @@ const theme: ThemeRegistration = {
         "constant.other.symbol",
         "variable.other.constant",
       ],
-      settings: { foreground: "#e8e0c8" },
+      settings: { foreground: THEME.textWarm },
     },
     {
       scope: [
@@ -38,7 +39,7 @@ const theme: ThemeRegistration = {
         "storage",
         "storage.modifier",
       ],
-      settings: { foreground: "#f5d800" },
+      settings: { foreground: THEME.yellow },
     },
     {
       scope: [
@@ -47,7 +48,7 @@ const theme: ThemeRegistration = {
         "support.class",
         "entity.other.inherited-class",
       ],
-      settings: { foreground: "#c4ac00" },
+      settings: { foreground: THEME.yellowDim },
     },
     {
       scope: [
@@ -56,7 +57,7 @@ const theme: ThemeRegistration = {
         "meta.function-call",
         "variable.function",
       ],
-      settings: { foreground: "#00f0ff" },
+      settings: { foreground: THEME.cyanBright },
     },
     {
       scope: [
@@ -67,11 +68,11 @@ const theme: ThemeRegistration = {
         "meta.object-literal.key",
         "entity.other.attribute-name",
       ],
-      settings: { foreground: "#d0c8b0" },
+      settings: { foreground: THEME.warmBright },
     },
     {
       scope: ["entity.name.tag"],
-      settings: { foreground: "#f5d800" },
+      settings: { foreground: THEME.yellow },
     },
     {
       scope: [
@@ -80,35 +81,35 @@ const theme: ThemeRegistration = {
         "punctuation.terminator",
         "keyword.operator",
       ],
-      settings: { foreground: "#d0c8b0" },
+      settings: { foreground: THEME.warmBright },
     },
     {
       scope: ["meta.decorator", "punctuation.decorator", "string.regexp"],
-      settings: { foreground: "#e63329" },
+      settings: { foreground: THEME.red },
     },
     {
       scope: ["invalid", "invalid.illegal"],
-      settings: { foreground: "#e63329" },
+      settings: { foreground: THEME.red },
     },
     {
       scope: ["markup.heading", "entity.name.section"],
-      settings: { foreground: "#f5d800", fontStyle: "bold" },
+      settings: { foreground: THEME.yellow, fontStyle: "bold" },
     },
     {
       scope: ["string.other.link.title", "markup.underline.link"],
-      settings: { foreground: "#00f0ff" },
+      settings: { foreground: THEME.cyanBright },
     },
     {
       scope: ["markup.inserted.diff", "markup.inserted"],
-      settings: { foreground: "#00d4ff" },
+      settings: { foreground: THEME.cyan },
     },
     {
       scope: ["markup.deleted.diff", "markup.deleted"],
-      settings: { foreground: "#e63329" },
+      settings: { foreground: THEME.red },
     },
     {
       scope: ["meta.diff.range", "meta.diff.header"],
-      settings: { foreground: "#f5d800" },
+      settings: { foreground: THEME.yellow },
     },
   ],
 };

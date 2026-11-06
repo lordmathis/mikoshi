@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Folder, File, ChevronRight, ChevronDown, Loader2, Pencil, Trash2, Plus, ArrowDownFromLine, ArrowUpFromLine, Check } from "lucide-react";
 import { api, type FileNode } from "../lib/api.ts";
+import { showError } from "../lib/show-error.ts";
 import { EmptyState } from "../shared/empty-state.tsx";
 import { useGit } from "./use-git.ts";
 
@@ -75,6 +76,7 @@ function TreeNode({
       await onRefreshTree();
     } catch (err) {
       console.error("Failed to delete file:", err);
+      showError(`Failed to delete "${node.name}": ${err instanceof Error ? err.message : "unknown error"}`);
     }
   };
 
@@ -96,6 +98,7 @@ function TreeNode({
       await onRefreshTree();
     } catch (err) {
       console.error("Failed to rename file:", err);
+      showError(`Failed to rename "${node.name}": ${err instanceof Error ? err.message : "unknown error"}`);
     }
   };
 
@@ -150,6 +153,7 @@ function TreeNode({
       await onRefreshTree();
     } catch (err) {
       console.error("Failed to move file:", err);
+      showError(`Failed to move "${fileName}": ${err instanceof Error ? err.message : "unknown error"}`);
     }
   };
 
@@ -186,7 +190,7 @@ function TreeNode({
           <div className="w-4" />
         )}
         {isDir ? (
-          <Folder className="h-4 w-4 text-blue-500 flex-shrink-0" />
+          <Folder className="h-4 w-4 text-cp-blue flex-shrink-0" />
         ) : (
           <File className="h-4 w-4 text-foreground/70 flex-shrink-0" />
         )}
@@ -323,6 +327,7 @@ export function WorkspaceTree({ tree, activeFilePath, onFileClick, workspaceId, 
       onFileClick(trimmed);
     } catch (err) {
       console.error("Failed to create file:", err);
+      showError(`Failed to create "${trimmed}": ${err instanceof Error ? err.message : "unknown error"}`);
     }
   };
 
@@ -394,6 +399,7 @@ export function WorkspaceTree({ tree, activeFilePath, onFileClick, workspaceId, 
       await onRefreshTree();
     } catch (err) {
       console.error("Failed to move file:", err);
+      showError(`Failed to move "${fileName}": ${err instanceof Error ? err.message : "unknown error"}`);
     }
   };
 
@@ -415,7 +421,7 @@ export function WorkspaceTree({ tree, activeFilePath, onFileClick, workspaceId, 
       }}
       onDrop={(e) => void handleRootDrop(e)}
     >
-      <div className="flex items-center px-1 pb-1 gap-0.5 border-b border-primary/6">
+      <div className="flex items-center px-1 pb-1 gap-0.5 border-b border-border">
         <button
           className="p-1 rounded hover:bg-accent transition-colors [&:hover>svg]:text-accent-foreground"
           onClick={() => setIsCreating(true)}

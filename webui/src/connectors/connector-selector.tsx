@@ -76,7 +76,7 @@ export function ConnectorSelector({
                   <div className="flex items-center gap-2">
                     <GitBranch className="h-4 w-4" />
                     <span>{c.name}</span>
-                    <span className="text-xs opacity-50">({c.type})</span>
+                    <span className="text-xs text-foreground/70">({c.type})</span>
                   </div>
                 </SelectItem>
               ))}

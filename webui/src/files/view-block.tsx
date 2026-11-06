@@ -198,7 +198,7 @@ function ViewDisplay({ query, workspaceId, onFileClick }: { query: string } & Vi
   return (
     <div className="mb-4 cp-cut-6 border border-cp-border bg-cp-surface3">
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-border">
-        <span className="cp-label text-foreground/70" style={{ fontSize: "10px" }}>
+        <span className="cp-label cp-label-sm text-foreground/70">
           View · {rows.length} {rows.length === 1 ? "file" : "files"}
         </span>
         {/* Agent edits to other workspace files don't re-render an open view; manual refresh is the v1 answer. */}
@@ -211,7 +211,7 @@ function ViewDisplay({ query, workspaceId, onFileClick }: { query: string } & Vi
         </button>
       </div>
       {rows.length === 0 ? (
-        <div className="px-3 py-6 text-center cp-label opacity-60 italic">No files match</div>
+        <div className="px-3 py-6 text-center cp-label text-foreground/70 italic">No files match</div>
       ) : kanban ? (
         <KanbanView
           rows={rows}
@@ -299,7 +299,7 @@ function TableView({
                   {column in entry.frontmatter ? (
                     formatValue(entry.frontmatter[column])
                   ) : (
-                    <span className="text-foreground/40">—</span>
+                    <span className="text-foreground/70">—</span>
                   )}
                 </td>
               ))}
@@ -331,7 +331,7 @@ function KanbanView({
         <div key={lane.label} data-lane={lane.label} className="w-56 shrink-0">
           <div className="cp-label mb-2 px-1 flex items-baseline gap-1.5">
             <span className="text-cp-yellow">{lane.label}</span>
-            <span className="text-foreground/60">· {lane.rows.length}</span>
+            <span className="text-foreground/70">· {lane.rows.length}</span>
           </div>
           <div className="flex flex-col gap-2">
             {lane.rows.map((entry) => (

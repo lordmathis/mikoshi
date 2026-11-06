@@ -129,7 +129,6 @@ providers:
   - `contains`: Include models where field contains this substring
   - `excludes`: Exclude models where field contains this substring
   - `equals`: Include models where field exactly matches this value
-  - `endpoint`: Endpoint appended to `api_base` when listing models (default: `/models`)
 
 When no `model_ids` and no `model_filter.conditions` are set, all models advertised by the provider's `/models` endpoint are exposed.
 

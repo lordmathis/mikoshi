@@ -11,6 +11,8 @@
   --color-cp-cyan: #00d4ff;
   --color-cp-cyan-bright: #00f0ff;
   --color-cp-cyan-dim: #007a94;
+  --color-cp-green: #5dfd8f;
+  --color-cp-blue: #4da6ff;
 
   --color-cp-bg: #0a0a0c;
   --color-cp-surface: #0f0f0f;
@@ -94,6 +96,17 @@ body {
   text-transform: uppercase;
 }
 
+.cp-label-sm {
+  font-size: 10px;
+}
+
+.cp-label-lg {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
 .cp-cut-6  { clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 0 100%); }
 .cp-cut-8  { clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%); }
 .cp-cut-10 { clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%); }
@@ -144,6 +157,40 @@ body {
 }
 .cp-hover-tool:hover {
   border-color: rgb(var(--cp-rgb-cyan) / 0.4);
+}
+
+.cp-chip {
+  border-color: rgb(var(--cp-rgb-yellow) / 0.15);
+  background-color: rgb(var(--cp-rgb-yellow) / 0.04);
+}
+
+.cp-chip-strong {
+  border-color: rgb(var(--cp-rgb-yellow) / 0.2);
+  background-color: rgb(var(--cp-rgb-yellow) / 0.06);
+}
+
+.cp-chip-cyan {
+  border-color: rgb(var(--cp-rgb-cyan) / 0.2);
+  background-color: rgb(var(--cp-rgb-cyan) / 0.06);
+}
+
+.cp-banner-edit {
+  border-color: rgb(var(--cp-rgb-cyan) / 0.3);
+  background-color: rgb(var(--cp-rgb-cyan) / 0.06);
+}
+
+.cp-mention-menu {
+  border-color: rgb(var(--cp-rgb-yellow) / 0.25);
+}
+
+.cp-chat-input {
+  border-top: 1px solid rgb(var(--cp-rgb-yellow) / 0.15);
+}
+
+.cp-header {
+  background: linear-gradient(180deg, rgb(var(--cp-rgb-surface3) / 0.95) 0%, rgb(var(--cp-rgb-surface3) / 0.8) 100%);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid rgb(var(--cp-rgb-yellow) / 0.15);
 }
 
 .typing-area {

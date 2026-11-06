@@ -11,7 +11,7 @@ import {
 import { IconButtonTooltip } from "../shared/icon-button-tooltip.tsx";
 import { Chip } from "../shared/chip.tsx";
 import { CornerTriangle, MessageAvatar, Scanlines } from "./message-atoms.tsx";
-import { type Message } from "../lib/api.ts";
+import { api, type Message } from "../lib/api.ts";
 import { markdownComponents, REMARK_PLUGINS } from "../lib/markdown-components.tsx";
 
 interface ChatMessageProps {
@@ -52,7 +52,6 @@ export const ChatMessage = memo(function ChatMessage({ message, onBranch, onRetr
     if (isSpeaking) return;
     try {
       setIsSpeaking(true);
-      const { api } = await import("../lib/api.ts");
       const audioBlob = await api.generateSpeech(message.content);
       const audioUrl = URL.createObjectURL(audioBlob);
       const audio = new Audio(audioUrl);
@@ -148,24 +147,16 @@ export const ChatMessage = memo(function ChatMessage({ message, onBranch, onRetr
       <div className="flex-1 space-y-2 overflow-hidden relative z-10">
         <div className="flex items-center gap-2 flex-wrap">
           <p
-            className="font-bold leading-none"
-            style={{
-              color: isUser ? 'var(--color-cp-yellow)' : 'var(--color-cp-red)',
-              fontSize: '14px',
-              letterSpacing: '0.16em',
-              textTransform: 'uppercase',
-            }}
+            className={cn(
+              "font-bold leading-none cp-label-lg",
+              isUser ? "text-cp-yellow" : "text-cp-red"
+            )}
           >
             {isUser ? "// UPLINK" : "// DAEMON"}
           </p>
           {!isUser && message.phase && (
             <span
-              className="inline-flex items-center gap-1.5 border border-cp-cyan/30 bg-cp-cyan/8 px-2 py-0.5 cp-cut-6 cp-label"
-              style={{
-                color: 'var(--color-cp-cyan)',
-                fontSize: '10px',
-                letterSpacing: '0.14em',
-              }}
+              className="inline-flex items-center gap-1.5 border border-cp-cyan/30 bg-cp-cyan/8 px-2 py-0.5 cp-cut-6 cp-label cp-label-sm text-cp-cyan"
             >
               <span
                 className="text-[var(--color-cp-cyan-bright)]"
@@ -241,10 +232,7 @@ export const ChatMessage = memo(function ChatMessage({ message, onBranch, onRetr
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span
-                          className="inline-flex items-center gap-1 border border-foreground/20 bg-foreground/5 px-2 py-0.5 text-xs hover:border-foreground/35 transition-colors cursor-default cp-cut-6"
-                          style={{
-                            color: 'var(--color-cp-text-warm)',
-                          }}
+                          className="inline-flex items-center gap-1 border border-foreground/20 bg-foreground/5 px-2 py-0.5 text-xs hover:border-foreground/35 transition-colors cursor-default cp-cut-6 text-cp-text-warm"
                         >
                           {tool.name.replace(/^\w+__/, '')}
                         </span>
@@ -286,7 +274,7 @@ export const ChatMessage = memo(function ChatMessage({ message, onBranch, onRetr
             <IconButtonTooltip
               icon={
                 copied ? (
-                  <Check className="h-4 w-4 text-green-500" />
+                  <Check className="h-4 w-4 text-cp-green" />
                 ) : (
                   <Copy className="h-4 w-4" />
                 )

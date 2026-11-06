@@ -130,19 +130,6 @@ class Database:
             result = session.execute(stmt)
             return list(result.scalars().all())
 
-    def get_messages_from_sequence(
-        self, chat_id: str, from_sequence: int
-    ) -> List[Message]:
-        """Get messages starting from a specific sequence number"""
-        with self.SessionLocal() as session:
-            stmt = (
-                select(Message)
-                .where(Message.chat_id == chat_id, Message.sequence >= from_sequence)
-                .order_by(Message.sequence)
-            )
-            result = session.execute(stmt)
-            return list(result.scalars().all())
-
     def get_chat(self, chat_id: str) -> Optional[Chat]:
         with self.SessionLocal() as session:
             return session.get(Chat, chat_id)
@@ -333,6 +320,7 @@ class Database:
                 system_prompt=source_chat.system_prompt,
                 tool_servers=source_chat.tool_servers,
                 model_params=source_chat.model_params,
+                skills=source_chat.skills,
                 workspace_id=source_chat.workspace_id,
             )
             session.add(new_chat)
@@ -362,6 +350,7 @@ class Database:
                     tool_call_id=old_message.tool_call_id,
                     file_ids=old_message.file_ids,
                     status=old_message.status,
+                    phase=old_message.phase,
                 )
                 session.add(new_message)
 
@@ -402,12 +391,6 @@ class Database:
             stmt = select(File).where(File.id.in_(file_ids))
             result = session.execute(stmt)
             return {f.id: f for f in result.scalars().all()}
-
-    def list_pending_files(self) -> List[File]:
-        with self.SessionLocal() as session:
-            stmt = select(File).where(File.status == "pending")
-            result = session.execute(stmt)
-            return list(result.scalars().all())
 
     def attach_files(self, file_ids: List[str]):
         if not file_ids:

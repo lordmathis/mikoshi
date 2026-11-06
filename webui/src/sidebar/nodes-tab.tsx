@@ -49,7 +49,6 @@ export function NodesTab({
             return (
               <SidebarItem
                 key={ws.id}
-                id={ws.id}
                 isActive={isActive}
                 label={ws.name}
                 sublabel={`[${ws.id.slice(0, 4).toUpperCase()}]`}

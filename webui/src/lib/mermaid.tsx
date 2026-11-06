@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from "react";
+import { THEME } from "./theme.ts";
 
 interface MermaidProps {
   chart: string;
@@ -22,25 +23,25 @@ export function Mermaid({ chart }: MermaidProps) {
           mermaid.initialize({
             startOnLoad: false,
             theme: "base",
-            fontFamily: "'Share Tech Mono', 'Courier New', monospace",
+            fontFamily: THEME.fontMono,
             themeVariables: {
-              background: "#0a0a0c",
-              primaryColor: "#141414",
-              primaryTextColor: "#f5f5f5",
-              primaryBorderColor: "#f5d800",
-              secondaryColor: "#10100e",
-              secondaryTextColor: "#d0c8b0",
-              secondaryBorderColor: "#00d4ff",
-              tertiaryColor: "#12110e",
-              tertiaryTextColor: "#a89e88",
-              tertiaryBorderColor: "#e63329",
-              lineColor: "#00d4ff",
-              textColor: "#f5f5f5",
-              edgeLabelBackground: "#0f0f0f",
-              clusterBkg: "#10100e",
-              clusterBorder: "#f5d800",
-              labelColor: "#f5f5f5",
-              nodeTextColor: "#f5f5f5",
+              background: THEME.bg,
+              primaryColor: THEME.surface2,
+              primaryTextColor: THEME.text,
+              primaryBorderColor: THEME.yellow,
+              secondaryColor: THEME.surface3,
+              secondaryTextColor: THEME.warmBright,
+              secondaryBorderColor: THEME.cyan,
+              tertiaryColor: THEME.surface4,
+              tertiaryTextColor: THEME.warm,
+              tertiaryBorderColor: THEME.red,
+              lineColor: THEME.cyan,
+              textColor: THEME.text,
+              edgeLabelBackground: THEME.surface,
+              clusterBkg: THEME.surface3,
+              clusterBorder: THEME.yellow,
+              labelColor: THEME.text,
+              nodeTextColor: THEME.text,
               fontSize: "14px",
             },
           });

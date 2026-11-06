@@ -20,18 +20,14 @@ const sortTree = (node: FileNode): FileNode => {
 };
 
 const parseConnectorLink = (link: string): string | null => {
-  try {
-    const match = link.match(/github\.com[:/]([^/]+\/[^/\s.]+)/);
-    if (match) {
-      return match[1].replace(/\.git$/, "");
-    }
-    if (/^[^/]+\/[^/]+$/.test(link.trim())) {
-      return link.trim();
-    }
-    return null;
-  } catch {
-    return null;
+  const match = link.match(/github\.com[:/]([^/]+\/[^/\s.]+)/);
+  if (match) {
+    return match[1].replace(/\.git$/, "");
   }
+  if (/^[^/]+\/[^/]+$/.test(link.trim())) {
+    return link.trim();
+  }
+  return null;
 };
 
 export function useConnectorData(

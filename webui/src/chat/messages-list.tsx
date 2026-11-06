@@ -145,10 +145,10 @@ export const MessagesList = memo(function MessagesList({
         ) : messages.length === 0 ? (
           <div className="flex items-center justify-center py-12">
             <div className="text-center">
-              <div className="text-2xl font-bold text-primary mb-2" style={{ letterSpacing: '0.1em' }}>
+              <div className="text-2xl font-bold text-primary mb-2 tracking-[0.1em]">
                 &gt;_
               </div>
-              <p className="cp-label text-foreground mb-2" style={{ color: 'var(--color-cp-yellow)' }}>
+              <p className="cp-label text-cp-yellow mb-2">
                 SYSTEM READY
               </p>
               <p className="cp-label text-foreground/70">
@@ -248,13 +248,7 @@ function ErrorMessage({ message }: { message: Message }) {
       />
       <div className="flex-1 space-y-2 overflow-hidden relative z-10">
         <p
-          className="font-bold leading-none"
-          style={{
-            color: 'var(--color-cp-red)',
-            fontSize: '14px',
-            letterSpacing: '0.16em',
-            textTransform: 'uppercase',
-          }}
+          className="font-bold leading-none cp-label-lg text-cp-red"
         >
           // ERROR
         </p>

@@ -113,7 +113,6 @@ export interface ModelParams {
 
 export interface ChatWithMessages extends Chat {
   messages: Message[];
-  model_params?: ModelParams;
 }
 
 export interface ChatConfig {

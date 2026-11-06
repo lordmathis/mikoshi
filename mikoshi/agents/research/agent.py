@@ -2,7 +2,6 @@ import asyncio
 import logging
 from typing import Any, Dict, List, Optional
 
-from openai.types.chat import ChatCompletionMessageParam
 
 from mikoshi.agents.base import BaseAgent
 from mikoshi.agents.plugin_base import AgentPluginBase
@@ -43,23 +42,6 @@ class ResearchAgent(BaseAgent):
     context_window: Optional[int] = None
 
     _active_queue: Optional[asyncio.Queue] = None
-
-    async def _get_iteration_context(
-        self, message: str
-    ) -> List[ChatCompletionMessageParam]:
-        return [
-            {"role": "system", "content": ""},
-            {"role": "user", "content": message},
-        ]
-
-    async def _process_final_response(
-        self,
-        response: Dict[str, Any],
-        message_data: Dict[str, Any],
-        queue: asyncio.Queue,
-    ) -> Dict[str, Any]:
-        await self._emit(queue, STREAM_DONE)
-        return {}
 
     @observe(name="research_turn")
     async def _loop(self, message: str, queue: asyncio.Queue) -> Dict[str, Any]:
@@ -106,7 +88,7 @@ class ResearchAgent(BaseAgent):
 
                     self._reconcile_plan()
                     plan = self._read_plan() or ""
-                    if _parse_pending_tasks(plan) and findings_path:
+                    if _parse_pending_tasks(plan):
                         findings = self.read_file(findings_path)
                         if findings:
                             await Replanner(self, original_question, plan, findings).apply(

@@ -338,11 +338,13 @@ class ToolManager:
             if handler is None:
                 raise ValueError(f"Tool server not found for {approval.tool_name}")
 
-            result = await handler.call_tool(
-                tool_name, approval.arguments, approval.context
+            result = await asyncio.shield(
+                handler.call_tool(tool_name, approval.arguments, approval.context)
             )
-        except Exception as e:
+        except BaseException as e:
             # Never leave the awaiting agent unresolved: it would hang forever.
+            # BaseException, not Exception: a cancelled HTTP request must also
+            # resolve the future or the chat stays 409-locked until restart.
             if not approval.future.done():
                 approval.future.set_exception(e)
             raise

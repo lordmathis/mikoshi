@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "../ui/select.tsx";
 import { api, type Connector } from "../lib/api.ts";
+import { showError } from "../lib/show-error.ts";
 
 interface CreateNodeDialogProps {
   open: boolean;
@@ -35,7 +36,10 @@ export function CreateNodeDialog({ open, onOpenChange, onCreated }: CreateNodeDi
 
   useEffect(() => {
     if (open) {
-      api.listConnectors().then((res) => setConnectors(res.connectors)).catch(() => {});
+      api.listConnectors().then((res) => setConnectors(res.connectors)).catch((error) => {
+        console.error("Failed to load connectors:", error);
+        showError("Failed to load connectors");
+      });
       setName("");
       setRepoUrl("");
       setConnector("__none__");

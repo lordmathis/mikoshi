@@ -3,6 +3,7 @@ import { api, isWorkspaceChange, type ChatWithMessages, type Message, type FileR
 import { type ChatSettings } from "./chat-settings-dialog.tsx";
 import { localCache } from "../lib/local-cache.ts";
 import { notifications } from "../lib/notifications.ts";
+import { showError } from "../lib/show-error.ts";
 
 function messagesCacheKey(chatId: string): string {
   return `mikoshi-cache:messages:${chatId}`;
@@ -98,20 +99,10 @@ export function useMessages(
       setChat(chatData);
       setChatSettings(chatSettingsFrom(chatData));
       localCache.set(messagesCacheKey(chatId), chatData);
-      const { approvals } = await api.listApprovals(chatId);
-      if (chatIdRef.current !== chatId) return;
-      const map: Record<string, PendingApproval> = {};
-      for (const a of approvals) {
-        if (a.message_id) map[a.message_id] = a;
-      }
-      setPendingApprovals(map);
       setLoadError(null);
     } catch (error) {
       console.error("Failed to reload messages:", error);
       if (chatIdRef.current !== chatId) return;
-      setMessages([]);
-      setChat(null);
-      setPendingApprovals({});
       setLoadError({
         message: error instanceof Error ? error.message : "Failed to load messages",
         status: error instanceof ApiError ? error.status : null,
@@ -120,6 +111,19 @@ export function useMessages(
       if (chatIdRef.current === chatId) {
         setLoadedChatId(chatId);
       }
+    }
+    if (chatIdRef.current !== chatId) return;
+    try {
+      const { approvals } = await api.listApprovals(chatId);
+      if (chatIdRef.current !== chatId) return;
+      const map: Record<string, PendingApproval> = {};
+      for (const a of approvals) {
+        if (a.message_id) map[a.message_id] = a;
+      }
+      setPendingApprovals(map);
+    } catch (error) {
+      console.error("Failed to load approvals:", error);
+      showError(`Failed to load approvals: ${error instanceof Error ? error.message : "unknown error"}`);
     }
   }, [chatId]);
 
@@ -371,6 +375,7 @@ export function useMessages(
         resolveApproval(messageId, result);
       } catch (e) {
         console.error("[Messages] approve failed:", e);
+        showError(`Failed to approve tool: ${e instanceof Error ? e.message : "unknown error"}`);
       }
     },
     [resolveApproval]
@@ -388,6 +393,7 @@ export function useMessages(
         );
       } catch (e) {
         console.error("[Messages] deny failed:", e);
+        showError(`Failed to deny tool: ${e instanceof Error ? e.message : "unknown error"}`);
       }
     },
     [resolveApproval]

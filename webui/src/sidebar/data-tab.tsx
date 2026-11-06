@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Loader2 } from "lucide-react";
 import { WorkspaceTree } from "../files/workspace-tree.tsx";
 import { EmptyState } from "../shared/empty-state.tsx";
@@ -10,7 +10,7 @@ interface DataTabProps {
   onFileClick: (path: string) => void;
   tree: FileNode | null;
   treeWorkspaceId: string | null;
-  onTreeUpdate: (tree: FileNode) => void;
+  onTreeUpdate: (tree: FileNode, fetchedFor: string) => void;
   onFileDeleted: (path: string) => void;
   onFileRenamed: (oldPath: string, newPath: string) => void;
   hasRepo: boolean;
@@ -29,13 +29,18 @@ export function DataTab({
 }: DataTabProps) {
   const [isLoading, setIsLoading] = useState(false);
 
+  const activeWorkspaceIdRef = useRef(activeWorkspaceId);
+  activeWorkspaceIdRef.current = activeWorkspaceId;
+
   const isTreeValid = !!tree && treeWorkspaceId === activeWorkspaceId;
 
   const refreshTree = useCallback(async () => {
     if (!activeWorkspaceId) return;
+    const fetchedFor = activeWorkspaceId;
     try {
-      const root = await api.getWorkspaceTree(activeWorkspaceId);
-      onTreeUpdate(root);
+      const root = await api.getWorkspaceTree(fetchedFor);
+      if (activeWorkspaceIdRef.current !== fetchedFor) return;
+      onTreeUpdate(root, fetchedFor);
     } catch (err) {
       console.error("Failed to refresh workspace tree:", err);
     }
@@ -43,10 +48,14 @@ export function DataTab({
 
   useEffect(() => {
     if (!activeWorkspaceId || isTreeValid) return;
+    const fetchedFor = activeWorkspaceId;
     setIsLoading(true);
     api
-      .getWorkspaceTree(activeWorkspaceId)
-      .then((root) => onTreeUpdate(root))
+      .getWorkspaceTree(fetchedFor)
+      .then((root) => {
+        if (activeWorkspaceIdRef.current !== fetchedFor) return;
+        onTreeUpdate(root, fetchedFor);
+      })
       .catch((err) => console.error("Failed to load workspace tree:", err))
       .finally(() => setIsLoading(false));
   }, [activeWorkspaceId, isTreeValid, onTreeUpdate]);

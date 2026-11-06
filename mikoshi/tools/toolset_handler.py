@@ -1,3 +1,4 @@
+import asyncio
 import inspect
 import logging
 from abc import ABC
@@ -86,7 +87,8 @@ class ToolSetHandler(ABC):
             if inspect.iscoroutinefunction(tool_def.func):
                 result = await tool_def.func(**kwargs)
             else:
-                result = tool_def.func(**kwargs)
+                # Sync tools (file scans, greps) must not block the event loop.
+                result = await asyncio.to_thread(tool_def.func, **kwargs)
         except ToolDeniedError:
             # Denials are control flow — the agent handles them specially.
             raise

@@ -66,13 +66,7 @@ export const ToolMessage = memo(function ToolMessage({
       <div className="flex-1 space-y-2 overflow-hidden relative z-10">
         <div className="flex items-center gap-2">
           <p
-            className="font-bold leading-none"
-            style={{
-              color: 'var(--color-cp-cyan)',
-              fontSize: '14px',
-              letterSpacing: '0.16em',
-              textTransform: 'uppercase',
-            }}
+            className="font-bold leading-none cp-label-lg text-cp-cyan"
           >
             // DATA_SHARD
           </p>
@@ -114,7 +108,7 @@ export const ToolMessage = memo(function ToolMessage({
 
             {showToolResult && (
               <div className="mt-2 border border-border bg-cp-cyan/3 p-3 cp-cut-10">
-                <div className="text-foreground/90" style={{ letterSpacing: '0.02em', lineHeight: '1.6' }}>
+                <div className="text-foreground/90 tracking-[0.02em]" style={{ lineHeight: '1.6' }}>
                   <ReactMarkdown
                     remarkPlugins={REMARK_PLUGINS}
                     components={cyanMarkdownComponents}

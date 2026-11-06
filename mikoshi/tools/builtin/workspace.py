@@ -6,7 +6,7 @@ import mimetypes
 import os
 import re
 
-from mikoshi.git import GitService, GitTimeout, run_git
+from mikoshi.git import GitService
 from mikoshi.tools.context import ToolCallContext
 from mikoshi.tools.edit_utils import EditError, apply_edits
 from mikoshi.tools.toolset_handler import ToolSetHandler, tool
@@ -52,17 +52,6 @@ def _resolve_path(root: str, path: str) -> str:
     if full != root and not full.startswith(root + os.sep):
         raise ValueError("Path is outside the workspace")
     return full
-
-
-async def _run_git(cwd: str, args: list[str], timeout: int = 30) -> str:
-    try:
-        rc, stdout, stderr = await run_git(args, cwd=cwd, timeout=timeout)
-    except GitTimeout as e:
-        return f"Error: {e}"
-    if rc != 0:
-        return f"Error (exit {rc}): {stderr.strip()}"
-    output = stdout.strip()
-    return output if output else stderr.strip() or "(no output)"
 
 
 def _has_git_repo(root: str) -> bool:
@@ -690,7 +679,7 @@ class WorkspaceTools(ToolSetHandler):
         root = _require_workspace(context)
         if not _has_git_repo(root):
             return "No git repository in this workspace."
-        return await _run_git(root, ["status", "--porcelain"])
+        return await self._get_git_service(context).status_porcelain()
 
     @tool(
         description="Show the unstaged diff of the workspace.",
@@ -703,7 +692,7 @@ class WorkspaceTools(ToolSetHandler):
         root = _require_workspace(context)
         if not _has_git_repo(root):
             return "No git repository in this workspace."
-        return await _run_git(root, ["diff"])
+        return await self._get_git_service(context).diff()
 
     @tool(
         description="Stage all changes and commit with a message.",
@@ -730,8 +719,7 @@ class WorkspaceTools(ToolSetHandler):
         if not result.success:
             return f"Error committing: {result.output}"
 
-        hash_ok, commit_hash = await svc._run_git(["rev-parse", "HEAD"])
-        return f"Committed as {commit_hash}" if hash_ok else result.output
+        return f"Committed as {result.head_hash}" if result.head_hash else result.output
 
     @tool(
         description="Pull latest changes from the remote repository.",

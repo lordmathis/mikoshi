@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from mikoshi.agents.manager import AgentManager
 from mikoshi.agents.streaming import STREAM_DONE, StreamEvent, error_event
+from mikoshi.db.db import Database
 from mikoshi.routes.schemas import serialize_chat
 from mikoshi.tasks import create_background_task
 
@@ -122,6 +123,17 @@ def _ensure_no_active_stream(chat_id: str):
         raise HTTPException(
             status_code=409, detail="Agent is currently processing a message"
         )
+
+
+def ensure_no_active_stream_for_workspace(database: Database, workspace_id: str):
+    """Reject workspace deletion while any of its chats is streaming."""
+    for chat_id in _active_streams:
+        chat = database.get_chat(chat_id)
+        if chat and chat.workspace_id == workspace_id:
+            raise HTTPException(
+                status_code=409,
+                detail="Agent is currently processing a message in one of this workspace's chats",
+            )
 
 
 def _collect_message_files(database, messages) -> dict:

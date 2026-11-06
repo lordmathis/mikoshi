@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { api, type FileNode } from "../lib/api.ts";
+import { showError } from "../lib/show-error.ts";
 import type { useSidebar } from "./use-sidebar.ts";
 
 type SidebarApi = ReturnType<typeof useSidebar>;
@@ -26,7 +27,10 @@ export function useWorkspaces(sidebar: SidebarApi) {
     setWorkspacesLoading(true);
     api.listWorkspaces().then((res) => {
       setWorkspaces(res.workspaces.map((w) => ({ id: w.id, name: w.name, repo_url: w.repo_url })));
-    }).catch(() => {}).finally(() => setWorkspacesLoading(false));
+    }).catch((error) => {
+      console.error("Failed to load workspaces:", error);
+      showError("Failed to load workspaces");
+    }).finally(() => setWorkspacesLoading(false));
   }, [refreshTrigger]);
 
   useEffect(() => {
@@ -44,7 +48,10 @@ export function useWorkspaces(sidebar: SidebarApi) {
         }
       }
       setFileIndex(index);
-    }).catch(() => {});
+    }).catch((error) => {
+      console.error("Failed to load workspace file index:", error);
+      showError("Failed to load workspace files");
+    });
   }, [sidebar.activeWorkspaceId]);
 
   const refresh = useCallback(() => {
@@ -61,14 +68,18 @@ export function useWorkspaces(sidebar: SidebarApi) {
     if (!wsId) return;
     try {
       const tree = await api.getWorkspaceTree(wsId);
+      if (activeWorkspaceIdRef.current !== wsId) return;
       setWorkspaceTree(tree);
       setTreeWorkspaceId(wsId);
-    } catch {}
+    } catch (error) {
+      console.error("Failed to refresh workspace tree:", error);
+      showError("Failed to refresh workspace tree");
+    }
   }, []);
 
-  const updateTree = useCallback((tree: FileNode) => {
+  const updateTree = useCallback((tree: FileNode, fetchedFor: string) => {
     setWorkspaceTree(tree);
-    setTreeWorkspaceId(activeWorkspaceIdRef.current);
+    setTreeWorkspaceId(fetchedFor);
   }, []);
 
   const selectWorkspace = useCallback((id: string | null) => {

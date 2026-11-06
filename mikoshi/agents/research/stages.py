@@ -64,10 +64,6 @@ class StageContext(Protocol):
     def list_files(self) -> List[str]: ...
 
 
-class StageProtocol(Protocol):
-    async def apply(self, queue: asyncio.Queue) -> Optional[str]: ...
-
-
 class Stage:
     """Shared spawn -> nudge workhorse.
 

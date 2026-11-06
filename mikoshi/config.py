@@ -20,7 +20,6 @@ class FilterCondition(BaseModel):
 
 class ModelFilter(BaseModel):
     conditions: List[FilterCondition] = []
-    endpoint: str = "/models"  # Endpoint to append to api_base
 
 
 class ProviderConfig(BaseModel):

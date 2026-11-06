@@ -91,7 +91,6 @@ export function SessionsTab({
             return (
               <SidebarItem
                 key={conversation.id}
-                id={conversation.id}
                 isActive={isActive}
                 label={conversation.title || "NULL_SIGNAL"}
                 sublabel={`[${conversation.id.slice(0, 4).toUpperCase()}]`}

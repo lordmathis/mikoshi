@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 
 export interface VoiceRecordingState {
   isRecording: boolean;
@@ -15,6 +15,14 @@ export function useVoiceRecording() {
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+
+  useEffect(() => () => {
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== 'inactive') {
+      recorder.stop();
+    }
+    recorder?.stream.getTracks().forEach((track) => track.stop());
+  }, []);
 
   const startRecording = useCallback(async () => {
     try {

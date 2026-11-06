@@ -74,7 +74,7 @@ export function Panel({
               "cp-label px-2 py-0.5 rounded transition-colors",
               mode === "preview"
                 ? "text-primary bg-primary/10"
-                : "text-foreground/50 hover:text-foreground/80"
+                : "text-foreground/70 hover:text-foreground"
             )}
             onClick={() => setMode("preview")}
           >
@@ -86,8 +86,8 @@ export function Panel({
               mode === "edit"
                 ? "text-primary bg-primary/10"
                 : canEdit
-                  ? "text-foreground/50 hover:text-foreground/80"
-                  : "text-foreground/20 cursor-not-allowed"
+                  ? "text-foreground/70 hover:text-foreground"
+                  : "text-foreground/70 cursor-not-allowed"
             )}
             onClick={() => {
               if (!canEdit) return;
@@ -127,11 +127,9 @@ export function Panel({
           filePath={filePath}
           fileContent={fileContent}
           isLoading={isLoading}
-          onClose={onClose}
           workspaceId={workspaceId}
           fileIndex={fileIndex}
           onFileClick={onFileClick}
-          hideHeader
         />
       ) : (
         <div className="flex flex-col flex-1 min-h-0">

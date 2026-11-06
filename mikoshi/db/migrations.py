@@ -7,104 +7,44 @@ logger = logging.getLogger(__name__)
 
 def run_migrations(engine):
     with engine.connect() as conn:
-        _migrate_file_ids_column(conn)
-        _migrate_drop_file_attachments_table(conn)
-        _migrate_tool_call_id_column(conn)
-        _migrate_file_source_column(conn)
-        _migrate_chat_workspace_id_column(conn)
+        _add_column_if_missing(conn, "messages", "file_ids", "file_ids TEXT")
+        _drop_table_if_exists(conn, "file_attachments")
+        _add_column_if_missing(conn, "messages", "tool_call_id", "tool_call_id TEXT")
+        _add_column_if_missing(conn, "files", "source", "source TEXT")
+        _add_column_if_missing(
+            conn,
+            "chats",
+            "workspace_id",
+            "workspace_id TEXT REFERENCES workspaces(id) ON DELETE SET NULL",
+        )
         _migrate_workspace_repo_url_nullable(conn)
-        _migrate_workspace_default_agent_column(conn)
-        _migrate_chat_skills_column(conn)
-        _migrate_message_phase_column(conn)
+        _add_column_if_missing(
+            conn, "workspaces", "default_agent", "default_agent TEXT"
+        )
+        _add_column_if_missing(conn, "chats", "skills", "skills TEXT")
+        _add_column_if_missing(conn, "messages", "phase", "phase TEXT")
+        _drop_column_if_exists(conn, "workspaces", "local_path")
         conn.commit()
 
 
-def _migrate_file_ids_column(conn):
-    inspector = inspect(conn)
-    columns = [col["name"] for col in inspector.get_columns("messages")]
-
-    if "file_ids" not in columns:
-        logger.info("Adding file_ids column to messages table...")
-        conn.execute(text("ALTER TABLE messages ADD COLUMN file_ids TEXT"))
-        logger.info("Column file_ids added to messages table.")
-    else:
-        logger.debug("Column file_ids already exists in messages table.")
+def _add_column_if_missing(conn, table: str, column: str, ddl: str) -> None:
+    names = {c["name"] for c in inspect(conn).get_columns(table)}
+    if column not in names:
+        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {ddl}"))
+        logger.info("Added %s.%s", table, column)
 
 
-def _migrate_drop_file_attachments_table(conn):
-    inspector = inspect(conn)
-    tables = inspector.get_table_names()
-
-    if "file_attachments" in tables:
-        logger.info("Dropping file_attachments table...")
-        conn.execute(text("DROP TABLE file_attachments"))
-        logger.info("Table file_attachments dropped.")
-    else:
-        logger.debug("Table file_attachments does not exist.")
+def _drop_column_if_exists(conn, table: str, column: str) -> None:
+    names = {c["name"] for c in inspect(conn).get_columns(table)}
+    if column in names:
+        conn.execute(text(f"ALTER TABLE {table} DROP COLUMN {column}"))
+        logger.info("Dropped %s.%s", table, column)
 
 
-def _migrate_tool_call_id_column(conn):
-    inspector = inspect(conn)
-    columns = [col["name"] for col in inspector.get_columns("messages")]
-
-    if "tool_call_id" not in columns:
-        logger.info("Adding tool_call_id column to messages table...")
-        conn.execute(text("ALTER TABLE messages ADD COLUMN tool_call_id TEXT"))
-        logger.info("Column tool_call_id added to messages table.")
-    else:
-        logger.debug("Column tool_call_id already exists in messages table.")
-
-
-def _migrate_file_source_column(conn):
-    inspector = inspect(conn)
-    columns = [col["name"] for col in inspector.get_columns("files")]
-
-    if "source" not in columns:
-        logger.info("Adding source column to files table...")
-        conn.execute(text("ALTER TABLE files ADD COLUMN source TEXT"))
-        logger.info("Column source added to files table.")
-    else:
-        logger.debug("Column source already exists in files table.")
-
-
-def _migrate_chat_workspace_id_column(conn):
-    inspector = inspect(conn)
-    columns = [col["name"] for col in inspector.get_columns("chats")]
-
-    if "workspace_id" not in columns:
-        logger.info("Adding workspace_id column to chats table...")
-        conn.execute(
-            text(
-                "ALTER TABLE chats ADD COLUMN workspace_id TEXT REFERENCES workspaces(id) ON DELETE SET NULL"
-            )
-        )
-        logger.info("Column workspace_id added to chats table.")
-    else:
-        logger.debug("Column workspace_id already exists in chats table.")
-
-
-def _migrate_chat_skills_column(conn):
-    inspector = inspect(conn)
-    columns = [col["name"] for col in inspector.get_columns("chats")]
-
-    if "skills" not in columns:
-        logger.info("Adding skills column to chats table...")
-        conn.execute(text("ALTER TABLE chats ADD COLUMN skills TEXT"))
-        logger.info("Column skills added to chats table.")
-    else:
-        logger.debug("Column skills already exists in chats table.")
-
-
-def _migrate_message_phase_column(conn):
-    inspector = inspect(conn)
-    columns = [col["name"] for col in inspector.get_columns("messages")]
-
-    if "phase" not in columns:
-        logger.info("Adding phase column to messages table...")
-        conn.execute(text("ALTER TABLE messages ADD COLUMN phase TEXT"))
-        logger.info("Column phase added to messages table.")
-    else:
-        logger.debug("Column phase already exists in messages table.")
+def _drop_table_if_exists(conn, table: str) -> None:
+    if table in inspect(conn).get_table_names():
+        conn.execute(text(f"DROP TABLE {table}"))
+        logger.info("Dropped table %s", table)
 
 
 def _migrate_workspace_repo_url_nullable(conn):
@@ -117,11 +57,11 @@ def _migrate_workspace_repo_url_nullable(conn):
     columns = [col for col in inspector.get_columns("workspaces")]
     repo_url_col = next((c for c in columns if c["name"] == "repo_url"), None)
     if repo_url_col is None or repo_url_col.get("nullable", True):
-        logger.debug(
-            "Column repo_url already nullable (or absent) in workspaces table."
-        )
         return
 
+    # Pre-nullable-era rebuild: old DBs made repo_url NOT NULL, which SQLite
+    # can only change via table rebuild. local_path is dropped here too —
+    # the column is dead and must not survive the rebuild.
     logger.info("Making workspaces.repo_url nullable...")
     conn.execute(text("PRAGMA foreign_keys=OFF"))
     conn.execute(
@@ -131,7 +71,6 @@ def _migrate_workspace_repo_url_nullable(conn):
                 id VARCHAR PRIMARY KEY,
                 name VARCHAR,
                 repo_url VARCHAR,
-                local_path VARCHAR,
                 connector VARCHAR,
                 created_at DATETIME,
                 updated_at DATETIME
@@ -143,8 +82,8 @@ def _migrate_workspace_repo_url_nullable(conn):
         text(
             """
             INSERT INTO _workspaces_new
-                (id, name, repo_url, local_path, connector, created_at, updated_at)
-            SELECT id, name, repo_url, local_path, connector, created_at, updated_at
+                (id, name, repo_url, connector, created_at, updated_at)
+            SELECT id, name, repo_url, connector, created_at, updated_at
             FROM workspaces
             """
         )
@@ -153,15 +92,3 @@ def _migrate_workspace_repo_url_nullable(conn):
     conn.execute(text("ALTER TABLE _workspaces_new RENAME TO workspaces"))
     conn.execute(text("PRAGMA foreign_keys=ON"))
     logger.info("Column repo_url is now nullable in workspaces table.")
-
-
-def _migrate_workspace_default_agent_column(conn):
-    inspector = inspect(conn)
-    columns = [col["name"] for col in inspector.get_columns("workspaces")]
-
-    if "default_agent" not in columns:
-        logger.info("Adding default_agent column to workspaces table...")
-        conn.execute(text("ALTER TABLE workspaces ADD COLUMN default_agent TEXT"))
-        logger.info("Column default_agent added to workspaces table.")
-    else:
-        logger.debug("Column default_agent already exists in workspaces table.")

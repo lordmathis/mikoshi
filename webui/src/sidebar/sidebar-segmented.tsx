@@ -27,7 +27,7 @@ interface SidebarSegmentedControlProps {
 
   workspaceTree: FileNode | null;
   treeWorkspaceId: string | null;
-  onWorkspaceTreeUpdate: (tree: FileNode) => void;
+  onWorkspaceTreeUpdate: (tree: FileNode, fetchedFor: string) => void;
   activeFilePath: string | null;
   onFileClick: (path: string) => void;
   onFileDeleted: (path: string) => void;
@@ -95,7 +95,7 @@ export function SidebarSegmentedControl({
         style={{ borderRightColor: "rgb(var(--cp-rgb-yellow) / 0.1)" }}
       >
         <div className={`flex h-full flex-col overflow-hidden ${isOpen ? "" : "lg:hidden"}`}>
-          <div className="flex shrink-0 items-center justify-between px-4 py-4 border-b border-white/5">
+          <div className="flex shrink-0 items-center justify-between px-4 py-4 border-b border-border">
             <div className="flex items-center gap-2">
               <div className="w-1.5 h-1.5 bg-primary rotate-45" />
               <h2 className="text-[10px] font-black text-primary uppercase tracking-[0.25em]">
@@ -112,14 +112,14 @@ export function SidebarSegmentedControl({
             </Button>
           </div>
 
-          <div className="flex shrink-0 border-b border-white/5">
+          <div className="flex shrink-0 border-b border-border">
             {tabs.map((tab) => (
               <button
                 key={tab.key}
                 className={`flex-1 py-2.5 text-[10px] font-black uppercase tracking-[0.2em] transition-colors ${
                   activeTab === tab.key
                     ? "text-primary border-b-2 border-primary"
-                    : "text-foreground/60 hover:text-foreground"
+                    : "text-foreground/70 hover:text-foreground"
                 }`}
                 onClick={() => onTabChange(tab.key)}
               >

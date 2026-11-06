@@ -22,7 +22,7 @@ def parse_content(msg_content: str):
 
 def insert_system_message(
     messages: List[ChatCompletionMessageParam], content: str
-) -> List[ChatCompletionMessageParam]:
+) -> None:
     """Insert a system message directly after any leading system/developer
     messages, so the persona always stays first and later context (tree,
     AGENTS.md, …) can't claim index 0 for itself."""
@@ -33,7 +33,6 @@ def insert_system_message(
         else:
             break
     messages.insert(insert_at, {"role": "system", "content": content})
-    return messages
 
 
 def parse_tool_arguments(raw: Any):

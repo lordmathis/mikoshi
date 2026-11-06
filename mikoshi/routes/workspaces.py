@@ -6,6 +6,7 @@ from fastapi.responses import PlainTextResponse, Response
 from pydantic import BaseModel
 
 from mikoshi.git import GitService
+from mikoshi.routes.chats import ensure_no_active_stream_for_workspace
 from mikoshi.routes.schemas import format_timestamp
 from mikoshi.workspace import WorkspaceError
 
@@ -167,10 +168,7 @@ async def _write_workspace_file(
     workspace_service = _get_workspace_service(request)
     _require_workspace(database, workspace_id)
 
-    try:
-        workspace_service.write_file(workspace_id, path, body.content)
-    except WorkspaceError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    workspace_service.write_file(workspace_id, path, body.content)
 
     return {"success": True}
 
@@ -195,10 +193,7 @@ async def delete_workspace_file(request: Request, workspace_id: str, path: str):
     workspace_service = _get_workspace_service(request)
     _require_workspace(database, workspace_id)
 
-    try:
-        workspace_service.delete_file(workspace_id, path)
-    except WorkspaceError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    workspace_service.delete_file(workspace_id, path)
 
     return {"success": True}
 
@@ -211,10 +206,7 @@ async def rename_workspace_file(
     workspace_service = _get_workspace_service(request)
     _require_workspace(database, workspace_id)
 
-    try:
-        new_path = workspace_service.rename_file(workspace_id, path, body.new_path)
-    except WorkspaceError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    new_path = workspace_service.rename_file(workspace_id, path, body.new_path)
 
     return {"success": True, "new_path": new_path}
 
@@ -227,10 +219,7 @@ async def get_workspace_frontmatter(
     workspace_service = _get_workspace_service(request)
     _require_workspace(database, workspace_id)
 
-    try:
-        files = workspace_service.get_frontmatter(workspace_id, glob)
-    except WorkspaceError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    files = workspace_service.get_frontmatter(workspace_id, glob)
 
     return {"files": files}
 
@@ -319,6 +308,7 @@ async def delete_workspace(request: Request, workspace_id: str):
     workspace_service = _get_workspace_service(request)
     agent_manager = request.app.state.agent_manager
     _require_workspace(database, workspace_id)
+    ensure_no_active_stream_for_workspace(database, workspace_id)
 
     database.delete_chats_by_workspace(workspace_id, agent_manager)
     workspace_service.delete_workspace_files(workspace_id)

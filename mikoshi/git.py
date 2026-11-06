@@ -85,6 +85,7 @@ class GitStatus:
 class GitResult:
     success: bool
     output: str
+    head_hash: str | None = None
 
 
 class GitService:
@@ -144,6 +145,14 @@ class GitService:
             branch=branch, staged=staged, unstaged=unstaged, untracked=untracked
         )
 
+    async def status_porcelain(self) -> str:
+        """Raw `git status --porcelain` output (or the error message)."""
+        return (await self._run_git(["status", "--porcelain"]))[1]
+
+    async def diff(self) -> str:
+        """Raw `git diff` output (or the error message)."""
+        return (await self._run_git(["diff"]))[1]
+
     async def commit(
         self,
         message: str,
@@ -162,7 +171,10 @@ class GitService:
         }
 
         ok, output = await self._run_git(["commit", "-m", message], env=env)
-        return GitResult(ok, output)
+        head_hash = None
+        if ok:
+            _, head_hash = await self._run_git(["rev-parse", "HEAD"])
+        return GitResult(ok, output, head_hash)
 
     async def pull(self, auth_env_vars: dict[str, str] | None = None) -> GitResult:
         ok, output = await self._run_git(["pull"], timeout=120, env=auth_env_vars)

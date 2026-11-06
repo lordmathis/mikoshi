@@ -1,7 +1,6 @@
 import asyncio
 import json
 import logging
-from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple
 
 from openai import APIConnectionError, InternalServerError, RateLimitError
@@ -45,7 +44,7 @@ def _retry_after_seconds(error: Exception) -> Optional[float]:
         return None
 
 
-class BaseAgent(ABC):
+class BaseAgent:
     """Abstract base for all agent types. Provides orchestration via Template Method pattern."""
 
     def __init__(self, **kwargs):
@@ -77,18 +76,23 @@ class BaseAgent(ABC):
         )
         self._title_model_id = kwargs.get("title_model_id")
 
-    @abstractmethod
     async def _get_iteration_context(
         self, message: str
-    ) -> List[ChatCompletionMessageParam]: ...
+    ) -> List[ChatCompletionMessageParam]:
+        return await self._build_context(message)
 
-    @abstractmethod
     async def _process_final_response(
         self,
         response: Dict[str, Any],
         message_data: Dict[str, Any],
         queue: asyncio.Queue,
-    ) -> Dict[str, Any]: ...
+    ) -> Dict[str, Any]:
+        msg = await self._save_message("assistant", response)
+        await self._emit(
+            queue, StreamEvent(type="message", data=self._format_message(msg))
+        )
+        await self._emit(queue, STREAM_DONE)
+        return response
 
     def _build_workspace_context(self) -> Optional[WorkspaceContext]:
         if not self.workspace_id:
@@ -367,10 +371,7 @@ class BaseAgent(ABC):
                         len(message_data.get("content", "") or ""),
                     )
 
-                    if (
-                        not message_data.get("tool_calls")
-                        or len(message_data.get("tool_calls", [])) == 0
-                    ):
+                    if not has_tool_calls:
                         logger.info(
                             "chat_id=%s no tool calls — processing final response",
                             self.chat_id,
@@ -424,7 +425,7 @@ class BaseAgent(ABC):
             result = await self._loop(message, queue=FilteredQueue(queue))
             # Failed turns already emitted an error event; don't title the
             # chat off an error message.
-            if not (isinstance(result, dict) and result.get("error")):
+            if not result.get("error"):
                 await self._generate_title(queue)
             await self._emit(queue, STREAM_DONE)
             logger.info("chat_id=%s chat() COMPLETE", self.chat_id)
@@ -453,8 +454,12 @@ class BaseAgent(ABC):
         last_user, last_assistant = self._find_last_exchange()
         if not last_user:
             return None
-        if last_assistant:
+        if last_assistant and last_assistant.sequence > last_user.sequence:
             self.db.delete_messages_after(self.chat_id, last_assistant.sequence)
+        else:
+            # Failed turn left no assistant reply; drop only messages after the
+            # user's message so it survives into the retry.
+            self.db.delete_messages_after(self.chat_id, last_user.sequence + 1)
         return last_user.content
 
     async def retry(self, queue: asyncio.Queue) -> None:
@@ -613,9 +618,11 @@ class BaseAgent(ABC):
         )
 
         if required_tool_servers:
-            new_servers = [
-                s for s in required_tool_servers if s not in self.tool_servers
-            ]
+            new_servers = list(
+                dict.fromkeys(
+                    s for s in required_tool_servers if s not in self.tool_servers
+                )
+            )
             if new_servers:
                 self.tool_servers = self.tool_servers + new_servers
                 self.db.update_chat(

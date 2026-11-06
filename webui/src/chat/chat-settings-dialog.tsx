@@ -23,6 +23,7 @@ import { Switch } from "../ui/switch.tsx";
 import { Input } from "../ui/input.tsx";
 import { api, type Model, type ToolServer, type ModelParams, type AgentConfig } from "../lib/api.ts";
 import { formatModelLabel } from "../lib/formatters.ts";
+import { showError } from "../lib/show-error.ts";
 
 export interface ChatSettings {
   baseModel: string;
@@ -166,7 +167,7 @@ export function ChatSettingsDialog({
         onChatUpdated?.();
       } catch (error) {
         console.error("Failed to update chat settings:", error);
-        alert(`Failed to update chat settings: ${error instanceof Error ? error.message : "Unknown error"}`);
+        showError(`Failed to update chat settings: ${error instanceof Error ? error.message : "Unknown error"}`);
       }
     }
   };
