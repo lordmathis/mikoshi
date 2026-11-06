@@ -252,10 +252,14 @@ class WorkspaceService:
         full_path = os.path.realpath(os.path.join(root, path))
         self._validate_path(root, full_path)
 
-        os.makedirs(os.path.dirname(full_path), exist_ok=True)
-
-        with open(full_path, "w", encoding="utf-8") as f:
-            f.write(content)
+        try:
+            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            with open(full_path, "w", encoding="utf-8") as f:
+                f.write(content)
+        except OSError as e:
+            # A path component existing as a file raises NotADirectoryError/
+            # FileExistsError; surface as WorkspaceError so routes map to 400.
+            raise WorkspaceError(f"Cannot write {path}: {e}")
 
         if self.indexer:
             self.indexer.notify_changed(workspace_id, path)
@@ -266,8 +270,11 @@ class WorkspaceService:
         self._validate_path(root, full_path)
         if not os.path.isfile(full_path):
             raise WorkspaceFileNotFoundError(f"File not found: {path}")
-        os.remove(full_path)
-        _remove_empty_parents(full_path, root)
+        try:
+            os.remove(full_path)
+            _remove_empty_parents(full_path, root)
+        except OSError as e:
+            raise WorkspaceError(f"Cannot delete {path}: {e}")
         if self.indexer:
             self.indexer.notify_deleted(workspace_id, path)
 
@@ -279,9 +286,13 @@ class WorkspaceService:
         self._validate_path(root, new_full)
         if not os.path.isfile(old_full):
             raise WorkspaceFileNotFoundError(f"File not found: {old_path}")
-        os.makedirs(os.path.dirname(new_full), exist_ok=True)
-        os.rename(old_full, new_full)
-        _remove_empty_parents(old_full, root)
+        try:
+            os.makedirs(os.path.dirname(new_full), exist_ok=True)
+            os.rename(old_full, new_full)
+            _remove_empty_parents(old_full, root)
+        except OSError as e:
+            # e.g. renaming onto an existing directory.
+            raise WorkspaceError(f"Cannot rename {old_path} to {new_path}: {e}")
         if self.indexer:
             self.indexer.notify_deleted(workspace_id, old_path)
             self.indexer.notify_changed(workspace_id, new_path)

@@ -139,6 +139,35 @@ async def monkeypatch_asyncio_sleep(monkeypatch):
     monkeypatch.setattr("mikoshi.agents.base.asyncio.sleep", fake_sleep)
 
 
+class TestPrepareRetry:
+    def test_keeps_unanswered_user_message(self, db):
+        # Failed turn: trailing user message with no assistant reply after it.
+        chat = db.create_chat()
+        db.save_message(chat.id, "user", "first question")
+        db.save_message(chat.id, "assistant", "first answer")
+        db.save_message(chat.id, "user", "second question")
+        agent = _make_agent(db, chat.id, _ScriptedLLM())
+
+        message = agent._prepare_retry()
+
+        assert message == "second question"
+        remaining = [m.content for m in db.get_chat_history(chat.id)]
+        assert remaining == ["first question", "first answer", "second question"]
+
+    def test_deletes_last_assistant_reply(self, db):
+        # Normal retry: last exchange answered, reply should be regenerated.
+        chat = db.create_chat()
+        db.save_message(chat.id, "user", "question")
+        db.save_message(chat.id, "assistant", "bad answer")
+        agent = _make_agent(db, chat.id, _ScriptedLLM())
+
+        message = agent._prepare_retry()
+
+        assert message == "question"
+        remaining = [m.content for m in db.get_chat_history(chat.id)]
+        assert remaining == ["question"]
+
+
 class TestToolErrorReturnedToLLM:
     @pytest.mark.asyncio
     async def test_unknown_tool_error_appended_as_tool_message(self, db):

@@ -213,6 +213,16 @@ class TestFileReadWrite:
         with pytest.raises(PathTraversalError):
             ws.write_file("test-ws", "../../etc/evil", "hacked")
 
+    def test_write_under_file_path_raises_workspace_error(self, ws):
+        # "a.txt/child.txt": a path component exists as a file, so
+        # makedirs/open raise NotADirectoryError/FileExistsError — must
+        # surface as WorkspaceError (400), not an unhandled 500.
+        root = _create_workspace(ws)
+        _create_file(root, "blocker.txt", "x")
+
+        with pytest.raises(WorkspaceError, match="Cannot write"):
+            ws.write_file("test-ws", "blocker.txt/child.txt", "y")
+
     def test_read_file_not_found(self, ws):
         _create_workspace(ws)
         with pytest.raises(WorkspaceError, match="File not found"):
@@ -354,6 +364,14 @@ class TestRenameFile:
         _create_file(os.path.join(ws._workspaces_dir, "test-ws"), "file.txt", "x")
         with pytest.raises(PathTraversalError):
             ws.rename_file("test-ws", "file.txt", "../../escaped.txt")
+
+    def test_rename_onto_directory_raises_workspace_error(self, ws):
+        root = _create_workspace(ws)
+        _create_file(root, "file.txt", "x")
+        os.makedirs(os.path.join(root, "existing-dir"))
+
+        with pytest.raises(WorkspaceError, match="Cannot rename"):
+            ws.rename_file("test-ws", "file.txt", "existing-dir")
 
 
 class TestListFilesFlat:

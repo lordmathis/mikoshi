@@ -1,3 +1,4 @@
+import json
 import os
 import time
 
@@ -251,6 +252,27 @@ class TestBranch:
         config = db.get_chat_config(branched.id)
         assert config["model"] == "gpt-4"
         assert config["system_prompt"] == "sys"
+
+    def test_branch_preserves_message_phase(self, db):
+        chat = db.create_chat()
+        db.save_message(chat.id, "user", "hi")
+        db.save_message(chat.id, "assistant", "inner", phase="subagent:worker")
+        m3 = db.save_message(chat.id, "assistant", "reply")
+
+        branched = db.branch_chat(chat.id, m3.id)
+
+        history = db.get_chat_history(branched.id)
+        assert [m.phase for m in history] == [None, "subagent:worker", None]
+
+    def test_branch_preserves_skills(self, db):
+        chat = db.create_chat()
+        db.update_chat(chat.id, skills=json.dumps(["review"]))
+        db.save_message(chat.id, "user", "hi")
+        m2 = db.save_message(chat.id, "assistant", "reply")
+
+        branched = db.branch_chat(chat.id, m2.id)
+
+        assert db.get_chat(branched.id).skills == json.dumps(["review"])
 
     def test_branch_new_message_ids(self, db):
         chat = db.create_chat()
