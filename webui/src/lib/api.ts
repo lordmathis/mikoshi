@@ -239,14 +239,26 @@ export class ApiError extends Error {
   }
 }
 
-let lastSessionReloadAt = 0;
+let lastSessionRedirectAt = 0;
 
-function reloadOnSessionExpiry(): void {
+// An expired Authelia session makes the proxy 302 /api calls to the portal;
+// fetch follows that redirect blindly and dies on CORS, and the service
+// worker answers plain reloads with cached HTML. Navigating to /login
+// (SW-denylisted, see vite.config.ts) forces the real portal round-trip.
+async function isSessionExpired(): Promise<boolean> {
+  try {
+    const probe = await fetch('/health', { redirect: 'manual', cache: 'no-store' });
+    return probe.status === 0 || probe.status === 401;
+  } catch {
+    return false;
+  }
+}
+
+function claimLoginRedirect(): boolean {
   const now = Date.now();
-  // Guard against reload loops when the session is still expired after reload.
-  if (now - lastSessionReloadAt < 5000) return;
-  lastSessionReloadAt = now;
-  window.location.reload();
+  if (now - lastSessionRedirectAt < 5000) return false;
+  lastSessionRedirectAt = now;
+  return true;
 }
 
 class ApiClient {
@@ -256,12 +268,26 @@ class ApiClient {
     this.baseURL = baseURL;
   }
 
-  private async assertOk(response: Response): Promise<void> {
-    if (response.status === 401) {
-      // With the service worker serving cached HTML, an expired Authelia
-      // session would otherwise leave a zombie UI of failing API calls.
-      reloadOnSessionExpiry();
+  private async guardedFetch(url: string, init?: RequestInit): Promise<Response> {
+    let response: Response;
+    try {
+      response = await fetch(url, init);
+    } catch (e) {
+      if ((e as { name?: string })?.name === 'AbortError') throw e;
+      if ((await isSessionExpired()) && claimLoginRedirect()) {
+        window.location.assign('/login');
+        throw new ApiError('Session expired', 401);
+      }
+      throw e;
     }
+    if (response.status === 401) {
+      if (claimLoginRedirect()) window.location.assign('/login');
+      throw new ApiError('Session expired', 401);
+    }
+    return response;
+  }
+
+  private async assertOk(response: Response): Promise<void> {
     if (!response.ok) {
       const body = (await response.json().catch(() => ({
         detail: response.statusText,
@@ -279,7 +305,7 @@ class ApiClient {
   ): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
     
-    const response = await fetch(url, {
+    const response = await this.guardedFetch(url, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
@@ -313,7 +339,7 @@ class ApiClient {
 
   async *subscribeStream(chatId: string, signal?: AbortSignal): AsyncGenerator<StreamEvent> {
     const url = `${this.baseURL}/chats/${chatId}/stream`;
-    const response = await fetch(url, { signal });
+    const response = await this.guardedFetch(url, { signal });
     await this.assertOk(response);
     yield* this.parseSSE(response);
   }
@@ -398,7 +424,7 @@ class ApiClient {
 
   private async *streamPost(endpoint: string, body: Record<string, unknown>, signal?: AbortSignal): AsyncGenerator<StreamEvent> {
     const url = `${this.baseURL}${endpoint}`;
-    const response = await fetch(url, {
+    const response = await this.guardedFetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -475,7 +501,7 @@ class ApiClient {
     });
 
     const url = `${this.baseURL}/files`;
-    const response = await fetch(url, {
+    const response = await this.guardedFetch(url, {
       method: 'POST',
       body: formData,
     });
@@ -525,7 +551,7 @@ class ApiClient {
     formData.append('file', audioBlob, 'audio.webm');
 
     const url = `${this.baseURL}/media/transcribe`;
-    const response = await fetch(url, {
+    const response = await this.guardedFetch(url, {
       method: 'POST',
       body: formData,
     });
@@ -537,7 +563,7 @@ class ApiClient {
 
   async generateSpeech(text: string): Promise<Blob> {
     const url = `${this.baseURL}/media/speech`;
-    const response = await fetch(url, {
+    const response = await this.guardedFetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ input: text }),
@@ -582,7 +608,7 @@ class ApiClient {
 
   async getWorkspaceFile(id: string, path: string): Promise<string> {
     const url = `${this.baseURL}/workspaces/${id}/files/${encodeFilePath(path)}`;
-    const response = await fetch(url);
+    const response = await this.guardedFetch(url);
 
     await this.assertOk(response);
 

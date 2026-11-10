@@ -46,7 +46,9 @@ export default defineConfig({
         ],
       },
       workbox: {
-        navigateFallbackDenylist: [/^\/api\//],
+        // /login must reach the network so an expired Authelia session can
+        // bounce through the portal (see api.ts).
+        navigateFallbackDenylist: [/^\/api\//, /^\/login\/?$/],
         // No runtime caching of /api — ever (Authelia + always-fresh data).
         // The JS bundle (mermaid + shiki) exceeds the 2 MiB default; the
         // shell must still be precached for instant rehydration.
