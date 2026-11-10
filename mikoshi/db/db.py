@@ -36,9 +36,6 @@ def _serialize_approval(a: PendingToolApproval) -> Dict:
 
 
 class Database:
-    # All methods block the event loop by design (accepted trade-off,
-    # 2026-11-06): single-user SQLite writes are sub-millisecond and the
-    # busy_timeout stall ceiling stays below the SSE ping interval.
 
     def __init__(self, db_path: str):
         self.engine = create_engine(
@@ -46,10 +43,7 @@ class Database:
         )
         self.SessionLocal = sessionmaker(bind=self.engine)
 
-        # PRAGMA foreign_keys is a per-connection setting, so it must be
-        # applied to every pooled connection, not just the first one.
-        # busy_timeout makes concurrent writers wait for the write lock
-        # instead of failing immediately with "database is locked".
+        # PRAGMA foreign_keys is a per-connection setting
         @event.listens_for(self.engine, "connect")
         def _set_sqlite_pragma(dbapi_connection, connection_record):
             cursor = dbapi_connection.cursor()
@@ -57,7 +51,7 @@ class Database:
             cursor.execute("PRAGMA busy_timeout = 5000")
             cursor.close()
 
-        # WAL mode is persistent (stored in the database file), so setting
+        # WAL mode is persistent, so setting
         # it once at startup is sufficient.
         with self.engine.connect() as conn:
             conn.execute(text("PRAGMA journal_mode = WAL"))
