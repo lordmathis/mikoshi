@@ -2,6 +2,7 @@ import asyncio
 import base64
 import logging
 import os
+import re
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
@@ -79,6 +80,39 @@ class GitStatus:
     staged: int
     unstaged: int
     untracked: int
+    ahead: int | None = None
+    behind: int | None = None
+
+
+def _parse_status_header(header: str) -> tuple[str, int | None, int | None]:
+    """Parse the `## ...` line of `git status --porcelain -b`.
+
+    Returns (branch, ahead, behind). ahead/behind are None when there is
+    no upstream to compare against, including `[gone]` and detached HEAD.
+    """
+    if not header.startswith("## "):
+        return "(unknown)", None, None
+    rest = header[3:]
+    if rest.startswith("No commits yet on "):
+        return rest[len("No commits yet on ") :], None, None
+    if rest.startswith("HEAD (no branch)"):
+        return "HEAD", None, None
+
+    branch, _, upstream = rest.partition("...")
+    ahead: int | None = None
+    behind: int | None = None
+    if upstream:
+        if "[gone]" in upstream:
+            return branch, None, None
+        ahead = 0
+        behind = 0
+        match = re.search(r"ahead (\d+)", upstream)
+        if match:
+            ahead = int(match.group(1))
+        match = re.search(r"behind (\d+)", upstream)
+        if match:
+            behind = int(match.group(1))
+    return branch, ahead, behind
 
 
 @dataclass
@@ -117,18 +151,17 @@ class GitService:
         return {}
 
     async def status(self) -> GitStatus:
-        ok, output = await self._run_git(["status", "--porcelain"])
+        ok, output = await self._run_git(["status", "--porcelain", "-b"])
         if not ok:
             return GitStatus(branch="(unknown)", staged=0, unstaged=0, untracked=0)
 
-        branch_ok, branch = await self._run_git(["rev-parse", "--abbrev-ref", "HEAD"])
-        if not branch_ok:
-            branch = "(unknown)"
+        lines = output.splitlines()
+        branch, ahead, behind = _parse_status_header(lines[0] if lines else "")
 
         staged = 0
         unstaged = 0
         untracked = 0
-        for line in output.splitlines():
+        for line in lines[1:]:
             if not line:
                 continue
             x = line[0]
@@ -142,7 +175,12 @@ class GitService:
                     unstaged += 1
 
         return GitStatus(
-            branch=branch, staged=staged, unstaged=unstaged, untracked=untracked
+            branch=branch,
+            staged=staged,
+            unstaged=unstaged,
+            untracked=untracked,
+            ahead=ahead,
+            behind=behind,
         )
 
     async def status_porcelain(self) -> str:

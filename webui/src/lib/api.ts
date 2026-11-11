@@ -222,6 +222,8 @@ export interface GitStatus {
   staged: number;
   unstaged: number;
   untracked: number;
+  ahead: number | null;
+  behind: number | null;
 }
 
 export interface GitResult {

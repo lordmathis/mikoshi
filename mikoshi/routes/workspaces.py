@@ -269,6 +269,8 @@ async def git_status(request: Request, workspace_id: str):
         "staged": status.staged,
         "unstaged": status.unstaged,
         "untracked": status.untracked,
+        "ahead": status.ahead,
+        "behind": status.behind,
     }
 
 

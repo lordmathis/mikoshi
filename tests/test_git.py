@@ -102,24 +102,79 @@ class TestAuthEnv:
 class TestStatusParsing:
     @pytest.mark.asyncio
     async def test_porcelain_counts(self):
-        outputs = {
-            ("status", "--porcelain"): (0, "M  a.py\n?? b.py\n M c.py\n", ""),
-            ("rev-parse", "--abbrev-ref", "HEAD"): (0, "main", ""),
-        }
+        output = "## main...origin/main\nM  a.py\n?? b.py\n M c.py\n"
 
-        async def fake_run_git(args, cwd=None, env=None, timeout=30):
-            return outputs[tuple(args)]
-
-        with patch("mikoshi.git.run_git", side_effect=fake_run_git):
+        with patch("mikoshi.git.run_git", new=AsyncMock(return_value=(0, output, ""))):
             status = await _svc().status()
 
         assert status.branch == "main"
         assert status.staged == 1
         assert status.unstaged == 1
         assert status.untracked == 1
+        assert status.ahead == 0
+        assert status.behind == 0
 
     @pytest.mark.asyncio
     async def test_failure_returns_unknown(self):
         with patch("mikoshi.git.run_git", new=AsyncMock(return_value=(128, "", "err"))):
             status = await _svc().status()
         assert status.branch == "(unknown)"
+        assert status.ahead is None
+        assert status.behind is None
+
+
+class TestAheadBehindParsing:
+    async def _status(self, output: str):
+        with patch("mikoshi.git.run_git", new=AsyncMock(return_value=(0, output, ""))):
+            return await _svc().status()
+
+    @pytest.mark.asyncio
+    async def test_ahead_and_behind(self):
+        status = await self._status("## main...origin/main [ahead 1, behind 2]\n")
+        assert status.ahead == 1
+        assert status.behind == 2
+
+    @pytest.mark.asyncio
+    async def test_ahead_only(self):
+        status = await self._status("## main...origin/main [ahead 3]\n")
+        assert status.ahead == 3
+        assert status.behind == 0
+
+    @pytest.mark.asyncio
+    async def test_behind_only(self):
+        status = await self._status("## main...origin/main [behind 5]\n")
+        assert status.ahead == 0
+        assert status.behind == 5
+
+    @pytest.mark.asyncio
+    async def test_no_upstream(self):
+        status = await self._status("## main\n")
+        assert status.branch == "main"
+        assert status.ahead is None
+        assert status.behind is None
+
+    @pytest.mark.asyncio
+    async def test_upstream_gone(self):
+        status = await self._status("## main...origin/main [gone]\n")
+        assert status.ahead is None
+        assert status.behind is None
+
+    @pytest.mark.asyncio
+    async def test_detached_head(self):
+        status = await self._status("## HEAD (no branch)\n")
+        assert status.branch == "HEAD"
+        assert status.ahead is None
+        assert status.behind is None
+
+    @pytest.mark.asyncio
+    async def test_unborn_branch(self):
+        status = await self._status("## No commits yet on main\n")
+        assert status.branch == "main"
+        assert status.ahead is None
+        assert status.behind is None
+
+    @pytest.mark.asyncio
+    async def test_branch_name_with_dots(self):
+        status = await self._status("## v1.0...origin/v1.0 [ahead 1]\n")
+        assert status.branch == "v1.0"
+        assert status.ahead == 1

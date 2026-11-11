@@ -270,6 +270,10 @@ export function WorkspaceTree({ tree, activeFilePath, onFileClick, workspaceId, 
   }, [tree]);
 
   useEffect(() => {
+    void git.refresh();
+  }, [tree, git.refresh]);
+
+  useEffect(() => {
     if (isCreating && newFileInputRef.current) {
       newFileInputRef.current.focus();
     }
@@ -382,6 +386,26 @@ export function WorkspaceTree({ tree, activeFilePath, onFileClick, workspaceId, 
     }
   };
 
+  const gitStatus = git.status;
+  const totalChanges = gitStatus
+    ? gitStatus.staged + gitStatus.unstaged + gitStatus.untracked
+    : 0;
+  const statusDetail: string[] = [];
+  if (gitStatus) {
+    statusDetail.push(
+      totalChanges > 0
+        ? `staged ${gitStatus.staged} · unstaged ${gitStatus.unstaged} · untracked ${gitStatus.untracked}`
+        : "working tree clean"
+    );
+    if (gitStatus.ahead === null || gitStatus.behind === null) {
+      statusDetail.push("no upstream");
+    } else if (gitStatus.ahead > 0 || gitStatus.behind > 0) {
+      statusDetail.push(`ahead ${gitStatus.ahead} · behind ${gitStatus.behind}`);
+    } else {
+      statusDetail.push("in sync");
+    }
+  }
+
   const btnClass = (id: string) =>
     `p-1 rounded hover:bg-accent transition-colors [&:hover>svg]:text-accent-foreground ${flashBtn === id ? "cp-flash-success" : ""} ${shakeBtn === id ? "cp-shake-error" : ""}`;
 
@@ -464,6 +488,23 @@ export function WorkspaceTree({ tree, activeFilePath, onFileClick, workspaceId, 
               )}
             </button>
           </>
+        )}
+        {hasRepo && gitStatus && (
+          <div
+            className="ml-auto flex items-center gap-1 text-xs"
+            title={statusDetail.join(" — ")}
+          >
+            <span className="text-foreground">{gitStatus.branch}</span>
+            {gitStatus.ahead !== null && gitStatus.ahead > 0 && (
+              <span className="text-primary">↑{gitStatus.ahead}</span>
+            )}
+            {gitStatus.behind !== null && gitStatus.behind > 0 && (
+              <span className="text-cp-cyan">↓{gitStatus.behind}</span>
+            )}
+            {totalChanges > 0 && (
+              <span className="text-foreground">· {totalChanges}</span>
+            )}
+          </div>
         )}
       </div>
       {isCommitting && (

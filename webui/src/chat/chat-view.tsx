@@ -282,7 +282,10 @@ export function ChatView() {
                 setEditContent={filePreview.setEditContent}
                 isDirty={filePreview.isDirty}
                 isSaving={filePreview.isSaving}
-                onSave={() => void filePreview.saveFile()}
+                onSave={async () => {
+                  await filePreview.saveFile();
+                  await refreshTree();
+                }}
                 chatHidden={chatHidden}
                 onToggleChat={() => setChatHidden((hidden) => !hidden)}
               />
