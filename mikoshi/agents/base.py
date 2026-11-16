@@ -20,6 +20,7 @@ from mikoshi.agents.streaming import STREAM_DONE, FilteredQueue, StreamEvent, er
 from mikoshi.config import WorkspaceConfig
 from mikoshi.db.models import Message
 from mikoshi.observability import observe, start_tool_span
+from mikoshi.file_storage import save_upload_file
 from mikoshi.tools.approval import ToolDeniedError
 from mikoshi.tools.context import ToolCallContext, WorkspaceContext
 from mikoshi.tools.manager import normalize_tool
@@ -66,6 +67,7 @@ class BaseAgent:
         # parent conversation's LLM context.
         self.phase = kwargs.get("phase")
         self.data_dir = kwargs["data_dir"]
+        self.uploads_dir = kwargs.get("uploads_dir", "uploads")
         self.connector_name = kwargs.get("connector_name")
         self._workspace_config = kwargs.get("workspace_config")
         self._workspace_service = kwargs.get("workspace_service")
@@ -145,6 +147,23 @@ class BaseAgent:
             )
 
             approval_msg_id: List[str] = []
+            saved_file_ids: List[str] = []
+
+            def _save_file(
+                filename: str,
+                content: Any,
+                content_type: Optional[str] = None,
+            ) -> str:
+                file = save_upload_file(
+                    self.db,
+                    filename,
+                    content,
+                    content_type,
+                    source="tool",
+                    uploads_root=self.uploads_dir,
+                )
+                saved_file_ids.append(file.id)
+                return file.id
 
             with start_tool_span(tool_name) as span:
                 span.set_attribute(
@@ -179,6 +198,7 @@ class BaseAgent:
                             chat_id=self.chat_id,
                             workspace=self._build_workspace_context(),
                             on_approval_requested=_on_approval_requested,
+                            save_file=_save_file,
                             stream_queue=queue,
                         )
                         result = await self.tool_manager.call_tool(
@@ -225,10 +245,20 @@ class BaseAgent:
             )
             logger.debug("Tool %s result: %s", tool_name, result_str[:1000])
 
+            if saved_file_ids:
+                logger.info(
+                    "chat_id=%s tool %s saved %d file(s): %s",
+                    self.chat_id,
+                    tool_name,
+                    len(saved_file_ids),
+                    ", ".join(saved_file_ids),
+                )
+
             if approval_msg_id:
                 msg_id = approval_msg_id[0]
                 self.db.update_message_content(msg_id, result_str)
                 self.db.update_message_status(msg_id, "completed")
+                self.db.append_message_files(msg_id, saved_file_ids)
                 # Stream the updated message so the client replaces the
                 # "Awaiting approval…" placeholder without a refetch.
                 updated = self.db.get_message(msg_id)
@@ -239,7 +269,8 @@ class BaseAgent:
                     )
             else:
                 msg = await self._save_message(
-                    "tool", result_str, tool_call_id=tool_call["id"]
+                    "tool", result_str, tool_call_id=tool_call["id"],
+                    file_ids=saved_file_ids,
                 )
                 await self._emit(
                     queue,
@@ -499,14 +530,25 @@ class BaseAgent:
         await self._loop(new_message, queue=queue)
         logger.info("chat_id=%s edit() COMPLETE", self.chat_id)
 
-    @staticmethod
-    def _format_message(msg: Message) -> dict:
+    def _format_message(self, msg: Message) -> dict:
         tool_calls = None
         if msg.tool_calls:
             try:
                 tool_calls = json.loads(msg.tool_calls)
             except (json.JSONDecodeError, TypeError):
                 tool_calls = None
+        file_ids = json.loads(msg.file_ids) if msg.file_ids else []
+        files_by_id = self.db.get_files(file_ids)
+        files = [
+            {
+                "id": f.id,
+                "filename": f.filename,
+                "content_type": f.content_type,
+                "source": f.source,
+            }
+            for fid in file_ids
+            if (f := files_by_id.get(fid)) is not None
+        ]
         return {
             "id": msg.id,
             "role": msg.role,
@@ -517,6 +559,7 @@ class BaseAgent:
             "sequence": msg.sequence,
             "phase": msg.phase,
             "created_at": msg.created_at.isoformat() if msg.created_at else None,
+            "files": files,
         }
 
     @staticmethod
@@ -539,13 +582,17 @@ class BaseAgent:
         if role == "assistant":
             return self._save_assistant_message(content_or_response)
         if role == "tool":
-            return self.db.save_message(
+            file_ids_json = json.dumps(file_ids) if file_ids else None
+            msg = self.db.save_message(
                 self.chat_id,
                 "tool",
                 str(content_or_response),
                 tool_call_id=tool_call_id,
+                file_ids=file_ids_json,
                 phase=self.phase,
             )
+            self.db.attach_files(file_ids or [])
+            return msg
         return self._save_user_message(content_or_response, file_ids)
 
     def _save_assistant_message(self, content_or_response) -> Message:

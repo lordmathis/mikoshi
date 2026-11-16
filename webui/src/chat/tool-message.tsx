@@ -5,6 +5,7 @@ import ReactMarkdown from "react-markdown";
 import { isWorkspaceChange, type Message, type PendingApproval } from "../lib/api.ts";
 import { cyanMarkdownComponents, REMARK_PLUGINS } from "../lib/markdown-components.tsx";
 import { CornerTriangle, MessageAvatar, Scanlines } from "./message-atoms.tsx";
+import { FileChip } from "./file-chip.tsx";
 
 interface ToolMessageProps {
   message: Message;
@@ -82,6 +83,13 @@ export const ToolMessage = memo(function ToolMessage({
           />
         ) : (
           <>
+            {message.files && message.files.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {message.files.map((file) => (
+                  <FileChip key={file.id} file={file} />
+                ))}
+              </div>
+            )}
             <button
               onClick={() => setShowToolResult(!showToolResult)}
               className="flex items-center gap-2 cp-label text-foreground/70 hover:text-foreground transition-colors max-lg:min-h-[36px]"

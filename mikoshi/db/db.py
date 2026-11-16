@@ -400,6 +400,18 @@ class Database:
                 f.status = "attached"
             session.commit()
 
+    def append_message_files(self, message_id: str, file_ids: List[str]):
+        if not file_ids:
+            return
+        with self.SessionLocal() as session:
+            msg = session.get(Message, message_id)
+            if not msg:
+                return
+            existing = loads_json_field(msg.file_ids, [])
+            msg.file_ids = json.dumps(existing + file_ids)
+            session.commit()
+        self.attach_files(file_ids)
+
     def delete_file(self, file_id: str):
         with self.SessionLocal() as session:
             file_obj = session.get(File, file_id)

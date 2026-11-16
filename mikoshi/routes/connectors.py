@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from mikoshi.db.db import Database
 from mikoshi.routes.schemas import FileResponse
-from mikoshi.routes.upload_utils import save_upload_file
+from mikoshi.file_storage import save_upload_file
 
 router = APIRouter(prefix="/connectors")
 logger = logging.getLogger(__name__)

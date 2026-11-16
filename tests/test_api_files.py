@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from starlette.datastructures import Headers
 
 from mikoshi.routes import files as files_module
-from mikoshi.routes.upload_utils import (
+from mikoshi.file_storage import (
     read_upload_body,
     remove_upload_dir,
     save_upload_file,
@@ -155,3 +155,38 @@ class TestUploadSizeLimit:
         upload = _upload("ok.bin")
         upload.file = io.BytesIO(b"x" * 4)
         assert await read_upload_body(upload, max_bytes=4) == b"xxxx"
+
+
+class TestDownloadFile:
+    @pytest.mark.asyncio
+    async def test_serves_stored_bytes_as_attachment(self, tmp_dir):
+        path = os.path.join(tmp_dir, "data")
+        with open(path, "wb") as f:
+            f.write(b"PDF bytes")
+        file_row = SimpleNamespace(
+            id="f1", filename="report.pdf", content_type="application/pdf", file_path=path,
+        )
+        request = _make_request()
+        request.app.state.database = SimpleNamespace(
+            get_file=lambda fid: file_row if fid == "f1" else None
+        )
+
+        resp = await files_module.download_file(request, "f1")
+
+        assert resp.media_type == "application/pdf"
+        assert resp.headers["content-disposition"] == 'attachment; filename="report.pdf"'
+        with open(resp.path, "rb") as f:
+            assert f.read() == b"PDF bytes"
+
+    @pytest.mark.asyncio
+    async def test_row_without_file_on_disk_returns_404(self, tmp_dir):
+        file_row = SimpleNamespace(
+            id="f1", filename="report.pdf", content_type="application/pdf",
+            file_path=os.path.join(tmp_dir, "gone"),
+        )
+        request = _make_request()
+        request.app.state.database = SimpleNamespace(get_file=lambda fid: file_row)
+
+        with pytest.raises(HTTPException) as exc:
+            await files_module.download_file(request, "f1")
+        assert exc.value.status_code == 404

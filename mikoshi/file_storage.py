@@ -61,6 +61,7 @@ def save_upload_file(
     content_type: str | None = None,
     source: str = "upload",
     uploads_root: str = "uploads",
+    src_path: str | None = None,
 ) -> File:
     filename = sanitize_filename(filename)
     file_id = str(uuid.uuid4())
@@ -69,11 +70,13 @@ def save_upload_file(
 
     file_path = os.path.join(upload_dir, "data")
 
-    if isinstance(content, str):
-        content = content.encode("utf-8")
-
-    with open(file_path, "wb") as f:
-        f.write(content)
+    if src_path is not None:
+        shutil.copyfile(src_path, file_path)
+    else:
+        if isinstance(content, str):
+            content = content.encode("utf-8")
+        with open(file_path, "wb") as f:
+            f.write(content)
 
     if not content_type:
         content_type, _ = mimetypes.guess_type(filename)

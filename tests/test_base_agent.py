@@ -1,5 +1,7 @@
 import asyncio
-from unittest.mock import MagicMock
+import json
+import os
+from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
@@ -273,3 +275,65 @@ class TestChatTitleSkippedOnFailedTurn:
         events = _drain(queue)
         assert all(e.type != "chat_renamed" for e in events)
         assert db.get_chat(chat.id).title == "Named already"
+
+
+class TestToolFileAttachment:
+    def _make_tool_agent(self, db, chat_id, tmp_dir, side_effect):
+        agent = ReActAgent(
+            chat_id=chat_id,
+            db=db,
+            provider=_FakeProvider(_ScriptedLLM()),
+            tool_manager=MagicMock(),
+            model_id="m",
+            data_dir=tmp_dir,
+            uploads_dir=os.path.join(tmp_dir, "uploads"),
+            max_iterations=1,
+        )
+        agent.tool_manager.call_tool = AsyncMock(side_effect=side_effect)
+        return agent
+
+    @staticmethod
+    def _write_report(tmp_dir):
+        path = os.path.join(tmp_dir, "report.txt")
+        with open(path, "w") as f:
+            f.write("data")
+        return path
+
+    @pytest.mark.asyncio
+    async def test_tool_saved_files_attach_to_tool_message(self, db, tmp_dir):
+        async def save_then_return(name, args, ctx):
+            ctx.save_file("report.txt", self._write_report(tmp_dir), "text/plain")
+            return "Created report.txt."
+
+        chat = db.create_chat()
+        agent = self._make_tool_agent(db, chat.id, tmp_dir, save_then_return)
+        tool_call = {"id": "tc1", "function": {"name": "report__make", "arguments": "{}"}}
+
+        await agent._execute_tool_calls([tool_call], [], asyncio.Queue())
+
+        msg = next(m for m in db.get_chat_history(chat.id) if m.tool_call_id == "tc1")
+        file_ids = json.loads(msg.file_ids)
+        assert len(file_ids) == 1
+        row = db.get_files(file_ids)[file_ids[0]]
+        assert row.status == "attached"
+        assert row.filename == "report.txt"
+
+    @pytest.mark.asyncio
+    async def test_tool_saved_files_attach_after_approval(self, db, tmp_dir):
+        async def save_then_request_approval(name, args, ctx):
+            ctx.save_file("report.txt", self._write_report(tmp_dir), "text/plain")
+            await ctx.on_approval_requested("appr-1", name, args)
+            return "Created report.txt."
+
+        chat = db.create_chat()
+        agent = self._make_tool_agent(db, chat.id, tmp_dir, save_then_request_approval)
+        tool_call = {"id": "tc2", "function": {"name": "report__make", "arguments": "{}"}}
+
+        await agent._execute_tool_calls([tool_call], [], asyncio.Queue())
+
+        msg = next(m for m in db.get_chat_history(chat.id) if m.tool_call_id == "tc2")
+        assert msg.status == "completed"
+        file_ids = json.loads(msg.file_ids)
+        assert len(file_ids) == 1
+        row = db.get_files(file_ids)[file_ids[0]]
+        assert row.status == "attached"

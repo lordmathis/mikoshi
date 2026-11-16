@@ -1,10 +1,12 @@
 import logging
+import os
 from typing import List
 
 from fastapi import APIRouter, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse as DownloadResponse
 
 from mikoshi.routes.schemas import FileResponse
-from mikoshi.routes.upload_utils import (
+from mikoshi.file_storage import (
     read_upload_body,
     remove_upload_dir,
     save_upload_file,
@@ -54,6 +56,22 @@ async def get_file(request: Request, file_id: str):
 
     return FileResponse(
         id=file_obj.id, filename=file_obj.filename, content_type=file_obj.content_type
+    )
+
+
+@router.get("/files/{file_id}/download")
+async def download_file(request: Request, file_id: str):
+    db = request.app.state.database
+    file_obj = db.get_file(file_id)
+    if not file_obj:
+        raise HTTPException(status_code=404, detail="File not found")
+    if not os.path.isfile(file_obj.file_path):
+        raise HTTPException(status_code=404, detail="File content not found")
+
+    return DownloadResponse(
+        path=file_obj.file_path,
+        media_type=file_obj.content_type,
+        filename=file_obj.filename,
     )
 
 

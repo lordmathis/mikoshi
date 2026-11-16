@@ -5,7 +5,7 @@ import httpx
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import Response
 
-from mikoshi.routes.upload_utils import read_upload_body
+from mikoshi.file_storage import read_upload_body
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

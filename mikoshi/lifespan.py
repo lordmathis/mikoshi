@@ -11,7 +11,7 @@ from mikoshi.connectors.registry import ConnectorRegistry
 from mikoshi.db.db import Database
 from mikoshi.middleware import InFlightRequests
 from mikoshi.providers.registry import ProviderRegistry
-from mikoshi.routes.upload_utils import remove_upload_dir
+from mikoshi.file_storage import remove_upload_dir
 from mikoshi.skills import SkillRegistry
 from mikoshi.tools.manager import ToolManager
 from mikoshi.workspace import WorkspaceService
@@ -120,6 +120,7 @@ async def lifespan(app: FastAPI):
         agent_registry=model_registry,
         tool_manager=tool_manager,
         data_dir=app_config.data_dir,
+        uploads_dir=app_config.uploads_dir,
         workspace_config=app_config.workspace,
         skill_registry=skill_registry,
         title_generation=app_config.title_generation,

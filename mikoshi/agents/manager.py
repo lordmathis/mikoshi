@@ -97,6 +97,7 @@ class AgentManager:
         skill_registry: Optional[SkillRegistry] = None,
         title_generation: Optional[TitleGenerationConfig] = None,
         workspace_service: Optional[WorkspaceService] = None,
+        uploads_dir: str = "uploads",
     ):
         self.db = db
         self.provider_registry = provider_registry
@@ -105,6 +106,7 @@ class AgentManager:
         self.skill_registry = skill_registry
         self.title_generation = title_generation
         self.data_dir = data_dir
+        self.uploads_dir = uploads_dir
         self.workspace_config = workspace_config
         self.workspace_service = workspace_service
         self._agents: Dict[str, BaseAgent] = {}
@@ -179,6 +181,7 @@ class AgentManager:
             "skill_registry": self.skill_registry,
             "workspace_id": workspace_id,
             "data_dir": self.data_dir,
+            "uploads_dir": self.uploads_dir,
             "connector_name": connector_name,
             "workspace_config": self.workspace_config,
             "workspace_service": self.workspace_service,

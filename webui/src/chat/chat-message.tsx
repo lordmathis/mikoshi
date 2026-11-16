@@ -1,4 +1,4 @@
-import { Bot, User, Brain, File, GitBranch, RotateCw, Edit2, Copy, Check, Link, Volume2 } from "lucide-react";
+import { Bot, User, Brain, GitBranch, RotateCw, Edit2, Copy, Check, Link, Volume2 } from "lucide-react";
 import { cn } from "../lib/utils.ts";
 import ReactMarkdown from "react-markdown";
 import { useState, useRef, useEffect, memo } from "react";
@@ -11,6 +11,7 @@ import {
 import { IconButtonTooltip } from "../shared/icon-button-tooltip.tsx";
 import { Chip } from "../shared/chip.tsx";
 import { CornerTriangle, MessageAvatar, Scanlines } from "./message-atoms.tsx";
+import { FileChip } from "./file-chip.tsx";
 import { api, type Message } from "../lib/api.ts";
 import { markdownComponents, REMARK_PLUGINS } from "../lib/markdown-components.tsx";
 
@@ -97,16 +98,6 @@ export const ChatMessage = memo(function ChatMessage({ message, onBranch, onRetr
     return groups;
   })();
 
-  const renderFileChip = (file: { id: string; filename: string }) => (
-    <Chip
-      key={file.id}
-      className="text-xs border-border bg-primary/6"
-      icon={<File className="h-3.5 w-3.5 text-primary/60" />}
-      label={file.filename}
-      labelClassName="font-medium text-foreground/80"
-    />
-  );
-
   const renderSourceChip = (source: string, fileCount: number) => {
     const repo = source.includes(':') ? source.split(':').slice(1).join(':') : source;
     return (
@@ -173,7 +164,7 @@ export const ChatMessage = memo(function ChatMessage({ message, onBranch, onRetr
           <div className="flex flex-wrap gap-2 mb-2">
             {groupedFiles.map(({ source, files }) => {
               if (source === null) {
-                return files.map(file => renderFileChip(file));
+                return files.map(file => <FileChip key={file.id} file={file} />);
               } else {
                 return <div key={source}>{renderSourceChip(source, files.length)}</div>;
               }
