@@ -8,7 +8,7 @@ from mcp.types import Tool
 
 from mikoshi.agents.structured import StructuredAgent
 from mikoshi.routes.tools import router as tools_router
-from mikoshi.tools.manager import normalize_tool
+from mikoshi.tools.handler_base import normalize_tool
 from mikoshi.tools.toolset_handler import ToolDefinition
 
 _MCP_SCHEMA = {"type": "object", "properties": {"x": {"type": "string"}}}

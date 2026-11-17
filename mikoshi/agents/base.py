@@ -23,13 +23,23 @@ from mikoshi.observability import observe, start_tool_span
 from mikoshi.file_storage import save_upload_file
 from mikoshi.tools.approval import ToolDeniedError
 from mikoshi.tools.context import ToolCallContext, WorkspaceContext
-from mikoshi.tools.manager import normalize_tool
+from mikoshi.tools.handler_base import normalize_tool
 
 logger = logging.getLogger(__name__)
 
 # Transient provider errors worth retrying with backoff: network failures,
 # rate limits (429), and server errors (5xx).
 _RETRYABLE_LLM_ERRORS = (APIConnectionError, RateLimitError, InternalServerError)
+
+# Static system-prompt hint appended when the discovery server is enabled.
+# Must stay byte-stable: it rides in the cached prompt prefix of every turn.
+DISCOVERY_HINT = (
+    "\n\n--- Tool discovery ---\n"
+    "More tools exist beyond those listed above. Use discovery__search_tools to "
+    "find one by keyword; it returns server, tool name and full parameter schema. "
+    "Execute it with discovery__invoke_tool(server, tool, arguments), matching "
+    "the returned schema exactly."
+)
 
 
 def _retry_after_seconds(error: Exception) -> Optional[float]:
@@ -200,6 +210,7 @@ class BaseAgent:
                             on_approval_requested=_on_approval_requested,
                             save_file=_save_file,
                             stream_queue=queue,
+                            upfront_tool_servers=list(self.tool_servers),
                         )
                         result = await self.tool_manager.call_tool(
                             tool_name, tool_args, ctx
@@ -664,20 +675,29 @@ class BaseAgent:
             active_skills, self.skill_registry
         )
 
-        if required_tool_servers:
-            new_servers = list(
-                dict.fromkeys(
-                    s for s in required_tool_servers if s not in self.tool_servers
-                )
+        discovery_active = "discovery" in self.tool_servers
+        new_servers = list(
+            dict.fromkeys(
+                s for s in required_tool_servers if s not in self.tool_servers
             )
-            if new_servers:
-                self.tool_servers = self.tool_servers + new_servers
-                self.db.update_chat(
-                    self.chat_id, tool_servers=json.dumps(self.tool_servers)
-                )
-                logger.info(
-                    f"Activated skill tool servers for chat {self.chat_id}: {new_servers}"
-                )
+        )
+        if new_servers and discovery_active:
+            # Changing the tool array mid-chat invalidates the whole provider
+            # prompt prefix; with discovery on, skill servers stay reachable
+            # through discovery__search_tools instead.
+            logger.info(
+                "chat_id=%s discovery enabled — skill tool servers served via discovery: %s",
+                self.chat_id,
+                new_servers,
+            )
+        elif new_servers:
+            self.tool_servers = self.tool_servers + new_servers
+            self.db.update_chat(
+                self.chat_id, tool_servers=json.dumps(self.tool_servers)
+            )
+            logger.info(
+                f"Activated skill tool servers for chat {self.chat_id}: {new_servers}"
+            )
 
         messages = format_history(self.db, self.chat_id)
 
@@ -687,6 +707,8 @@ class BaseAgent:
             insert_system_message(messages, self.system_prompt)
 
         messages = apply_skill_context(messages, skill_context)
+        if discovery_active:
+            messages = apply_skill_context(messages, DISCOVERY_HINT)
 
         return messages
 

@@ -8,6 +8,7 @@ import pytest
 from openai import AuthenticationError, InternalServerError, RateLimitError
 
 from mikoshi.agents.react import ReActAgent
+from tests.conftest import FakeRegistry, FakeSkill
 
 
 def _response(content="ok"):
@@ -337,3 +338,47 @@ class TestToolFileAttachment:
         assert len(file_ids) == 1
         row = db.get_files(file_ids)[file_ids[0]]
         assert row.status == "attached"
+
+
+class TestBuildContextSkillServers:
+    def _make_skill_agent(self, db, chat_id, tool_servers):
+        registry = FakeRegistry(
+            {"deploy": FakeSkill(content="deploy steps", tool_servers=["k8s"])}
+        )
+        return ReActAgent(
+            chat_id=chat_id,
+            db=db,
+            provider=_FakeProvider(_ScriptedLLM()),
+            tool_manager=MagicMock(),
+            model_id="m",
+            data_dir="/tmp",
+            max_iterations=1,
+            tool_servers=tool_servers,
+            skill_registry=registry,
+        )
+
+    @pytest.mark.asyncio
+    async def test_skill_servers_stay_discoverable_when_discovery_enabled(self, db):
+        chat = db.create_chat()
+        agent = self._make_skill_agent(db, chat.id, ["workspace", "discovery"])
+
+        messages = await agent._build_context("/deploy the api")
+
+        assert agent.tool_servers == ["workspace", "discovery"]
+        assert db.get_chat(chat.id).tool_servers is None
+        system = messages[0]["content"]
+        assert "discovery__search_tools" in system
+        assert "deploy steps" in system
+
+    @pytest.mark.asyncio
+    async def test_skill_servers_appended_when_discovery_disabled(self, db):
+        chat = db.create_chat()
+        agent = self._make_skill_agent(db, chat.id, ["workspace"])
+
+        messages = await agent._build_context("/deploy the api")
+
+        assert agent.tool_servers == ["workspace", "k8s"]
+        assert db.get_chat(chat.id).tool_servers == json.dumps(["workspace", "k8s"])
+        assert all(
+            "discovery__search_tools" not in str(m.get("content")) for m in messages
+        )

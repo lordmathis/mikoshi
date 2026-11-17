@@ -18,6 +18,7 @@ from mikoshi.tools.mcp_handler import MCPToolHandler
 from mikoshi.tools.toolset_handler import ToolSetHandler
 from mikoshi.tools.builtin import (
     BashTools,
+    DiscoveryTools,
     MemoryTools,
     ScraperTools,
     SubagentTools,
@@ -35,21 +36,8 @@ BUILTIN_TOOLS: list[tuple[type[ToolSetHandler], Optional[str]]] = [
     (ScraperTools, "search"),
     (MemoryTools, "memory"),
     (SubagentTools, None),
+    (DiscoveryTools, None),
 ]
-
-
-def normalize_tool(tool: Any) -> Dict[str, Any]:
-    """Normalize a tool object from any handler type into a plain dict.
-
-    ToolSetHandler tools expose ``parameters`` (JSON Schema); MCP ``Tool``
-    objects expose ``input_schema``.
-    """
-    schema = getattr(tool, "input_schema", None) or getattr(tool, "parameters", None)
-    return {
-        "name": getattr(tool, "name", "unknown"),
-        "description": getattr(tool, "description", "") or "",
-        "parameters": schema or {},
-    }
 
 
 def _parse_tool_name(call_name: str) -> tuple[str, str]:

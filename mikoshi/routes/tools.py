@@ -3,7 +3,7 @@ import logging
 
 from fastapi import APIRouter, Request
 
-from mikoshi.tools.manager import normalize_tool
+from mikoshi.tools.handler_base import normalize_tool
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

@@ -1,7 +1,7 @@
 import asyncio
 import os
 from dataclasses import dataclass
-from typing import Awaitable, Callable, Optional, Union
+from typing import Awaitable, Callable, List, Optional, Union
 
 from mikoshi.providers.provider import Provider
 
@@ -40,3 +40,6 @@ class ToolCallContext:
     save_file: Optional[FileSaveCallback] = None
     # The agent's SSE queue; lets a tool stream sub-agent events to the UI.
     stream_queue: Optional[asyncio.Queue] = None
+    # Servers already expanded into the LLM tool array for this chat; lets the
+    # discovery toolset compute its catalog as "everything else".
+    upfront_tool_servers: Optional[List[str]] = None
