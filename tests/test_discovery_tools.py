@@ -1,9 +1,12 @@
 from types import SimpleNamespace
 
 import pytest
+from unittest.mock import MagicMock
 
+from mikoshi.config import AppConfig
 from mikoshi.tools.builtin.discovery import DiscoveryTools, match_tools
 from mikoshi.tools.context import ToolCallContext
+from mikoshi.tools.manager import ToolManager
 
 CATALOG = [
     {
@@ -36,8 +39,9 @@ def _mcp_tool(name, description, parameters=None):
 
 
 class _StubManager:
-    def __init__(self, servers):
+    def __init__(self, servers, chat_servers=None):
         self._servers = servers
+        self._chat_servers = chat_servers or []
         self.calls = []
 
     async def list_tool_servers(self):
@@ -50,19 +54,21 @@ class _StubManager:
         self.calls.append((call_name, arguments))
         return {"called": call_name}
 
+    def get_chat_tool_servers(self, chat_id):
+        return self._chat_servers
 
-def _discovery(servers):
+
+def _discovery(servers, chat_servers=None):
     tools = DiscoveryTools()
-    tools.set_tool_manager(_StubManager(servers))
+    tools.set_tool_manager(_StubManager(servers, chat_servers))
     return tools
 
 
-def _context(upfront=None):
+def _context():
     return ToolCallContext(
         provider=None,
         model_id="m",
         chat_id="c1",
-        upfront_tool_servers=upfront or [],
     )
 
 
@@ -86,7 +92,7 @@ async def test_initialize_registers_search_and_invoke_tools():
 
 
 @pytest.mark.asyncio
-async def test_search_tools_excludes_upfront_and_discovery_servers():
+async def test_search_tools_excludes_chat_servers_from_catalog():
     servers = {
         "workspace": [_mcp_tool("read_file", "Read a file")],
         "github": [
@@ -94,16 +100,23 @@ async def test_search_tools_excludes_upfront_and_discovery_servers():
         ],
         "discovery": [_mcp_tool("search_tools", "fake")],
     }
-    discovery = _discovery(servers)
+    discovery = _discovery(servers, chat_servers=["workspace"])
 
-    result = await discovery.search_tools(
-        "issue", context=_context(upfront=["workspace"])
-    )
+    result = await discovery.search_tools("issue", context=_context())
 
     assert result["count"] == 1
     entry = result["results"][0]
     assert entry["server"] == "github"
     assert entry["parameters"] == {"type": "object"}
+
+
+def test_manager_reads_chat_tool_servers_from_db(db):
+    manager = ToolManager(AppConfig(), MagicMock(), db=db)
+    chat = db.create_chat()
+    db.update_chat(chat.id, tool_servers='["workspace", "discovery"]')
+
+    assert manager.get_chat_tool_servers(chat.id) == ["workspace", "discovery"]
+    assert manager.get_chat_tool_servers("missing-chat") == []
 
 
 @pytest.mark.asyncio

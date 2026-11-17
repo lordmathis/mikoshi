@@ -279,6 +279,19 @@ class ToolManager:
         """List all registered tool servers"""
         return list(self._server_map.keys())
 
+    def get_chat_tool_servers(self, chat_id: str) -> List[str]:
+        """Servers currently enabled for a chat (persisted chat row)."""
+        if self._db is None:
+            return []
+        chat = self._db.get_chat(chat_id)
+        if not chat or not chat.tool_servers:
+            return []
+        try:
+            servers = json.loads(chat.tool_servers)
+        except (json.JSONDecodeError, TypeError):
+            return []
+        return servers if isinstance(servers, list) else []
+
     def get_tool_definition(self, call_name: str):
         try:
             server_name, tool_name = _parse_tool_name(call_name)

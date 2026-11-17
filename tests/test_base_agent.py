@@ -362,23 +362,17 @@ class TestBuildContextSkillServers:
         chat = db.create_chat()
         agent = self._make_skill_agent(db, chat.id, ["workspace", "discovery"])
 
-        messages = await agent._build_context("/deploy the api")
+        await agent._build_context("/deploy the api")
 
         assert agent.tool_servers == ["workspace", "discovery"]
         assert db.get_chat(chat.id).tool_servers is None
-        system = messages[0]["content"]
-        assert "discovery__search_tools" in system
-        assert "deploy steps" in system
 
     @pytest.mark.asyncio
     async def test_skill_servers_appended_when_discovery_disabled(self, db):
         chat = db.create_chat()
         agent = self._make_skill_agent(db, chat.id, ["workspace"])
 
-        messages = await agent._build_context("/deploy the api")
+        await agent._build_context("/deploy the api")
 
         assert agent.tool_servers == ["workspace", "k8s"]
         assert db.get_chat(chat.id).tool_servers == json.dumps(["workspace", "k8s"])
-        assert all(
-            "discovery__search_tools" not in str(m.get("content")) for m in messages
-        )

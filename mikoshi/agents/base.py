@@ -31,16 +31,6 @@ logger = logging.getLogger(__name__)
 # rate limits (429), and server errors (5xx).
 _RETRYABLE_LLM_ERRORS = (APIConnectionError, RateLimitError, InternalServerError)
 
-# Static system-prompt hint appended when the discovery server is enabled.
-# Must stay byte-stable: it rides in the cached prompt prefix of every turn.
-DISCOVERY_HINT = (
-    "\n\n--- Tool discovery ---\n"
-    "More tools exist beyond those listed above. Use discovery__search_tools to "
-    "find one by keyword; it returns server, tool name and full parameter schema. "
-    "Execute it with discovery__invoke_tool(server, tool, arguments), matching "
-    "the returned schema exactly."
-)
-
 
 def _retry_after_seconds(error: Exception) -> Optional[float]:
     """Parse a numeric Retry-After header off a provider error, if present."""
@@ -210,7 +200,6 @@ class BaseAgent:
                             on_approval_requested=_on_approval_requested,
                             save_file=_save_file,
                             stream_queue=queue,
-                            upfront_tool_servers=list(self.tool_servers),
                         )
                         result = await self.tool_manager.call_tool(
                             tool_name, tool_args, ctx
@@ -707,8 +696,6 @@ class BaseAgent:
             insert_system_message(messages, self.system_prompt)
 
         messages = apply_skill_context(messages, skill_context)
-        if discovery_active:
-            messages = apply_skill_context(messages, DISCOVERY_HINT)
 
         return messages
 

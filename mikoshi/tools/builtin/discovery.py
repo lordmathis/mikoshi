@@ -56,9 +56,10 @@ class DiscoveryTools(ToolSetHandler):
 
     @tool(
         description=(
-            "Search for tools that are not in the current tool list. Returns each "
-            "match's server, tool name, description and full JSON parameter schema. "
-            "Execute a found tool with discovery__invoke_tool."
+            "Search for tools that are not in your current tool list. Use this "
+            "when a task needs a capability you don't have. Returns each match's "
+            "server, tool name, description and full JSON parameter schema. "
+            "Execute a match with discovery__invoke_tool."
         ),
         parameters={
             "type": "object",
@@ -80,7 +81,11 @@ class DiscoveryTools(ToolSetHandler):
     ) -> Any:
         if not self._tool_manager:
             return "Error: discovery is not initialized."
-        upfront = set(context.upfront_tool_servers or []) if context else set()
+        upfront = set(
+            self._tool_manager.get_chat_tool_servers(context.chat_id)
+            if context
+            else []
+        )
         catalog = await self._catalog(upfront)
         results = match_tools(catalog, query, max(1, min(int(limit or 8), 25)))
         logger.info(
