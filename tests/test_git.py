@@ -178,3 +178,92 @@ class TestAheadBehindParsing:
         status = await self._status("## v1.0...origin/v1.0 [ahead 1]\n")
         assert status.branch == "v1.0"
         assert status.ahead == 1
+
+
+class TestCheckoutAndBranches:
+    @pytest.mark.asyncio
+    async def test_checkout_existing_branch(self):
+        captured = {}
+
+        async def fake_run_git(args, cwd=None, env=None, timeout=30):
+            captured["args"] = args
+            return 0, "Switched to branch 'main'", ""
+
+        with patch("mikoshi.git.run_git", side_effect=fake_run_git):
+            result = await _svc().checkout("main")
+        assert result.success is True
+        assert captured["args"] == ["checkout", "main"]
+
+    @pytest.mark.asyncio
+    async def test_checkout_create_uses_b_flag(self):
+        captured = {}
+
+        async def fake_run_git(args, cwd=None, env=None, timeout=30):
+            captured["args"] = args
+            return 0, "Switched to a new branch 'feat'", ""
+
+        with patch("mikoshi.git.run_git", side_effect=fake_run_git):
+            result = await _svc().checkout("feat", create=True)
+        assert result.success is True
+        assert captured["args"] == ["checkout", "-b", "feat"]
+
+    @pytest.mark.asyncio
+    async def test_checkout_failure_returns_error(self):
+        with patch(
+            "mikoshi.git.run_git",
+            new=AsyncMock(
+                return_value=(1, "", "error: pathspec 'nope' did not match")
+            ),
+        ):
+            result = await _svc().checkout("nope")
+        assert result.success is False
+        assert "did not match" in result.output
+
+    @pytest.mark.asyncio
+    async def test_branches_returns_raw_output(self):
+        with patch(
+            "mikoshi.git.run_git",
+            new=AsyncMock(
+                return_value=(0, "* main\n  other\n  remotes/origin/main\n", "")
+            ),
+        ):
+            output = await _svc().branches()
+        assert "* main" in output
+        assert "remotes/origin/main" in output
+
+
+class TestPushUpstreamFallback:
+    async def _push(self, rev_parse_results):
+        calls = []
+        results = list(rev_parse_results)
+
+        async def fake_run_git(args, cwd=None, env=None, timeout=30):
+            calls.append(args)
+            if args[0] == "rev-parse":
+                return results.pop(0)
+            return 0, "pushed", ""
+
+        with patch("mikoshi.git.run_git", side_effect=fake_run_git):
+            return await _svc().push(), calls
+
+    @pytest.mark.asyncio
+    async def test_with_upstream_pushes_plain(self):
+        result, calls = await self._push(
+            [(0, "main\n", ""), (0, "origin/main\n", "")]
+        )
+        assert result.success is True
+        assert calls[-1] == ["push"]
+
+    @pytest.mark.asyncio
+    async def test_without_upstream_sets_it(self):
+        result, calls = await self._push(
+            [(0, "feat\n", ""), (1, "", "fatal: no upstream")]
+        )
+        assert result.success is True
+        assert calls[-1] == ["push", "-u", "origin", "feat"]
+
+    @pytest.mark.asyncio
+    async def test_detached_head_pushes_plain(self):
+        result, calls = await self._push([(0, "HEAD\n", "")])
+        assert result.success is True
+        assert calls[-1] == ["push"]

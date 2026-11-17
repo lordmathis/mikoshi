@@ -444,7 +444,9 @@ A `workspace` tool server is registered automatically (no plugin required) and i
 | `git_status` | `git status --porcelain` |
 | `git_diff` | `git diff` (unstaged) |
 | `git_commit` | Stage all and commit with a message (uses the workspace's configured git identity) |
-| `git_pull` / `git_push` | Pull/push using connector credentials when the remote is an HTTPS URL |
+| `git_pull` / `git_push` | Pull/push using connector credentials when the remote is an HTTPS URL; push sets the upstream automatically for new branches |
+| `git_branches` | List all branches (local and remote-tracking), current one marked `*` |
+| `git_checkout` | Switch to a branch, optionally creating it first |
 
 ### 3. Skill Plugins
 

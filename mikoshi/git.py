@@ -214,10 +214,30 @@ class GitService:
             _, head_hash = await self._run_git(["rev-parse", "HEAD"])
         return GitResult(ok, output, head_hash)
 
+    async def checkout(self, branch: str, create: bool = False) -> GitResult:
+        args = ["checkout", "-b", branch] if create else ["checkout", branch]
+        ok, output = await self._run_git(args)
+        return GitResult(ok, output)
+
+    async def branches(self) -> str:
+        """Raw `git branch -a` output (or the error message)."""
+        return (await self._run_git(["branch", "-a"]))[1]
+
     async def pull(self, auth_env_vars: dict[str, str] | None = None) -> GitResult:
         ok, output = await self._run_git(["pull"], timeout=120, env=auth_env_vars)
         return GitResult(ok, output)
 
     async def push(self, auth_env_vars: dict[str, str] | None = None) -> GitResult:
-        ok, output = await self._run_git(["push"], timeout=120, env=auth_env_vars)
+        args = ["push"]
+        ok, branch = await self._run_git(
+            ["rev-parse", "--abbrev-ref", "HEAD"], timeout=10
+        )
+        if ok and branch != "HEAD":
+            has_upstream, _ = await self._run_git(
+                ["rev-parse", "--abbrev-ref", "--symbolic-full-name", f"{branch}@{{u}}"],
+                timeout=10,
+            )
+            if not has_upstream:
+                args = ["push", "-u", "origin", branch]
+        ok, output = await self._run_git(args, timeout=120, env=auth_env_vars)
         return GitResult(ok, output)

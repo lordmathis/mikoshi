@@ -755,3 +755,45 @@ class WorkspaceTools(ToolSetHandler):
         auth_env_vars = await self._get_auth_env(context)
         result = await svc.push(auth_env_vars)
         return result.output
+
+    @tool(
+        description="List all branches (local and remote-tracking). The current branch is marked with '*'.",
+        parameters={
+            "type": "object",
+            "properties": {},
+        },
+    )
+    async def git_branches(self, context: ToolCallContext) -> str:
+        root = _require_workspace(context)
+        if not _has_git_repo(root):
+            return "No git repository in this workspace."
+        return await self._get_git_service(context).branches()
+
+    @tool(
+        description="Switch to a branch. Set create to true to create the branch first.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "branch": {
+                    "type": "string",
+                    "description": "Branch name to switch to",
+                },
+                "create": {
+                    "type": "boolean",
+                    "description": "Create the branch before switching (default: false)",
+                },
+            },
+            "required": ["branch"],
+        },
+    )
+    async def git_checkout(
+        self, branch: str, context: ToolCallContext, create: bool = False
+    ) -> str:
+        root = _require_workspace(context)
+        if not _has_git_repo(root):
+            return "No git repository in this workspace."
+        result = await self._get_git_service(context).checkout(branch, create)
+        if not result.success:
+            return f"Error checking out branch: {result.output}"
+        self._notify_index_sync(context)
+        return _workspace_result(f"Now on branch {branch}")
