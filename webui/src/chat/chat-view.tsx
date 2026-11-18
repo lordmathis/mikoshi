@@ -38,7 +38,6 @@ export function ChatView() {
   }, []);
 
   const toggleSidebar = useCallback(() => setSidebarOpen((open) => !open), []);
-  useOverlayHistory(sidebarOpen, toggleSidebar);
 
   const sidebar = useSidebar();
   const conversations = useConversations(sidebar.activeWorkspaceId);
@@ -51,6 +50,16 @@ export function ChatView() {
   const workspaces = useWorkspaces(sidebar);
   const { refreshTree, deleteWorkspace } = workspaces;
   const filePreview = usePreview(sidebar.activeWorkspaceId);
+
+  // One history entry for "an overlay is open" — separate entries for the
+  // sidebar and preview race on the sidebar→preview handoff (file tap).
+  const showPreview = filePreview.filePath !== null;
+  const { closePreview } = filePreview;
+  const closeTopOverlay = useCallback(() => {
+    if (showPreview) closePreview();
+    else setSidebarOpen(false);
+  }, [showPreview, closePreview, setSidebarOpen]);
+  useOverlayHistory(sidebarOpen || showPreview, closeTopOverlay);
 
   const currentFilePathRef = useRef(filePreview.filePath);
   currentFilePathRef.current = filePreview.filePath;
@@ -203,9 +212,7 @@ export function ChatView() {
     fileInputRef.current?.click();
   };
 
-  const showPreview = filePreview.filePath !== null;
   const [chatHidden, setChatHidden] = useState(false);
-  useOverlayHistory(showPreview, filePreview.closePreview);
 
   useEffect(() => {
     if (!showPreview) setChatHidden(false);

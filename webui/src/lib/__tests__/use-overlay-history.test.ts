@@ -87,4 +87,26 @@ describe("useOverlayHistory", () => {
 
     expect(history.state).toBeNull();
   });
+
+  it("keeps the entry when the close handler changes while open", async () => {
+    mockDesktop(false);
+    const onClose = vi.fn();
+    const onClose2 = vi.fn();
+
+    const { rerender } = renderHook(
+      ({ isOpen, handler }) => useOverlayHistory(isOpen, handler),
+      { initialProps: { isOpen: false, handler: onClose } }
+    );
+    rerender({ isOpen: true, handler: onClose });
+
+    // Overlay handoff (sidebar → preview) in one commit: same entry, new
+    // handler. Re-running the effect here would push + self-inflict a
+    // history.back() whose popstate closes the incoming overlay.
+    rerender({ isOpen: true, handler: onClose2 });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(history.state).toEqual({ mOverlay: true });
+    expect(onClose2).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
 });

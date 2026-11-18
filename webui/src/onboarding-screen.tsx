@@ -44,7 +44,10 @@ export function OnboardingScreen() {
           <Label htmlFor="server-url">Server URL</Label>
           <Input
             id="server-url"
-            type="url"
+            type="text"
+            inputMode="url"
+            autoComplete="url"
+            spellCheck={false}
             placeholder="https://mikoshi.home.example.com"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
