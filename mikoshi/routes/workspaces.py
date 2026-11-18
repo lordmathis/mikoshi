@@ -158,7 +158,11 @@ async def get_workspace_file(request: Request, workspace_id: str, path: str):
         "application/xml",
     ):
         return PlainTextResponse(content.decode("utf-8", errors="replace"))
-    return Response(content=content, media_type=mime_type)
+    return Response(
+        content=content,
+        media_type=mime_type,
+        headers={"Content-Disposition": "inline"},
+    )
 
 
 async def _write_workspace_file(

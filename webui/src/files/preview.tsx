@@ -10,6 +10,7 @@ import { markdownComponents, REMARK_PLUGINS } from "../lib/markdown-components.t
 import { formatValue, parseFrontmatter } from "../lib/frontmatter.ts";
 import { encodeFilePath } from "../lib/api.ts";
 import { ViewBlockContext } from "./view-block.tsx";
+import { PdfPreview } from "./pdf-preview.tsx";
 
 interface PreviewProps {
   filePath: string | null;
@@ -22,6 +23,10 @@ interface PreviewProps {
 
 function isMarkdownFile(path: string): boolean {
   return /\.(md|mdx|markdown)$/i.test(path);
+}
+
+function isPdfFile(path: string): boolean {
+  return /\.pdf$/i.test(path);
 }
 
 function UnresolvedWiki({ children }: { children: React.ReactNode }) {
@@ -112,6 +117,10 @@ export function FrontmatterPanel({ metadata, workspaceId, fileIndex, onFileClick
 
 export function Preview({ filePath, fileContent, isLoading, workspaceId, fileIndex, onFileClick }: PreviewProps) {
   if (!filePath) return null;
+
+  if (isPdfFile(filePath)) {
+    return <PdfPreview workspaceId={workspaceId} filePath={filePath} />;
+  }
 
   const isMd = isMarkdownFile(filePath);
 

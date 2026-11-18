@@ -284,6 +284,7 @@ class TestFileRead:
         resp = await client.get(f"/api/workspaces/{ws.id}/files/img.png")
         assert resp.status_code == 200
         assert resp.headers["content-type"] == "image/png"
+        assert resp.headers["content-disposition"] == "inline"
 
     @pytest.mark.asyncio
     async def test_json_file_returns_plain_text(self, client, db):

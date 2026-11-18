@@ -28,11 +28,13 @@ export function usePreview(workspaceId: string | null) {
 
   const openFile = useCallback(async (path: string) => {
     if (!workspaceId) return;
+    const isPdf = /\.pdf$/i.test(path);
     setFilePath(path);
     filePathRef.current = path;
     setFileContent(null);
-    setIsLoading(true);
+    setIsLoading(!isPdf);
     setEditContent(null);
+    if (isPdf) return;
     try {
       const content = await api.getWorkspaceFile(workspaceId, path);
       setFileContent(content);
@@ -48,6 +50,7 @@ export function usePreview(workspaceId: string | null) {
 
   const refreshCurrentFile = useCallback(async () => {
     if (!workspaceId || !filePathRef.current) return;
+    if (/\.pdf$/i.test(filePathRef.current)) return;
     try {
       const content = await api.getWorkspaceFile(workspaceId, filePathRef.current);
       setFileContent(content);
