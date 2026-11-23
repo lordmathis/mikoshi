@@ -80,7 +80,7 @@ export function ChatSettingsDialog({
 
       if (cancelled) return;
 
-      const toolServers = toolsRes.tool_servers;
+      const toolServers = [...toolsRes.tool_servers].sort((a, b) => a.name.localeCompare(b.name));
       const agentConfigs = agentsRes.agents;
       const grouped: Record<string, { id: string; label: string; preferred?: boolean }[]> = {};
       for (const model of modelsRes.data) {
