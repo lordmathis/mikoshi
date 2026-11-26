@@ -304,6 +304,11 @@ class BaseAgent:
         await self._emit(
             queue, StreamEvent(type="message", data=self._format_message(msg))
         )
+        arguments = (
+            json.loads(tool_call["function"]["arguments"])
+            if isinstance(tool_call["function"]["arguments"], str)
+            else tool_call["function"]["arguments"]
+        )
         await self._emit(
             queue,
             StreamEvent(
@@ -312,9 +317,8 @@ class BaseAgent:
                     "approval_id": approval_id,
                     "message_id": msg.id,
                     "tool_name": tool_name,
-                    "arguments": json.loads(tool_call["function"]["arguments"])
-                    if isinstance(tool_call["function"]["arguments"], str)
-                    else tool_call["function"]["arguments"],
+                    "arguments": arguments,
+                    "rule": self.tool_manager.suggested_rule(tool_name, arguments),
                 },
             ),
         )

@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 from typing import Any, Dict
 import os
 
@@ -7,6 +8,27 @@ from mikoshi.tools.context import ToolCallContext
 from mikoshi.tools.toolset_handler import ToolSetHandler, tool
 
 logger = logging.getLogger(__name__)
+
+_SEGMENT_SEPARATORS = re.compile(r"&&|\|\||[;|&\n]")
+
+
+def _segment_tokens(command: str) -> list[str]:
+    return [
+        segment.split()[0]
+        for segment in (part.strip() for part in _SEGMENT_SEPARATORS.split(command))
+        if segment
+    ]
+
+
+def command_auto_approved(command: str, rules: set[str]) -> bool:
+    if not rules:
+        return False
+    if "$(" in command or "`" in command:
+        return False
+    tokens = _segment_tokens(command)
+    if not tokens:
+        return False
+    return all(token in rules for token in tokens)
 
 
 class BashTools(ToolSetHandler):
@@ -18,6 +40,18 @@ class BashTools(ToolSetHandler):
         indexer = self._tool_manager.workspace_index
         if indexer:
             indexer.notify_sync(context.workspace.workspace_id)
+
+    def suggested_rule(self, arguments: dict) -> str | None:
+        command = arguments.get("command")
+        if not isinstance(command, str) or not command.strip():
+            return None
+        return command.split()[0]
+
+    def is_auto_approved(self, arguments: dict, rules: set[str]) -> bool:
+        command = arguments.get("command")
+        if not isinstance(command, str):
+            return False
+        return command_auto_approved(command, rules)
 
     @tool(
         description="Execute a bash command in the workspace directory. Requires user approval before execution.",

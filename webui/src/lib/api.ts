@@ -85,6 +85,7 @@ export interface PendingApproval {
   message_id: string | null;
   tool_name: string;
   arguments: Record<string, unknown>;
+  rule: string | null;
   created_at: string | null;
 }
 
@@ -93,6 +94,7 @@ export interface ApprovalRequestEvent {
   message_id: string;
   tool_name: string;
   arguments: Record<string, unknown>;
+  rule: string | null;
 }
 
 export interface ChatRenamedEvent {
@@ -478,10 +480,10 @@ class ApiClient {
     return this.request(`/approvals?chat_id=${encodeURIComponent(chatId)}`);
   }
 
-  async approveTool(approvalId: string, scope: 'once' | 'always' = 'once'): Promise<{ status: string; result: string }> {
+  async approveTool(approvalId: string, rule?: string): Promise<{ status: string; result: string }> {
     return this.request(`/approvals/${approvalId}/approve`, {
       method: 'POST',
-      body: JSON.stringify({ scope }),
+      body: JSON.stringify({ rule: rule ?? null }),
     });
   }
 

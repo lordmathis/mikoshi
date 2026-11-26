@@ -10,7 +10,7 @@ import { FileChip } from "./file-chip.tsx";
 interface ToolMessageProps {
   message: Message;
   pendingApproval?: PendingApproval | null;
-  onApprove?: (messageId: string, scope: "once" | "always") => void | Promise<void>;
+  onApprove?: (messageId: string, rule?: string) => void | Promise<void>;
   onDeny?: (messageId: string) => void | Promise<void>;
 }
 
@@ -31,13 +31,13 @@ export const ToolMessage = memo(function ToolMessage({
   onDeny,
 }: ToolMessageProps) {
   const [showToolResult, setShowToolResult] = useState(false);
-  const [resolving, setResolving] = useState<"once" | "always" | "deny" | null>(null);
+  const [resolving, setResolving] = useState<"once" | "rule" | "deny" | null>(null);
   const displayContent = useMemo(() => extractDisplayContent(message.content), [message.content]);
 
-  const handleApprove = async (scope: "once" | "always") => {
-    setResolving(scope);
+  const handleApprove = async (rule?: string) => {
+    setResolving(rule ? "rule" : "once");
     try {
-      await onApprove?.(message.id, scope);
+      await onApprove?.(message.id, rule);
     } finally {
       setResolving(null);
     }
@@ -77,6 +77,7 @@ export const ToolMessage = memo(function ToolMessage({
           <ApprovalControls
             toolName={pendingApproval.tool_name}
             args={pendingApproval.arguments}
+            rule={pendingApproval.rule}
             resolving={resolving}
             onApprove={handleApprove}
             onDeny={handleDeny}
@@ -136,8 +137,9 @@ export const ToolMessage = memo(function ToolMessage({
 interface ApprovalControlsProps {
   toolName: string;
   args?: Record<string, unknown>;
-  resolving: "once" | "always" | "deny" | null;
-  onApprove: (scope: "once" | "always") => void | Promise<void>;
+  rule?: string | null;
+  resolving: "once" | "rule" | "deny" | null;
+  onApprove: (rule?: string) => void | Promise<void>;
   onDeny: () => void | Promise<void>;
 }
 
@@ -149,7 +151,7 @@ function formatToolArguments(args: Record<string, unknown>): string {
     .join("\n");
 }
 
-function ApprovalControls({ toolName, args, resolving, onApprove, onDeny }: ApprovalControlsProps) {
+function ApprovalControls({ toolName, args, rule, resolving, onApprove, onDeny }: ApprovalControlsProps) {
   const hasArgs = args && Object.keys(args).length > 0;
 
   return (
@@ -176,7 +178,7 @@ function ApprovalControls({ toolName, args, resolving, onApprove, onDeny }: Appr
       )}
       <div className="flex flex-wrap gap-2">
         <button
-          onClick={() => void onApprove("once")}
+          onClick={() => void onApprove()}
           disabled={resolving !== null}
           className="flex items-center gap-1.5 cp-label px-3 py-1.5 cp-cut-8 transition-colors disabled:opacity-50"
           style={{
@@ -187,19 +189,21 @@ function ApprovalControls({ toolName, args, resolving, onApprove, onDeny }: Appr
           <Check className="h-3.5 w-3.5" />
           <span>{resolving === "once" ? "…" : "Allow"}</span>
         </button>
-        <button
-          onClick={() => void onApprove("always")}
-          disabled={resolving !== null}
-          className="flex items-center gap-1.5 cp-label px-3 py-1.5 cp-cut-8 border transition-colors disabled:opacity-50"
-          style={{
-            color: 'var(--color-cp-cyan)',
-            borderColor: 'rgb(var(--cp-rgb-cyan) / 0.4)',
-            background: 'rgb(var(--cp-rgb-cyan) / 0.06)',
-          }}
-        >
-          <ShieldCheck className="h-3.5 w-3.5" />
-          <span>{resolving === "always" ? "…" : "Always allow"}</span>
-        </button>
+        {rule && (
+          <button
+            onClick={() => void onApprove(rule)}
+            disabled={resolving !== null}
+            className="flex items-center gap-1.5 cp-label px-3 py-1.5 cp-cut-8 border transition-colors disabled:opacity-50"
+            style={{
+              color: 'var(--color-cp-cyan)',
+              borderColor: 'rgb(var(--cp-rgb-cyan) / 0.4)',
+              background: 'rgb(var(--cp-rgb-cyan) / 0.06)',
+            }}
+          >
+            <ShieldCheck className="h-3.5 w-3.5" />
+            <span>{resolving === "rule" ? "…" : `Always allow ${rule}`}</span>
+          </button>
+        )}
         <button
           onClick={() => void onDeny()}
           disabled={resolving !== null}

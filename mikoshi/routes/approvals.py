@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 class ApproveBody(BaseModel):
-    scope: str = "once"
+    rule: str | None = None
 
 
 @router.get("/approvals")
@@ -27,6 +27,7 @@ async def get_pending_approvals(request: Request, chat_id: str):
                 "message_id": a["message_id"],
                 "tool_name": a["tool_name"],
                 "arguments": a["arguments"],
+                "rule": a["rule"],
                 "created_at": a["created_at"],
             }
             for a in approvals
@@ -40,7 +41,7 @@ async def approve_tool(request: Request, approval_id: str, body: ApproveBody):
     tool_manager: ToolManager = request.app.state.tool_manager
 
     try:
-        result = await tool_manager.approve_tool(approval_id, scope=body.scope)
+        result = await tool_manager.approve_tool(approval_id, rule=body.rule)
         return {"status": "approved", "result": str(result)}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))

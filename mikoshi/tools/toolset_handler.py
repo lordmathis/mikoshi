@@ -1,13 +1,13 @@
 import asyncio
 import inspect
 import logging
-from abc import ABC
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict
 
 from mikoshi.tools.approval import ToolDeniedError
 from mikoshi.tools.context import ToolCallContext
+from mikoshi.tools.handler_base import ToolHandler
 
 if TYPE_CHECKING:
     from mikoshi.tools.manager import ToolManager
@@ -27,7 +27,7 @@ class ToolDefinition(BaseModel):
     require_approval: bool = False
 
 
-class ToolSetHandler(ABC):
+class ToolSetHandler(ToolHandler):
     """Base class for function-based tool handlers"""
 
     server_name: str = ""

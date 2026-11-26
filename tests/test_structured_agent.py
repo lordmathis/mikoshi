@@ -150,6 +150,9 @@ class _ApprovalStubToolManager:
             await ctx.on_approval_requested("aid-1", name, args)
         return "tool result"
 
+    def suggested_rule(self, name, args):
+        return None
+
 
 class TestApprovalResultStreaming:
     @pytest.mark.asyncio

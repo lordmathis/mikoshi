@@ -33,6 +33,26 @@ class _FailingToolset(ToolSetHandler):
         raise RuntimeError("kaboom")
 
 
+class _RuleToolset(ToolSetHandler):
+    server_name = "ruled"
+
+    @tool(
+        description="risky tool with a rule source",
+        parameters={"type": "object", "properties": {"cmd": {"type": "string"}}},
+        require_approval=True,
+    )
+    async def risky(self, cmd: str = "") -> str:
+        return f"ran {cmd}"
+
+    def suggested_rule(self, arguments: dict) -> str | None:
+        tokens = arguments.get("cmd", "").split()
+        return tokens[0] if tokens else None
+
+    def is_auto_approved(self, arguments: dict, rules: set[str]) -> bool:
+        tokens = arguments.get("cmd", "").split()
+        return bool(tokens) and tokens[0] in rules
+
+
 def _ctx(**overrides):
     defaults = dict(provider=MagicMock(), model_id="m", chat_id="c1")
     defaults.update(overrides)
@@ -67,21 +87,21 @@ class TestCallToolApproval:
         assert tm.list_pending_approvals("c1") == []
 
     @pytest.mark.asyncio
-    async def test_allowlist_skips_prompt(self, db):
-        tm = await make_tool_manager(_DangerousToolset())
-        tm.allow("c1", "danger__risky")
+    async def test_rule_skips_prompt(self, db):
+        tm = await make_tool_manager(_RuleToolset())
+        tm.add_rule("c1", "ruled__risky", "npm")
 
-        result = await tm.call_tool("danger__risky", {"x": 5}, _ctx())
-        assert result == "ran risky with x=5"
+        result = await tm.call_tool("ruled__risky", {"cmd": "npm run build"}, _ctx())
+        assert result == "ran npm run build"
         assert tm.list_pending_approvals("c1") == []
 
     @pytest.mark.asyncio
-    async def test_allowlist_is_chat_scoped(self, db):
-        tm = await make_tool_manager(_DangerousToolset())
-        tm.allow("c1", "danger__risky")
+    async def test_rules_are_chat_scoped(self, db):
+        tm = await make_tool_manager(_RuleToolset())
+        tm.add_rule("c1", "ruled__risky", "npm")
 
         task = asyncio.create_task(
-            tm.call_tool("danger__risky", {"x": 9}, _ctx(chat_id="c2"))
+            tm.call_tool("ruled__risky", {"cmd": "npm ci"}, _ctx(chat_id="c2"))
         )
         await asyncio.sleep(0)
         assert len(tm.list_pending_approvals("c2")) == 1
@@ -90,15 +110,88 @@ class TestCallToolApproval:
             await task
 
     @pytest.mark.asyncio
-    async def test_approve_always_adds_to_allowlist(self, db):
-        tm = await make_tool_manager(_DangerousToolset())
-        task = asyncio.create_task(tm.call_tool("danger__risky", {"x": 7}, _ctx()))
+    async def test_approve_with_rule_allows_future_calls(self, db):
+        tm = await make_tool_manager(_RuleToolset())
+        task = asyncio.create_task(
+            tm.call_tool("ruled__risky", {"cmd": "npm run build"}, _ctx())
+        )
         await asyncio.sleep(0)
         aid = tm.list_pending_approvals("c1")[0]["id"]
 
-        await tm.approve_tool(aid, scope="always")
+        await tm.approve_tool(aid, rule="npm")
         await task
-        assert tm.is_allowed("c1", "danger__risky")
+
+        result = await tm.call_tool("ruled__risky", {"cmd": "npm ci"}, _ctx())
+        assert result == "ran npm ci"
+        assert tm.list_pending_approvals("c1") == []
+
+    @pytest.mark.asyncio
+    async def test_approve_rule_sanitized_to_first_token(self, db):
+        tm = await make_tool_manager(_RuleToolset())
+        task = asyncio.create_task(
+            tm.call_tool("ruled__risky", {"cmd": "npm run build"}, _ctx())
+        )
+        await asyncio.sleep(0)
+        aid = tm.list_pending_approvals("c1")[0]["id"]
+
+        await tm.approve_tool(aid, rule="npm run build")
+        await task
+
+        result = await tm.call_tool("ruled__risky", {"cmd": "npm ci"}, _ctx())
+        assert result == "ran npm ci"
+
+    @pytest.mark.asyncio
+    async def test_approve_blank_rule_is_once_only(self, db):
+        tm = await make_tool_manager(_RuleToolset())
+        task = asyncio.create_task(
+            tm.call_tool("ruled__risky", {"cmd": "npm run build"}, _ctx())
+        )
+        await asyncio.sleep(0)
+        aid = tm.list_pending_approvals("c1")[0]["id"]
+
+        await tm.approve_tool(aid, rule="   ")
+        await task
+
+        task2 = asyncio.create_task(
+            tm.call_tool("ruled__risky", {"cmd": "npm ci"}, _ctx())
+        )
+        await asyncio.sleep(0)
+        assert len(tm.list_pending_approvals("c1")) == 1
+        await tm.deny_tool(tm.list_pending_approvals("c1")[0]["id"])
+        with pytest.raises(ToolDeniedError):
+            await task2
+
+    @pytest.mark.asyncio
+    async def test_pending_approval_includes_suggested_rule(self, db):
+        tm = await make_tool_manager(_RuleToolset())
+        task = asyncio.create_task(
+            tm.call_tool("ruled__risky", {"cmd": "npm run build"}, _ctx())
+        )
+        await asyncio.sleep(0)
+
+        pending = tm.list_pending_approvals("c1")
+        assert pending[0]["rule"] == "npm"
+
+        await tm.deny_tool(pending[0]["id"])
+        with pytest.raises(ToolDeniedError):
+            await task
+
+    @pytest.mark.asyncio
+    async def test_tool_without_rule_source_prompts_even_after_rule_approve(self, db):
+        tm = await make_tool_manager(_DangerousToolset())
+        task = asyncio.create_task(tm.call_tool("danger__risky", {"x": 1}, _ctx()))
+        await asyncio.sleep(0)
+        aid = tm.list_pending_approvals("c1")[0]["id"]
+
+        await tm.approve_tool(aid, rule="danger")
+        await task
+
+        task2 = asyncio.create_task(tm.call_tool("danger__risky", {"x": 2}, _ctx()))
+        await asyncio.sleep(0)
+        assert len(tm.list_pending_approvals("c1")) == 1
+        await tm.deny_tool(tm.list_pending_approvals("c1")[0]["id"])
+        with pytest.raises(ToolDeniedError):
+            await task2
 
     @pytest.mark.asyncio
     async def test_callback_invoked_and_message_id_stored(self, db):

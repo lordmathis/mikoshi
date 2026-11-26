@@ -44,3 +44,9 @@ class ToolHandler(ABC):
     async def cleanup(self) -> None:
         """Clean up resources"""
         pass
+
+    def suggested_rule(self, arguments: dict) -> str | None:
+        return None
+
+    def is_auto_approved(self, arguments: dict, rules: set[str]) -> bool:
+        return False

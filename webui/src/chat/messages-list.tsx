@@ -34,7 +34,7 @@ interface MessagesListProps {
   currentConversationId: string | undefined;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
   pendingApprovals?: Record<string, PendingApproval>;
-  onApprove?: (messageId: string, scope: "once" | "always") => void | Promise<void>;
+  onApprove?: (messageId: string, rule?: string) => void | Promise<void>;
   onDeny?: (messageId: string) => void | Promise<void>;
   onBranch?: (messageId: string) => void | Promise<void>;
   onRetry?: () => void | Promise<void>;

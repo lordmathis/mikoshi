@@ -165,12 +165,14 @@ export function useMessages(
           message_id: string;
           tool_name: string;
           arguments: Record<string, unknown>;
+          rule: string | null;
         };
         const approval: PendingApproval = {
           id: req.approval_id,
           message_id: req.message_id,
           tool_name: req.tool_name,
           arguments: req.arguments,
+          rule: req.rule,
           created_at: null,
         };
         setPendingApprovals((prev) => ({ ...prev, [req.message_id]: approval }));
@@ -367,11 +369,11 @@ export function useMessages(
   );
 
   const approveApproval = useCallback(
-    async (messageId: string, scope: "once" | "always") => {
+    async (messageId: string, rule?: string) => {
       const approval = pendingApprovalsRef.current[messageId];
       if (!approval) return;
       try {
-        const { result } = await api.approveTool(approval.id, scope);
+        const { result } = await api.approveTool(approval.id, rule);
         resolveApproval(messageId, result);
       } catch (e) {
         console.error("[Messages] approve failed:", e);

@@ -14,6 +14,7 @@ class PendingApproval:
     future: asyncio.Future
     context: ToolCallContext
     message_id: Optional[str] = None
+    suggested_rule: Optional[str] = None
 
 
 class ToolDeniedError(Exception):

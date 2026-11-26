@@ -69,7 +69,7 @@ class ToolManager:
         self._tools_dir = app_config.plugins.tools_dir
 
         self._pending_approvals: Dict[str, PendingApproval] = {}
-        self._chat_allowlist: Dict[str, set[str]] = {}
+        self._chat_rules: Dict[str, Dict[str, set[str]]] = {}
         self._connectors_config = app_config.connectors
 
         self.mcp_timeout = app_config.mcp_timeout
@@ -176,11 +176,18 @@ class ToolManager:
 
         logger.info("ToolManager initialization completed successfully")
 
-    def is_allowed(self, chat_id: str, call_name: str) -> bool:
-        return call_name in self._chat_allowlist.get(chat_id, set())
+    def add_rule(self, chat_id: str, call_name: str, token: str) -> None:
+        self._chat_rules.setdefault(chat_id, {}).setdefault(call_name, set()).add(token)
 
-    def allow(self, chat_id: str, call_name: str) -> None:
-        self._chat_allowlist.setdefault(chat_id, set()).add(call_name)
+    def suggested_rule(self, call_name: str, arguments: dict) -> Optional[str]:
+        try:
+            server_name, _ = _parse_tool_name(call_name)
+        except ValueError:
+            return None
+        handler = self._server_map.get(server_name)
+        if handler is None:
+            return None
+        return handler.suggested_rule(arguments)
 
     async def call_tool(
         self,
@@ -197,14 +204,12 @@ class ToolManager:
             raise ValueError(f"Tool server '{server_name}' not found")
 
         tool_def = self.get_tool_definition(call_name)
-        if (
-            tool_def
-            and tool_def.require_approval
-            and not self.is_allowed(context.chat_id, call_name)
-        ):
-            return await self._call_with_approval(
-                call_name, arguments, context, handler, tool_name
-            )
+        if tool_def and tool_def.require_approval:
+            rules = self._chat_rules.get(context.chat_id, {}).get(call_name, set())
+            if not handler.is_auto_approved(arguments, rules):
+                return await self._call_with_approval(
+                    call_name, arguments, context, handler, tool_name
+                )
 
         logger.info(
             "call_tool EXECUTING %s via handler %s", call_name, type(handler).__name__
@@ -235,6 +240,12 @@ class ToolManager:
             arguments=arguments,
             future=future,
             context=context,
+            suggested_rule=self.suggested_rule(call_name, arguments),
+        )
+        logger.info(
+            "call_tool APPROVAL suggested_rule=%s for %s",
+            approval.suggested_rule,
+            call_name,
         )
         self._pending_approvals[approval_id] = approval
 
@@ -310,13 +321,13 @@ class ToolManager:
         tool_def = handler._tools.get(tool_name)
         return tool_def
 
-    async def approve_tool(self, approval_id: str, scope: str = "once") -> Any:
+    async def approve_tool(self, approval_id: str, rule: str | None = None) -> Any:
         """Approve a pending tool call
 
         Args:
             approval_id: The id of the approval to approve
-            scope: "once" runs the tool this time; "always" also adds the tool
-                to the chat-scoped allowlist so future calls skip the prompt.
+            rule: When set, its first word is added to the chat-scoped rules so
+                future calls covered by the rule skip the prompt.
 
         Returns:
             The tool execution result
@@ -327,10 +338,11 @@ class ToolManager:
         if approval is None:
             raise ValueError(f"Approval {approval_id} not found or already resolved")
 
-        try:
-            if scope == "always":
-                self.allow(approval.chat_id, approval.tool_name)
+        tokens = rule.split() if rule else []
+        if tokens:
+            self.add_rule(approval.chat_id, approval.tool_name, tokens[0])
 
+        try:
             if self._db is not None:
                 self._db.update_approval_status(approval_id, "approved")
 
@@ -386,6 +398,7 @@ class ToolManager:
                 "message_id": a.message_id,
                 "tool_name": a.tool_name,
                 "arguments": a.arguments,
+                "rule": a.suggested_rule,
                 "created_at": None,
             }
             for a in self._pending_approvals.values()
